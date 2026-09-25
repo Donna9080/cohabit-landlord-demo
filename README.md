@@ -4,6 +4,8 @@
 
 [![Landlord Dashboard showing three fictional Waltham properties with tenant counts, lease end dates and status](docs/dashboard.png)](https://cohabit-landlord-demo.dolgorsureng.workers.dev)
 
+[![Property and Tenants page for 22 Oak Avenue, Unit 2, showing the lease end date and a table of three fictional tenants with rooms, emails and phone numbers](docs/property.png)](https://cohabit-landlord-demo.dolgorsureng.workers.dev/properties/22-oak-avenue-unit-2)
+
 A two-page demo for a class project. **All names, addresses and contact details are fictional.**
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
