@@ -1,5 +1,7 @@
 # coHabit — Landlord Demo
 
+### [👉 View the live demo](https://cohabit-landlord-demo.dolgorsureng.workers.dev)
+
 A two-page demo for a class project. **All names, addresses and contact details are fictional.**
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
