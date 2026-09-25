@@ -6,6 +6,12 @@
 
 [![Property and Tenants page for 22 Oak Avenue, Unit 2, showing the lease end date and a table of three fictional tenants with rooms, emails and phone numbers](docs/property.png)](https://cohabit-landlord-demo.dolgorsureng.workers.dev/properties/22-oak-avenue-unit-2)
 
+<p align="center">
+  <img src="docs/phone.png" width="320" alt="The same property page on a phone: the tenant table becomes one card per tenant with name, room, email and phone" />
+  <br />
+  <em>On a phone, the tenant table becomes one card per tenant.</em>
+</p>
+
 A two-page demo for a class project. **All names, addresses and contact details are fictional.**
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
