@@ -1,0 +1,17 @@
+{
+  "name": "cohabit-landlord-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Two-page coHabit landlord demo with fictional sample data",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.139.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "workerd@1.20260923.1": true
+  }
+}

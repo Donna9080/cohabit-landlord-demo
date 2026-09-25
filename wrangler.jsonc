@@ -1,0 +1,13 @@
+// Cloudflare settings for the coHabit landlord demo.
+// A static site only: no server code, no database, free Workers plan.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cohabit-landlord-demo",
+  "compatibility_date": "2026-09-20",
+  "assets": {
+    "directory": "./public",
+    // Any address that isn't a real file (like /properties/14-elm-street)
+    // loads index.html, so refreshing or sharing a link always works.
+    "not_found_handling": "single-page-application"
+  }
+}
