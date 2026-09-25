@@ -2,6 +2,8 @@
 
 ### [👉 View the live demo](https://cohabit-landlord-demo.dolgorsureng.workers.dev)
 
+[![Landlord Dashboard showing three fictional Waltham properties with tenant counts, lease end dates and status](docs/dashboard.png)](https://cohabit-landlord-demo.dolgorsureng.workers.dev)
+
 A two-page demo for a class project. **All names, addresses and contact details are fictional.**
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
