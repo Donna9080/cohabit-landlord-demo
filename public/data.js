@@ -1,7 +1,7 @@
 /*
-  coHabit landlord demo — SAMPLE DATA
+  coHabit — SAMPLE DATA
   ------------------------------------
-  Everything here is FICTIONAL. It exists only for a class project demo.
+  Everything here is FICTIONAL. It is sample content only.
 
   How to edit:
   - Change any text between the quote marks, then save and redeploy (see README.md).

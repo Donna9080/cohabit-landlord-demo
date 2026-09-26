@@ -1,4 +1,4 @@
-// coHabit demo: three screens, switched by the address bar.
+// coHabit: three screens, switched by the address bar.
 //   /                      → Front page (Landlord / Tenant choice)
 //   /landlord              → Landlord Dashboard
 //   /properties/<id>       → Property and Tenants
@@ -21,18 +21,18 @@
     return `<span class="pill pill-${kind}"><span class="dot" aria-hidden="true"></span>${esc(status)}</span>`;
   }
 
-  const footnote = `<p class="footnote">Demo for a class project. All names, addresses, and contact details are fictional sample data.</p>`;
+  const footnote = `<p class="footnote">All names, addresses, and contact details shown are fictional sample data.</p>`;
 
   function home() {
     return {
       title: "Welcome",
-      brand: "Demo",
+      brand: "",
       html: `
       <div class="home">
         <div class="hero">
           <p class="eyebrow">Shared student housing</p>
           <h1 tabindex="-1">Welcome to coHabit</h1>
-          <p class="lead">A class project demo. Choose a view to explore.</p>
+          <p class="lead">Choose how you use coHabit.</p>
         </div>
         <div class="choices">
           <a class="choice" href="/landlord">
@@ -49,7 +49,7 @@
               <span class="choice-title">Tenant</span>
               <span class="choice-desc">See your home, room, lease and housemates.</span>
             </span>
-            <span class="choice-cta">Not available in this demo</span>
+            <span class="choice-cta">Not available yet</span>
           </button>
         </div>
         ${footnote}
@@ -157,12 +157,12 @@
     }
     return {
       title: "Page not found",
-      brand: "Demo",
+      brand: "",
       html: `
-      <a class="back" href="/">${icon("left", 16)} Back to start</a>
+      <a class="back" href="/">${icon("left", 16)} Back to home</a>
       <div class="heading">
         <h1 tabindex="-1">Page not found</h1>
-        <p class="muted">This page isn't part of the demo. Go back to the start page to choose a view.</p>
+        <p class="muted">This page doesn't exist. Go back to the home page to choose a view.</p>
       </div>`,
     };
   }
@@ -188,8 +188,8 @@
   function render(moveFocus) {
     const view = route(location.pathname);
     app.innerHTML = view.html;
-    document.title = `${view.title} · coHabit demo`;
-    brandSub.textContent = view.brand || "Landlord demo";
+    document.title = `${view.title} · coHabit`;
+    brandSub.textContent = view.brand ?? "Landlord portal";
     if (moveFocus) {
       window.scrollTo(0, 0);
       const h1 = app.querySelector("h1");
