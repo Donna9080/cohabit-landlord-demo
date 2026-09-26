@@ -1,8 +1,10 @@
-# coHabit — Landlord Demo
+# coHabit — Demo
 
 ### [👉 View the live demo](https://cohabit-landlord-demo.dolgorsureng.workers.dev)
 
-[![Landlord Dashboard showing three fictional Waltham properties with tenant counts, lease end dates and status](docs/dashboard.png)](https://cohabit-landlord-demo.dolgorsureng.workers.dev)
+[![Front page with two choices: Landlord, which opens the dashboard, and Tenant, marked Coming soon](docs/front.png)](https://cohabit-landlord-demo.dolgorsureng.workers.dev)
+
+[![Landlord Dashboard showing three fictional Waltham properties with tenant counts, lease end dates and status](docs/dashboard.png)](https://cohabit-landlord-demo.dolgorsureng.workers.dev/landlord)
 
 [![Property and Tenants page for 22 Oak Avenue, Unit 2, showing the lease end date and a table of three fictional tenants with rooms, emails and phone numbers](docs/property.png)](https://cohabit-landlord-demo.dolgorsureng.workers.dev/properties/22-oak-avenue-unit-2)
 
@@ -14,15 +16,18 @@
   <em>On a phone, the property cards stack and the tenant table becomes one card per tenant.</em>
 </p>
 
-A two-page demo for a class project. **All names, addresses and contact details are fictional.**
+A small demo for a class project: a front page and two landlord screens. **All names, addresses and contact details are fictional.**
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
 - **Design (Figma):** https://www.figma.com/design/QDAewcvq3aSsZgfQvw1v4X
 
 | Page | Address |
 | --- | --- |
-| Landlord Dashboard | `/` |
+| Front page (choose Landlord or Tenant) | `/` |
+| Landlord Dashboard | `/landlord` |
 | Property and Tenants | `/properties/<id>`, e.g. `/properties/14-elm-street` |
+
+The Tenant button on the front page is marked "Coming soon" and can't be clicked yet.
 
 This is separate from the main coHabit app in `Documents\cohabit`. It has no login, no database and no server code. It runs on Cloudflare's free plan as its own site (`cohabit-landlord-demo`).
 
@@ -60,7 +65,7 @@ If the page looks broken after an edit, the usual cause is a missing comma or qu
 
 ```
 public/index.html   page frame (top bar, icons)
-public/app.js       the two screens and navigation
+public/app.js       the screens (front page, dashboard, property) and navigation
 public/data.js      sample properties and tenants  ← edit this one
 public/styles.css   colors, spacing, phone layout (values match Figma)
 wrangler.jsonc      Cloudflare settings

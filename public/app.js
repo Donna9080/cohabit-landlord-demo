@@ -1,9 +1,11 @@
-// coHabit landlord demo: two screens, switched by the address bar.
-//   /                      → Landlord Dashboard
+// coHabit demo: three screens, switched by the address bar.
+//   /                      → Front page (Landlord / Tenant choice)
+//   /landlord              → Landlord Dashboard
 //   /properties/<id>       → Property and Tenants
 // Cloudflare serves index.html for every address, so refreshing any page works.
 (function () {
   const app = document.getElementById("app");
+  const brandSub = document.getElementById("brand-sub");
   const properties = (window.COHABIT_DATA && window.COHABIT_DATA.properties) || [];
 
   const esc = (s) =>
@@ -20,6 +22,40 @@
   }
 
   const footnote = `<p class="footnote">Demo for a class project. All names, addresses, and contact details are fictional sample data.</p>`;
+
+  function home() {
+    return {
+      title: "Welcome",
+      brand: "Demo",
+      html: `
+      <div class="home">
+        <div class="hero">
+          <p class="eyebrow">Shared student housing</p>
+          <h1 tabindex="-1">Welcome to coHabit</h1>
+          <p class="lead">A class project demo. Choose a view to explore.</p>
+        </div>
+        <div class="choices">
+          <a class="choice" href="/landlord">
+            <span class="choice-top"><span class="choice-icon">${icon("building", 24)}</span></span>
+            <span class="choice-text">
+              <span class="choice-title">Landlord</span>
+              <span class="choice-desc">See your properties, lease dates and who lives where.</span>
+            </span>
+            <span class="choice-cta">Open landlord dashboard ${icon("right", 16)}</span>
+          </a>
+          <button class="choice choice-off" type="button" disabled>
+            <span class="choice-top"><span class="choice-icon">${icon("user", 24)}</span><span class="soon">Coming soon</span></span>
+            <span class="choice-text">
+              <span class="choice-title">Tenant</span>
+              <span class="choice-desc">See your home, room, lease and housemates.</span>
+            </span>
+            <span class="choice-cta">Not available in this demo</span>
+          </button>
+        </div>
+        ${footnote}
+      </div>`,
+    };
+  }
 
   function dashboard() {
     const tenantTotal = properties.reduce((sum, p) => sum + p.tenants.length, 0);
@@ -59,7 +95,7 @@
     };
   }
 
-  const backLink = `<a class="back" href="/">${icon("left", 16)} Back to dashboard</a>`;
+  const backLink = `<a class="back" href="/landlord">${icon("left", 16)} Back to dashboard</a>`;
 
   function propertyPage(p) {
     const rows = p.tenants
@@ -107,34 +143,53 @@
     };
   }
 
-  function notFound() {
-    return {
-      title: "Property not found",
-      html: `
+  function notFound(isProperty) {
+    if (isProperty) {
+      return {
+        title: "Property not found",
+        html: `
       ${backLink}
       <div class="heading">
         <h1 tabindex="-1">Property not found</h1>
         <p class="muted">This address doesn't match any sample property. Go back to the dashboard to pick one.</p>
+      </div>`,
+      };
+    }
+    return {
+      title: "Page not found",
+      brand: "Demo",
+      html: `
+      <a class="back" href="/">${icon("left", 16)} Back to start</a>
+      <div class="heading">
+        <h1 tabindex="-1">Page not found</h1>
+        <p class="muted">This page isn't part of the demo. Go back to the start page to choose a view.</p>
       </div>`,
     };
   }
 
   function route(path) {
     const clean = path.replace(/\/+$/, "") || "/";
-    if (clean === "/" || clean === "/index.html") return dashboard();
+    if (clean === "/" || clean === "/index.html") return home();
+    if (clean === "/landlord") return dashboard();
     const m = clean.match(/^\/properties\/([^/]+)$/);
     if (m) {
-      const id = decodeURIComponent(m[1]);
+      let id = m[1];
+      try {
+        id = decodeURIComponent(id);
+      } catch {
+        // A malformed address just counts as an unknown property.
+      }
       const p = properties.find((x) => x.id === id);
-      if (p) return propertyPage(p);
+      return p ? propertyPage(p) : notFound(true);
     }
-    return notFound();
+    return notFound(false);
   }
 
   function render(moveFocus) {
     const view = route(location.pathname);
     app.innerHTML = view.html;
     document.title = `${view.title} · coHabit demo`;
+    brandSub.textContent = view.brand || "Landlord demo";
     if (moveFocus) {
       window.scrollTo(0, 0);
       const h1 = app.querySelector("h1");
