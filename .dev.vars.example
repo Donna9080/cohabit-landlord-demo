@@ -1,0 +1,8 @@
+# Copy to .dev.vars for local development (npm run dev). .dev.vars is git-ignored.
+# Production values are Cloudflare secrets: npx wrangler secret put <NAME>
+BETTER_AUTH_URL=http://localhost:8787
+# Any long random string for local use only, e.g. from: node -e "console.log(crypto.randomBytes(32).toString('base64url'))"
+BETTER_AUTH_SECRET=
+# From Google Cloud Console > Google Auth Platform > Clients (see ACCOUNTS_SETUP.md)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

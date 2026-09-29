@@ -1,13 +1,37 @@
-// Cloudflare settings for the coHabit landlord demo.
-// A static site only: no server code, no database, free Workers plan.
+// Cloudflare settings for coHabit (free Workers plan).
+// Static pages in ./public, plus a small Worker (src/index.js) for /api/*:
+// Google sign-in, landlords' units, renters' preferences, admin user list.
+// Data lives in the D1 database "cohabit-db". See ACCOUNTS_SETUP.md.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cohabit-landlord-demo",
+  "main": "./src/index.js",
   "compatibility_date": "2026-09-20",
   "assets": {
     "directory": "./public",
-    // Any address that isn't a real file (like /properties/14-elm-street)
-    // loads index.html, so refreshing or sharing a link always works.
-    "not_found_handling": "single-page-application"
-  }
+    // Any address that isn't a real file (like /landlord) loads index.html,
+    // so refreshing or sharing a link always works.
+    "not_found_handling": "single-page-application",
+    // Only API requests run the Worker; every page and file is served as-is.
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cohabit-db",
+      "database_id": "0e413d91-d5f8-42ce-868c-fc382b0ca38c",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    // Public address of the site. Local development overrides this in .dev.vars.
+    "BETTER_AUTH_URL": "https://cohabit-landlord-demo.dolgorsureng.workers.dev"
+  },
+  // Secrets (set with `npx wrangler secret put <NAME>`, never in this file):
+  //   BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+  "triggers": {
+    // Daily cleanup of expired sessions and old rate-limit counters (04:17 UTC).
+    "crons": ["17 4 * * *"]
+  },
+  "observability": { "enabled": true }
 }

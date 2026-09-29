@@ -2,9 +2,12 @@
   "name": "cohabit-landlord-demo",
   "version": "1.0.0",
   "private": true,
-  "description": "Two-page coHabit landlord demo with fictional sample data",
+  "description": "coHabit: landlord dashboard and renter matching, with Google sign-in",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --port 8787",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "test": "node tests/run-local.mjs",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
@@ -13,5 +16,9 @@
   "allowScripts": {
     "esbuild@0.28.1": true,
     "workerd@1.20260923.1": true
-  }
+  },
+  "dependencies": {
+    "better-auth": "1.7.6"
+  },
+  "type": "module"
 }

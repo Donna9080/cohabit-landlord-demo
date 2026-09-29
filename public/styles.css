@@ -106,7 +106,8 @@ h1 { font-size: 28px; font-weight: 600; line-height: 36px; letter-spacing: -0.01
 .card hr { width: 100%; border: 0; border-top: 1px solid var(--border); margin: 0; }
 .stats { display: flex; gap: 32px; }
 .stats dt, .fact dt { font-size: 12px; font-weight: 500; color: var(--sub); }
-.stats dd { font-size: 15px; font-weight: 600; }
+.stats dd { font-size: 15px; font-weight: 600; white-space: nowrap; }
+.stats:has(> div:nth-child(3)) { gap: 20px; }
 .card-link {
   display: inline-flex; align-items: center; gap: 4px; margin-top: auto;
   font-size: 14px; font-weight: 600; color: var(--green);
@@ -196,6 +197,86 @@ a.choice:hover .choice-cta { text-decoration: underline; }
   font-size: 12px; font-weight: 500; color: var(--sub); white-space: nowrap;
 }
 .home .footnote { text-align: center; }
+button.choice { cursor: pointer; }
+button.choice:hover:not(:disabled) { border-color: var(--navy); box-shadow: 0 4px 14px rgba(15, 30, 61, 0.1); }
+button.choice:hover:not(:disabled) .choice-cta { text-decoration: underline; }
+button.choice:disabled { opacity: 0.6; cursor: progress; }
+
+/* Account area in the top bar */
+.account { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.nav-link {
+  display: inline-flex; align-items: center; gap: 8px; min-width: 0;
+  padding: 6px 10px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--navy); text-decoration: none;
+}
+.nav-link:hover { background: var(--subtle); }
+.who-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.avatar-sm { width: 28px; height: 28px; font-size: 11px; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 16px; border: 1px solid var(--navy); border-radius: 8px;
+  background: var(--navy); color: var(--white); font: inherit; font-size: 15px; font-weight: 600;
+  text-decoration: none; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { background: #16305c; }
+.btn:disabled { opacity: 0.6; cursor: progress; }
+.btn .icon { flex: none; }
+.btn-small { padding: 6px 12px; font-size: 14px; }
+.btn-quiet { background: var(--white); color: var(--navy); border-color: var(--border); }
+.btn-quiet:hover { background: var(--subtle); }
+.btn-danger { background: var(--white); color: #b42318; border-color: #f1c4c0; margin-left: auto; }
+.btn-danger:hover { background: #fef3f2; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* Messages and panels */
+.panel {
+  display: flex; flex-direction: column; gap: 12px; max-width: 560px;
+  padding: 28px; border: 1px solid var(--border); border-radius: 16px;
+}
+.panel .actions { margin-top: 8px; }
+.loading { padding: 40px 0; }
+.links { font-size: 14px; color: var(--sub); }
+.links a, .muted a, .empty a { color: var(--navy); font-weight: 500; }
+.heading-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pill-off { background: #eef0f3; color: var(--sub); }
+.pill-off .dot { background: #9aa3b2; }
+.desc { color: var(--sub); overflow-wrap: anywhere; }
+.reasons { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.reasons li { font-size: 12px; font-weight: 500; padding: 3px 8px; border-radius: 6px; background: var(--navy-subtle); color: var(--navy); }
+.badge { font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 6px; background: var(--amber-bg); color: var(--amber); vertical-align: middle; }
+
+/* How it works */
+.how { display: flex; flex-direction: column; gap: 16px; width: 100%; text-align: left; }
+.how > h2 { font-size: 20px; font-weight: 600; }
+.steps { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.step-col { padding: 20px 24px; border: 1px solid var(--border); border-radius: 12px; text-align: left; }
+.step-col h2 { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; color: var(--navy); margin-bottom: 12px; }
+.step-col ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; color: var(--sub); }
+.step-col strong { color: var(--text); font-weight: 600; }
+
+/* Forms */
+.form { display: flex; flex-direction: column; gap: 20px; max-width: 720px; }
+.form fieldset { display: flex; flex-direction: column; gap: 16px; margin: 0; padding: 20px; border: 1px solid var(--border); border-radius: 12px; }
+.form legend { padding: 0 6px; font-size: 16px; font-weight: 600; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.field-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.field label { font-size: 14px; font-weight: 600; }
+.field input, .field select, .field textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid #c9d1de; border-radius: 8px;
+  background: var(--white); color: var(--text); font: inherit;
+}
+.field textarea { resize: vertical; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--navy); box-shadow: var(--focus); }
+.field [aria-invalid="true"] { border-color: #b42318; }
+.hint { font-size: 13px; color: var(--muted); }
+.field-error, .form-error { font-size: 13px; font-weight: 500; color: #b42318; }
+.field-error:empty, .form-error:empty { display: none; }
+.saved { color: var(--green); font-weight: 500; }
+
+/* Admin user list */
+.users td[data-label="Email"] { overflow-wrap: anywhere; }
 
 /* Phones and narrow screens */
 @media (max-width: 720px) {
@@ -210,6 +291,12 @@ a.choice:hover .choice-cta { text-decoration: underline; }
   .hero h1 { font-size: 30px; line-height: 36px; }
   .lead { font-size: 16px; line-height: 24px; }
   .choices { grid-template-columns: 1fr; gap: 12px; }
+  .steps, .field-row, .field-grid { grid-template-columns: 1fr; }
+  .who-name { display: none; }
+  .nav-link { padding: 4px; }
+  .panel { padding: 20px; }
+  .btn-danger { margin-left: 0; }
+  .form fieldset { padding: 16px; }
   .home .footnote { text-align: left; }
   .title-row { flex-direction: column; align-items: flex-start; }
   .facts { gap: 12px; }
