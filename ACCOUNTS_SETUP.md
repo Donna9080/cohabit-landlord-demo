@@ -80,7 +80,8 @@ Rules enforced on the server (`src/index.js`), not in the page:
 
 ## How the first admin was assigned
 
-There is no web page or endpoint that makes someone an admin, and the first
+The owner (user id `E17hW2AFcxjOkt3oA3Cmvq3VTroxN5X5`) signed in with Google on 2026-09-30 and was promoted with the
+commands below. There is no web page or endpoint that makes someone an admin, and the first
 person to sign up is not special. The owner runs a D1 command with Wrangler,
 which requires being logged in to the Cloudflare account:
 
@@ -113,7 +114,9 @@ npx wrangler d1 execute DB --remote --command "DELETE FROM session WHERE userId 
 Locally the same names go in `.dev.vars` (git-ignored; copy `.dev.vars.example`).
 Binding: `DB` → D1 `cohabit-db` (`0e413d91-d5f8-42ce-868c-fc382b0ca38c`).
 
-Set production secrets (you type or paste the value at the prompt; it is never shown):
+Set production secrets. Names are case-sensitive. Easiest for the two Google values: in Google Cloud > Clients, add a secret,
+download the JSON, then run `node scripts/set-google-secrets.mjs` (reads the newest `client_secret_*.json` in Downloads,
+prints names only), and delete the JSON file. Or type/paste each value at the prompt (it is never shown):
 
 ```powershell
 npx wrangler secret put GOOGLE_CLIENT_ID
@@ -124,6 +127,10 @@ npx wrangler secret list
 ```
 
 Changing `BETTER_AUTH_SECRET` signs everyone out.
+
+If sign-in fails, run `npx wrangler tail`, try to sign in, and read the `[Better Auth]` line: `invalid_client` means the
+client ID and secret don't match; `CLIENT_ID_AND_SECRET_REQUIRED` means one is missing or misnamed;
+`redirect_uri_mismatch` (shown by Google) means the redirect URI in Google Cloud is not exactly the one below.
 
 ## Google sign-in setup (one time)
 

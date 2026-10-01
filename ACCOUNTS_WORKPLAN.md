@@ -15,9 +15,10 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       public listings, How it works, admin user list; sample dashboard moved to `/sample`
 - [x] Local tests: `npm test` 102/102 passing (local D1), plus browser check of each screen (desktop + phone)
 - [x] Handoff docs (this file, ACCOUNTS_SETUP.md)
-- [ ] Owner: create Google OAuth client, set 3 secrets (ACCOUNTS_SETUP.md → Google sign-in setup)
-- [ ] Apply migration `--remote`, deploy, verify live
-- [ ] Owner signs in on live site → promote to admin with the D1 command → verify
+- [x] Owner: created Google OAuth client, set 3 secrets (2026-09-30)
+- [x] Applied migration `--remote`, deployed version `dcb965ea-d350-4e36-b56e-3458f7f7c423`, signed-out live checks pass
+- [x] Owner signed in on the live site with Google (landlord); promoted to admin with the D1 command; read-back shows `role = admin`
+- [ ] Owner confirms `/admin` opens and add/edit/reload of a unit works on the live site
 - [ ] Live test with a second Google account as renter
 
 ## Decisions
@@ -75,11 +76,25 @@ blocked; admin list desktop + phone; sign-out → admin API 401.
 NOT RUN locally: the real Google callback (needs the Google client). It is covered
 by the live test.
 
+## Live results (2026-09-30)
+
+- Signed out: public pages 200; `/api/me` signed out and `no-store`; admin, landlord and renter APIs 401;
+  cross-origin sign-in 403; hidden Better Auth endpoint 404; forged OAuth state rejected; Google URL has scopes
+  `email profile openid`, PKCE S256, no offline access; cookies `HttpOnly; Secure; SameSite=Lax`.
+- Real Google sign-in: one user row created, Google subject linked, no tokens/photo/IP/user agent stored.
+- Trouble along the way: one secret was first saved as `Google_CLIENT_ID` (names are case-sensitive), then the
+  client secret did not match the client ID (Google: `invalid_client`). Fixed by loading both from Google's
+  downloaded JSON with `node scripts/set-google-secrets.mjs`. How to diagnose next time: `npx wrangler tail`,
+  try to sign in, read the `[Better Auth]` error line.
+- CPU time per sign-in request measured 6 to 57 ms (higher right after a deploy). Workers Free lists 10 ms per
+  request; no request was cut off, but if sign-in ever fails with error 1102 this is why.
+
 ## Blockers
 
-- Waiting on the owner for the Google OAuth client and the three secrets.
-- Plan check: Wrangler's token can't read the account's subscriptions. Confirm
-  **Workers Free** in the dashboard.
+- Google app is still in **Testing**: only accounts listed under Audience → Test users can sign in. Not ready
+  for outside users until **Publish app** works (see ACCOUNTS_SETUP.md, Google sign-in setup, step 5).
+- Second-account (renter) live test not done yet.
+- Plan check: Wrangler's token can't read the account's subscriptions. Confirm **Workers Free** in the dashboard.
 
 ## Next safe step
 
