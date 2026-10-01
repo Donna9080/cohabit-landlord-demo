@@ -283,6 +283,14 @@ button.choice:disabled { opacity: 0.6; cursor: progress; }
 .field-error:empty, .form-error:empty { display: none; }
 .saved { color: var(--green); font-weight: 500; }
 
+/* Account page */
+.facts { flex-wrap: wrap; }
+.fact dd.wrap { overflow-wrap: anywhere; font-size: 15px; }
+.danger-zone fieldset { border-color: #f1c4c0; }
+.danger-zone legend { color: #b42318; }
+.danger-zone .btn-danger { margin-left: 0; }
+.danger-zone .field { max-width: 320px; }
+
 /* Admin user list */
 .users td[data-label="Email"] { overflow-wrap: anywhere; }
 
@@ -300,7 +308,7 @@ button.choice:disabled { opacity: 0.6; cursor: progress; }
   .lead { font-size: 16px; line-height: 24px; }
   .choices { grid-template-columns: 1fr; gap: 12px; }
   .steps, .field-row, .field-grid { grid-template-columns: 1fr; }
-  .who-name { display: none; }
+  .who-name, .nav-home { display: none; }
   .nav-link { padding: 4px; }
   .panel { padding: 20px; }
   .btn-danger { margin-left: 0; }

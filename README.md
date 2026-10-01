@@ -29,6 +29,7 @@ Landlords list rooms; renters answer a short questionnaire and see rooms that fi
 | Current listings (active units) | `/listings` | Anyone |
 | Sample dashboard (fictional data) | `/sample`, `/properties/<id>` | Anyone |
 | Choose landlord or renter (once) | `/welcome` | Signed in |
+| Your account, delete my account | `/account` | Signed in |
 | Your units | `/landlord`, `/landlord/units/new` | Landlords |
 | Questionnaire and matches | `/renter` | Renters |
 | User list (read only) | `/admin` | Admin |

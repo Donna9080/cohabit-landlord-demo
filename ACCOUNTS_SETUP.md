@@ -52,6 +52,7 @@ The fictional sample dashboard (`/sample`, `/properties/<id>`) is still in
 | Sign in with Google, choose landlord/renter once | ✓ | | | |
 | Create/view/edit/delete **own** units | | ✓ | | |
 | Save/edit **own** preferences, see matches | | | ✓ | |
+| Delete **own** account and everything saved with it (`/account`) | | ✓ | ✓ | ✓ (not the last admin) |
 | Read-only user list (`/admin`) | | | | ✓ |
 
 Rules enforced on the server (`src/index.js`), not in the page:
@@ -63,6 +64,10 @@ Rules enforced on the server (`src/index.js`), not in the page:
   database trigger rejects any later change. Choosing a type never touches `role`.
 - `role` defaults to `user`. No web endpoint changes it. Admin checks read the
   role from D1 on every request, so demotion is immediate.
+- Delete my account (`POST /api/me/delete`, body `{"confirm":"DELETE"}`) removes only the signed-in user: their units,
+  preferences, sessions, Google link and user row, in one D1 batch (one transaction). No user id is read from the
+  request. The last remaining admin is refused (409), so the owner can't lock themself out. Signing in again with
+  the same Google account afterwards creates a brand-new, empty account.
 - Only four Better Auth endpoints are reachable: `GET /api/auth/get-session`,
   `POST /api/auth/sign-in/social`, `GET /api/auth/callback/google`,
   `POST /api/auth/sign-out`. Everything else under `/api/auth/` returns 404
@@ -172,7 +177,7 @@ npm install
 copy .dev.vars.example .dev.vars        # then fill in the values (BETTER_AUTH_SECRET: any long random string)
 npm run db:migrate:local                # = wrangler d1 migrations apply DB --local
 npm run dev                             # http://localhost:8787
-npm test                                # 109 automated checks (see below)
+npm test                                # 122 automated checks (see below)
 ```
 
 `npm test` (`tests/run-local.mjs`) wipes and recreates a separate local database in
@@ -230,7 +235,7 @@ Cloudflare dashboard (Workers & Pages → Plans). Alerts are not a spending cap.
 Landlord tenant preferences, applicant or match tracking, private notes, saved matches,
 messaging, listing photos / R2 uploads, landlord approval or verification, roommate
 (person-to-person) matching, admin moderation/editing/deleting, admin stats,
-role-management UI, account deletion UI, changing account type, payments.
+role-management UI, admin deleting other people's accounts, changing account type, payments.
 
 ## Manual test for a group member (about 10 minutes)
 

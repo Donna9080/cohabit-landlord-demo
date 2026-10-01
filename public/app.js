@@ -7,6 +7,7 @@
 //   /listings                Active units, listing fields only (public)
 //   /sample, /properties/<id>  Fictional sample dashboard (public, clearly labeled)
 //   /welcome                 After Google sign-in: choose landlord or renter (once)
+//   /account                 Your name, email, account type; delete my account
 //   /landlord                A landlord's own units
 //   /landlord/units/new      Add a unit
 //   /landlord/units/<id>     Edit or delete a unit
@@ -109,7 +110,8 @@
     const home = u.accountType === "landlord" ? "/landlord" : u.accountType === "renter" ? "/renter" : "/welcome";
     accountEl.innerHTML = `
       ${u.isAdmin ? `<a class="nav-link" href="/admin">Admin</a>` : ""}
-      <a class="nav-link who" href="${home}" title="${esc(u.email)}"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(u.name || u.email))}</span><span class="who-name">${esc(u.name)}</span></a>
+      <a class="nav-link nav-home" href="${home}">${u.accountType === "landlord" ? "My units" : u.accountType === "renter" ? "My matches" : "Get started"}</a>
+      <a class="nav-link who" href="/account" title="Your account: ${esc(u.email)}"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(u.name || u.email))}</span><span class="who-name">${esc(u.name)}</span></a>
       <button class="btn btn-small btn-quiet" type="button" data-action="sign-out">Sign out</button>`;
   }
 
@@ -297,7 +299,7 @@
         <p>coHabit runs on Cloudflare, which stores the database and processes requests on our behalf, and keeps short-term technical logs. Google handles the sign-in step.</p>
 
         <h2>Your choices</h2>
-        <p>You can edit or delete your units and edit your answers at any time. To delete your account and everything saved with it, contact the coHabit team using the support email shown on the Google sign-in screen. You can also remove coHabit's access in your Google Account under Security → Your connections to third-party apps.</p>
+        <p>You can edit or delete your units and edit your answers at any time. To delete your account and everything saved with it, sign in, click your name in the top bar, and use <a href="/account">Delete my account</a>. It takes effect immediately. You can also remove coHabit's access in your Google Account under Security → Your connections to third-party apps.</p>
 
         <p class="links"><a href="/terms">Terms of use</a> · <a href="/">Back to home</a></p>
       </article>`,
@@ -784,6 +786,59 @@
     };
   }
 
+  // ── Account: who you are, and delete my account ──────────────────────────────
+  function accountPage() {
+    const u = me.user;
+    if (!u) return signInView("/account", "Account");
+    const saved =
+      u.accountType === "landlord"
+        ? "all of your units"
+        : u.accountType === "renter"
+          ? "your questionnaire answers"
+          : "anything you have saved";
+    return {
+      title: "Your account",
+      brand: "Account",
+      html: `
+      <div class="heading"><h1 tabindex="-1">Your account</h1></div>
+      <dl class="facts">
+        <div class="fact"><dt>Name</dt><dd>${esc(u.name)}</dd></div>
+        <div class="fact"><dt>Email</dt><dd class="wrap">${esc(u.email)}</dd></div>
+        <div class="fact"><dt>Account type</dt><dd>${u.accountType ? esc(u.accountType[0].toUpperCase() + u.accountType.slice(1)) : "Not chosen yet"}${u.isAdmin ? ` <span class="badge">Admin</span>` : ""}</dd></div>
+      </dl>
+      ${u.accountType ? `<p class="links"><a href="${u.accountType === "landlord" ? "/landlord" : "/renter"}">${u.accountType === "landlord" ? "Go to your units" : "Go to your matches"}</a></p>` : ""}
+      <p class="muted small">Your name and email come from Google. See the <a href="/privacy">privacy policy</a> for what coHabit keeps.</p>
+      <form class="form danger-zone" id="delete-account-form" novalidate>
+        <fieldset>
+          <legend>Delete my account</legend>
+          <p>This permanently deletes your coHabit account, ${saved}, and signs you out. It can't be undone. Your Google account is not affected.</p>
+          ${field("confirm", "Type DELETE to confirm", input("confirm", 'type="text" autocomplete="off" autocapitalize="characters" spellcheck="false"', ""))}
+          <p class="form-error" id="form-error" role="alert"></p>
+          <div class="actions"><button class="btn btn-danger" type="submit">Delete my account</button></div>
+        </fieldset>
+      </form>`,
+    };
+  }
+
+  async function submitDeleteAccount(form) {
+    const btn = form.querySelector("[type=submit]");
+    const confirmText = form.elements.confirm.value.trim();
+    if (confirmText !== "DELETE") return showErrors(form, { field: "confirm", message: "Type DELETE in capital letters to confirm." });
+    btn.disabled = true;
+    try {
+      await api("/api/me/delete", { method: "POST", body: { confirm: confirmText } });
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      showErrors(form, e);
+      btn.disabled = false;
+      return;
+    }
+    me = { user: null, sessionExpired: false };
+    renderAccount();
+    history.replaceState(null, "", "/");
+    showView(messageView("Your account was deleted", "Your account and everything saved with it have been removed. You're signed out.", `<a class="btn btn-quiet" href="/">Go to home page</a>`, ""), true);
+  }
+
   function notFound() {
     return messageView("Page not found", "This page doesn't exist.", `<a class="btn btn-quiet" href="/">Go to home page</a>`, "");
   }
@@ -798,6 +853,7 @@
     if (clean === "/listings") return listings();
     if (clean === "/sample") return sampleDashboard();
     if (clean === "/welcome") return welcome();
+    if (clean === "/account") return accountPage();
     if (clean === "/signin-error")
       return messageView("Sign-in didn't work", "Google sign-in was cancelled or failed. Please try again.", `<button class="btn" type="button" data-action="sign-in">Try again</button>`, "");
     if (clean === "/landlord") return landlordDashboard();
@@ -894,6 +950,9 @@
     } else if (e.target.id === "prefs-form") {
       e.preventDefault();
       submitPrefs(e.target);
+    } else if (e.target.id === "delete-account-form") {
+      e.preventDefault();
+      submitDeleteAccount(e.target);
     }
   });
 

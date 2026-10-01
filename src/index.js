@@ -2,7 +2,7 @@
 // only /api/* reaches this code (see run_worker_first in wrangler.jsonc).
 //
 //   /api/auth/*   Google sign-in, sign-out, session (Better Auth, allowlisted paths only)
-//   /api/me       who is signed in; one-time landlord/renter choice
+//   /api/me       who is signed in; one-time landlord/renter choice; delete my account
 //   /api/landlord/units[/<id>]   a landlord's own units
 //   /api/listings                active units, listing fields only (public)
 //   /api/renter/preferences      a renter's own questionnaire answers
@@ -203,6 +203,31 @@ async function handleApi(request, env, url) {
       .run();
     if (res.meta.changes !== 1) throw new HttpError(409, "already_chosen", "Your account type is already set.");
     return reply({ accountType });
+  }
+
+  // Delete my own account and everything saved with it. Only ever the signed-in user's own row.
+  if (path === "/api/me/delete" && method === "POST") {
+    const user = requireUser(viewer);
+    const body = await readJson(request);
+    if (body?.confirm !== "DELETE") throw new InvalidInput("confirm", "Type DELETE to confirm.");
+    if (user.role === "admin") {
+      const { n } = await db.prepare(`SELECT COUNT(*) AS n FROM "user" WHERE role = 'admin'`).first();
+      if (n <= 1) throw new HttpError(409, "last_admin", "You are the only admin, so this account can't be deleted here.");
+    }
+    // One batch = one transaction in D1. Children first, then the user row.
+    await db.batch([
+      db.prepare(`DELETE FROM units WHERE landlord_user_id = ?1`).bind(user.id),
+      db.prepare(`DELETE FROM match_preferences WHERE user_id = ?1`).bind(user.id),
+      db.prepare(`DELETE FROM "session" WHERE "userId" = ?1`).bind(user.id),
+      db.prepare(`DELETE FROM "account" WHERE "userId" = ?1`).bind(user.id),
+      db.prepare(`DELETE FROM app_rate_limits WHERE key IN (?1, ?2)`).bind(`r:u:${user.id}`, `w:u:${user.id}`),
+      db.prepare(`DELETE FROM "user" WHERE id = ?1`).bind(user.id),
+    ]);
+    const gone = "Max-Age=0; Path=/; HttpOnly; SameSite=Lax";
+    return json({ deleted: true }, 200, [
+      `better-auth.session_token=; ${gone}`,
+      `__Secure-better-auth.session_token=; ${gone}; Secure`,
+    ]);
   }
 
   // Landlord: own units only. Owner always comes from the session.

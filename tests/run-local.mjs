@@ -273,6 +273,8 @@ try {
   const ra = r.data.users.find((u) => u.email === renterA.email);
   const rb = r.data.users.find((u) => u.email === renterB.email);
   check("Admin list shows unit count for landlords and prefs yes/no for renters", la.unitCount === 2 && ra.hasPreferences === true && rb.hasPreferences === true && la.hasPreferences === null);
+  r = await api("/api/me/delete", { method: "POST", as: admin, body: { confirm: "DELETE" } });
+  check("The only admin cannot delete their own account (409)", r.status === 409 && d1rows(`SELECT COUNT(*) AS n FROM "user" WHERE id='t_admin'`)[0].n === 1);
   d1(`UPDATE "user" SET role='user' WHERE id='t_admin'`);
   r = await api("/api/admin/users", { as: admin });
   check("Demoting the disposable admin removes access immediately (403)", r.status === 403);
@@ -343,6 +345,30 @@ try {
   check("Session row removed from D1", d1rows(`SELECT COUNT(*) AS n FROM "session" WHERE "userId"='t_renter_b'`)[0].n === 0);
   r = await api("/api/auth/sign-out", { method: "POST", as: renterA, body: {}, origin: "https://evil.example" });
   check("Cross-origin sign-out blocked (403)", r.status === 403);
+
+  // ── Delete my account ─────────────────────────────────────────────────────
+  const count = (sqlText) => d1rows(sqlText)[0].n;
+  r = await api("/api/me/delete", { method: "POST", body: { confirm: "DELETE" } });
+  check("Visitor cannot call delete-account (401)", r.status === 401);
+  r = await api("/api/me/delete", { method: "POST", as: landlordB, body: { confirm: "DELETE" }, origin: "https://evil.example" });
+  check("Cross-origin delete-account blocked (403)", r.status === 403);
+  r = await api("/api/me/delete", { method: "POST", as: landlordB, body: {} });
+  check("Delete-account without typed confirmation refused (400)", r.status === 400);
+  d1(`INSERT INTO "account" (id,"accountId","providerId","userId","createdAt","updatedAt") VALUES ('acc_b','google-sub-b','google','t_landlord_b','${now}','${now}')`);
+  check("Before deleting: Landlord B has units and a Google link", count(`SELECT COUNT(*) AS n FROM units WHERE landlord_user_id='t_landlord_b'`) >= 1 && count(`SELECT COUNT(*) AS n FROM "account" WHERE "userId"='t_landlord_b'`) === 1);
+  r = await api("/api/me/delete", { method: "POST", as: landlordB, body: { confirm: "DELETE", userId: "t_landlord_a", id: "t_landlord_a" } });
+  check("Landlord B deletes own account (forged other user id ignored)", r.status === 200 && r.data.deleted === true);
+  check("Deleted user's row, units, sessions and Google link are gone",
+    count(`SELECT (SELECT COUNT(*) FROM "user" WHERE id='t_landlord_b') + (SELECT COUNT(*) FROM units WHERE landlord_user_id='t_landlord_b') + (SELECT COUNT(*) FROM "session" WHERE "userId"='t_landlord_b') + (SELECT COUNT(*) FROM "account" WHERE "userId"='t_landlord_b') AS n`) === 0);
+  check("Landlord A and their units are untouched", count(`SELECT COUNT(*) AS n FROM "user" WHERE id='t_landlord_a'`) === 1 && count(`SELECT COUNT(*) AS n FROM units WHERE landlord_user_id='t_landlord_a'`) === 2);
+  check("Response clears the session cookie", (r.headers.getSetCookie?.() || []).some((c) => c.startsWith("better-auth.session_token=;") && c.includes("Max-Age=0")));
+  r = await api("/api/me", { as: landlordB });
+  check("Deleted user's old cookie no longer signs in", r.data.user === null);
+  r = await api("/api/listings");
+  check("Deleted landlord's units no longer listed", r.data.listings.every((u) => u.name !== inj) && r.data.listings.some((u) => u.id === unitA.id));
+  r = await api("/api/me/delete", { method: "POST", as: renterA, body: { confirm: "DELETE" } });
+  check("Renter A deletes own account; questionnaire answers are gone", r.status === 200 && count(`SELECT COUNT(*) AS n FROM match_preferences WHERE user_id='t_renter_a'`) === 0 && count(`SELECT COUNT(*) AS n FROM "user" WHERE id='t_renter_a'`) === 0);
+  check("Other renters' answers untouched", count(`SELECT COUNT(*) AS n FROM match_preferences WHERE user_id='t_renter_b'`) === 1);
 
   // ── Rate limits ───────────────────────────────────────────────────────────
   let statuses = [];
