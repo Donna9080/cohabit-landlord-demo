@@ -246,6 +246,14 @@ button.choice:disabled { opacity: 0.6; cursor: progress; }
 .reasons li { font-size: 12px; font-weight: 500; padding: 3px 8px; border-radius: 6px; background: var(--navy-subtle); color: var(--navy); }
 .badge { font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 6px; background: var(--amber-bg); color: var(--amber); vertical-align: middle; }
 
+/* Text pages (privacy, terms) */
+.prose { display: flex; flex-direction: column; gap: 14px; max-width: 720px; }
+.prose h2 { font-size: 18px; font-weight: 600; margin-top: 10px; }
+.prose p, .prose li { line-height: 1.6; }
+.prose ul { padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.prose strong { font-weight: 600; }
+.prose a { color: var(--navy); font-weight: 500; }
+
 /* How it works */
 .how { display: flex; flex-direction: column; gap: 16px; width: 100%; text-align: left; }
 .how > h2 { font-size: 20px; font-weight: 600; }

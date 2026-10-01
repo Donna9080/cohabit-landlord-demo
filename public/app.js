@@ -3,6 +3,7 @@
 //
 //   /                        Front page (public)
 //   /how-it-works            How coHabit works (public)
+//   /privacy, /terms         Privacy policy and terms of use (public)
 //   /listings                Active units, listing fields only (public)
 //   /sample, /properties/<id>  Fictional sample dashboard (public, clearly labeled)
 //   /welcome                 After Google sign-in: choose landlord or renter (once)
@@ -242,6 +243,7 @@
           ${howSteps}
         </section>
         <p class="links"><a href="/listings">Browse current listings</a> · <a href="/sample">See a sample landlord dashboard</a></p>
+        <p class="links small"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
       </div>`,
     };
   }
@@ -257,6 +259,69 @@
       </div>
       ${howSteps}
       <p class="links"><a href="/listings">Browse current listings</a> · <a href="/">Back to home</a></p>`,
+    };
+  }
+
+  // Keep these two pages in step with ACCOUNTS_SETUP.md ("What is stored where").
+  function privacy() {
+    return {
+      title: "Privacy",
+      brand: "",
+      html: `
+      <article class="prose">
+        <h1 tabindex="-1">Privacy policy</h1>
+        <p class="muted">Last updated October 1, 2026. coHabit is a student project for shared student housing.</p>
+
+        <h2>What we collect</h2>
+        <ul>
+          <li><strong>From Google when you sign in:</strong> your name, your email address, and Google's ID for your account. We ask Google only for basic sign-in information (openid, email, profile). We do not keep Google access tokens or your profile photo, and we never see your Google password.</li>
+          <li><strong>Your account type:</strong> whether you chose landlord or renter.</li>
+          <li><strong>If you are a landlord:</strong> the units you add: name, general area, monthly rent, rooms available, move-in date, description and status.</li>
+          <li><strong>If you are a renter:</strong> your questionnaire answers: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets and smoking.</li>
+          <li><strong>To keep you signed in:</strong> one cookie that holds your session. It can't be read by scripts and expires after 7 days without use.</li>
+          <li><strong>To limit abuse:</strong> short-lived request counters that include your IP address. They are deleted within about a day.</li>
+        </ul>
+        <p>We do not ask for street addresses, phone numbers, government IDs, dates of birth, payment details or health information. Please don't put them in descriptions.</p>
+
+        <h2>Who can see it</h2>
+        <ul>
+          <li><strong>Everyone:</strong> active units' listing details (name, area, rent, rooms, move-in date, description). Never the landlord's name or email.</li>
+          <li><strong>Only you:</strong> your inactive units, and your questionnaire answers. Other renters and landlords cannot see your answers.</li>
+          <li><strong>The coHabit admin:</strong> a list of users with name, email, account type, join date, and either a count of units or whether preferences are saved. Not your questionnaire answers.</li>
+        </ul>
+
+        <h2>How we use it</h2>
+        <p>Only to run coHabit: to sign you in, show your units or preferences back to you, and match renters to active units. We don't sell or share your information, show ads, or use tracking or analytics cookies. Matching runs inside coHabit; your answers are not sent to any outside AI service.</p>
+
+        <h2>Where it is kept</h2>
+        <p>coHabit runs on Cloudflare, which stores the database and processes requests on our behalf, and keeps short-term technical logs. Google handles the sign-in step.</p>
+
+        <h2>Your choices</h2>
+        <p>You can edit or delete your units and edit your answers at any time. To delete your account and everything saved with it, contact the coHabit team using the support email shown on the Google sign-in screen. You can also remove coHabit's access in your Google Account under Security → Your connections to third-party apps.</p>
+
+        <p class="links"><a href="/terms">Terms of use</a> · <a href="/">Back to home</a></p>
+      </article>`,
+    };
+  }
+
+  function terms() {
+    return {
+      title: "Terms",
+      brand: "",
+      html: `
+      <article class="prose">
+        <h1 tabindex="-1">Terms of use</h1>
+        <p class="muted">Last updated October 1, 2026. coHabit is a student project and is offered free of charge.</p>
+        <ul>
+          <li><strong>Listings are provided by landlords.</strong> coHabit does not verify landlords, units or renters, and is not a party to any lease or agreement. Check details yourself before making any commitment or payment.</li>
+          <li><strong>Be accurate and lawful.</strong> Only list units you have the right to offer. Don't post street addresses, phone numbers, other people's personal information, or anything discriminatory, misleading or illegal.</li>
+          <li><strong>Matches are suggestions.</strong> They are based on the budget, area, timing and rooms you entered, and are not a recommendation or guarantee.</li>
+          <li><strong>No guarantees.</strong> The service is provided as is. It may change, be unavailable, or be shut down, and saved information may be removed.</li>
+          <li><strong>Accounts.</strong> We may remove content or accounts that break these terms.</li>
+        </ul>
+        <p>How your information is handled is described in the <a href="/privacy">privacy policy</a>.</p>
+        <p class="links"><a href="/privacy">Privacy policy</a> · <a href="/">Back to home</a></p>
+      </article>`,
     };
   }
 
@@ -728,6 +793,8 @@
     const clean = path.replace(/\/+$/, "") || "/";
     if (clean === "/" || clean === "/index.html") return home();
     if (clean === "/how-it-works") return howItWorks();
+    if (clean === "/privacy") return privacy();
+    if (clean === "/terms") return terms();
     if (clean === "/listings") return listings();
     if (clean === "/sample") return sampleDashboard();
     if (clean === "/welcome") return welcome();

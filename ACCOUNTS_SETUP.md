@@ -156,6 +156,9 @@ allowed to create Cloud projects or "External" apps.
    **Test users** can sign in (max 100). To let anyone sign in, click **Publish app**
    → **In production**. With only name/email/profile, Google doesn't require a
    review. Don't upload a logo: that triggers brand verification.
+   If **Publish app** is greyed out with "complete your configuration on the Branding page", fill in on **Branding**:
+   home page `https://cohabit-landlord-demo.dolgorsureng.workers.dev`, privacy policy `…/privacy`, terms `…/terms`,
+   authorized domain `dolgorsureng.workers.dev`, then **Save**.
 6. Google changes can take a few minutes to apply. `redirect_uri_mismatch` means the
    callback URL in step 4 doesn't exactly match the site address.
 

@@ -25,6 +25,7 @@ Landlords list rooms; renters answer a short questionnaire and see rooms that fi
 | Page | Address | Who |
 | --- | --- | --- |
 | Front page, How it works | `/`, `/how-it-works` | Anyone |
+| Privacy policy, Terms of use | `/privacy`, `/terms` | Anyone |
 | Current listings (active units) | `/listings` | Anyone |
 | Sample dashboard (fictional data) | `/sample`, `/properties/<id>` | Anyone |
 | Choose landlord or renter (once) | `/welcome` | Signed in |
