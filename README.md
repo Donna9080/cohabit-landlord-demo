@@ -12,9 +12,9 @@
 
 ![Unit page for "Sunny 3-bedroom near campus": rent, rooms and move-in date tiles, a description, and two interested renters with their notes](docs/unit.png)
 
-**Renter's matches:** rooms ranked against the renter's questionnaire, with the reasons for each match and an "I'm interested" button.
+**Renter's matches:** a summary of the saved preferences, then rooms ranked against them, with the reasons for each match and an "I'm interested" button.
 
-![Matching rooms for a renter: cards with a match percentage, reasons such as "Within your budget" and "In your area", and a request already sent for one room](docs/renter.png)
+![Renter page: a preferences summary with budget, move-in month, area and lifestyle answers, then matching rooms with a match percentage, reasons such as "Within your budget", a sort control, and a request already sent for one room](docs/renter.png)
 
 <p align="center">
   <img src="docs/phone-dashboard.png" width="300" alt="The landlord dashboard on a phone: navigation on a second row, a full-width Add a unit button, tiles and stacked unit cards" />

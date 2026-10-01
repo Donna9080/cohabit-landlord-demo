@@ -41,6 +41,9 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [x] Interface polish for user testing (2026-10-01): one navigation bar, dashboard with summary tiles, new unit page
       (details + interested renters), no more How it works, single blue accent, shared loading/empty/error/success
       states. Frontend only. Deployed as `f72de36f-ce45-453f-a2e7-989b88a96bc7`. Signed-out pages checked live.
+- [x] Polish round 2 (2026-10-01): in-app confirm dialog, renter preferences summary with Edit preferences, sorting for
+      matches, sort and search for listings, role-specific home page, tables as cards below 900px, skip link.
+      Frontend only. Deployed as `697c8f5b-6eff-4230-9e68-5152c6b923cc`; listings search and sort checked live.
 - [ ] After the polish: owner re-checks on the live site with real Google accounts (sign in, first-time landlord/renter
       choice, dashboard to unit page to edit and back, renter page, admin page)
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
