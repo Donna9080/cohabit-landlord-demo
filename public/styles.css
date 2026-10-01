@@ -244,6 +244,8 @@ button.choice:disabled { opacity: 0.6; cursor: progress; }
 .desc { color: var(--sub); overflow-wrap: anywhere; }
 .reasons { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .reasons li { font-size: 12px; font-weight: 500; padding: 3px 8px; border-radius: 6px; background: var(--navy-subtle); color: var(--navy); }
+.card-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.badge-sample { background: var(--subtle); color: var(--sub); border: 1px solid var(--border); }
 .badge { font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 6px; background: var(--amber-bg); color: var(--amber); vertical-align: middle; }
 
 /* Text pages (privacy, terms) */

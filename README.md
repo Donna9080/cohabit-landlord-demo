@@ -87,5 +87,7 @@ src/validate.js     checks every field sent by the browser
 src/match.js        renter-to-unit matching rules
 migrations/         database tables (D1)
 tests/run-local.mjs automated local tests (npm test)
+scripts/sample-data.mjs  fictional sample landlords, units and renters (see ACCOUNTS_SETUP.md)
+docs/SAMPLE_MATCHING.md  how matching works, shown with the sample data
 wrangler.jsonc      Cloudflare settings
 ```

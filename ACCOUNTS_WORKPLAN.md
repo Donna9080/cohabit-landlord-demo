@@ -13,7 +13,7 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [x] Worker API with server-side permissions, validation, CSRF/origin checks, D1 rate limits, daily cleanup
 - [x] UI: sign in/out, one-time landlord/renter choice, units dashboard + form, renter questionnaire + matches,
       public listings, How it works, admin user list; sample dashboard moved to `/sample`
-- [x] Local tests: `npm test` 122/122 passing (local D1), plus browser check of each screen (desktop + phone)
+- [x] Local tests: `npm test` 124/124 passing (local D1), plus browser check of each screen (desktop + phone)
 - [x] Handoff docs (this file, ACCOUNTS_SETUP.md)
 - [x] Owner: created Google OAuth client, set 3 secrets (2026-09-30)
 - [x] Applied migration `--remote`, first deployed version `dcb965ea-d350-4e36-b56e-3458f7f7c423` (current: `1eb287af-f083-4312-a309-46cf923ab3b1`), signed-out live checks pass
@@ -24,6 +24,10 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [x] Delete my account: `/account` page + `POST /api/me/delete` (2026-10-01), 13 new tests, deployed as
       `514b3a18-af63-4c17-bb68-78d4140ed0db`. Live: visitor 401, cross-origin 403. Not exercised live with a real
       account (that would delete it); covered by local tests and a local browser run.
+- [x] Fictional sample data loaded in production (2026-10-01): 6 landlords, 20 units, 30 renters, all tagged Sample;
+      matching write-up in `docs/SAMPLE_MATCHING.md`. Restore bookmark from just before the load:
+      `00000019-00000000-000050f7-8f1857dca024c6a8f827bb00861ff290`. Removal command in ACCOUNTS_SETUP.md.
+- [ ] Decide whether to tighten matching (sample run: 49% of shown matches are outside the renter's area, 84 are over budget)
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
 - [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works
 - [ ] Live test with a second Google account as renter
@@ -60,7 +64,7 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 
 ## Tests completed (local, 2026-09-29)
 
-`npm test` → **122/122 passed** against Wrangler's local D1 (`.wrangler/test-state`).
+`npm test` → **124/124 passed** against Wrangler's local D1 (`.wrangler/test-state`).
 Covers: public pages; Google authorization URL (scopes exactly openid/email/profile,
 PKCE S256, state, no offline access, correct redirect URI, injected scope dropped);
 forged OAuth state rejected; non-allowlisted Better Auth endpoints 404; one-time account

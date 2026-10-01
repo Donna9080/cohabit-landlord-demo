@@ -342,7 +342,7 @@
         <article class="card">
           <div class="card-top">
             <span class="icon-tile">${icon("house", 20)}</span>
-            ${extra}
+            <span class="card-tags">${u.sample ? `<span class="tag" title="Fictional listing for demonstration">Sample</span>` : ""}${extra}</span>
           </div>
           <div>
             <h2 class="card-title">${esc(u.name)}</h2>
@@ -761,7 +761,7 @@
       .map(
         (u) => `
         <tr>
-          <td><span class="person"><span class="avatar" aria-hidden="true">${esc(initials(u.name || u.email))}</span><span class="name">${esc(u.name)}${u.role === "admin" ? ` <span class="badge">Admin</span>` : ""}</span></span></td>
+          <td><span class="person"><span class="avatar" aria-hidden="true">${esc(initials(u.name || u.email))}</span><span class="name">${esc(u.name)}${u.role === "admin" ? ` <span class="badge">Admin</span>` : ""}${u.isSample ? ` <span class="badge badge-sample">Sample</span>` : ""}</span></span></td>
           <td data-label="Email">${esc(u.email)}</td>
           <td data-label="Account type">${u.accountType ? esc(u.accountType[0].toUpperCase() + u.accountType.slice(1)) : "Not chosen yet"}</td>
           <td data-label="Joined">${esc(fmtJoined(u.joinedAt))}</td>
@@ -769,15 +769,18 @@
         </tr>`
       )
       .join("");
-    const landlords = users.filter((u) => u.accountType === "landlord").length;
-    const renters = users.filter((u) => u.accountType === "renter").length;
+    // Counts are real people only; fictional sample accounts are counted separately.
+    const real = users.filter((u) => !u.isSample);
+    const samples = users.length - real.length;
+    const landlords = real.filter((u) => u.accountType === "landlord").length;
+    const renters = real.filter((u) => u.accountType === "renter").length;
     return {
       title: "Users",
       brand: "Admin",
       html: `
       <div class="heading">
         <h1 tabindex="-1">Users</h1>
-        <p class="muted">${plural(users.length, "person", "people")} · ${plural(landlords, "landlord", "landlords")} · ${plural(renters, "renter", "renters")}. Read only.</p>
+        <p class="muted">${plural(real.length, "person", "people")} · ${plural(landlords, "landlord", "landlords")} · ${plural(renters, "renter", "renters")}${samples ? ` · plus ${plural(samples, "fictional sample account", "fictional sample accounts")}` : ""}. Read only.</p>
       </div>
       <table class="tenants users">
         <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Account type</th><th scope="col">Joined</th><th scope="col">Activity</th></tr></thead>

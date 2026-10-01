@@ -221,8 +221,11 @@ try {
   r = await api("/api/listings");
   check("Visitor listings include active unit", r.data.listings.some((u) => u.id === unitA.id));
   check("Inactive unit never in public listings", !r.data.listings.some((u) => u.id === inactiveId));
+  d1(`INSERT INTO "user" (id,name,email,"emailVerified","createdAt","updatedAt",role,account_type) VALUES ('sample-landlord-99','Sample Landlord (sample)','landlord99@sample.example',0,'${now}','${now}','user','landlord'); INSERT INTO units (id,landlord_user_id,name,area,monthly_rent,rooms_available,move_in_date,description,status,created_at,updated_at) VALUES ('00000000-0000-4000-8000-000000000099','sample-landlord-99','Sample room','Waltham, MA',1000,1,'2027-06-01','','active',1,1)`);
+  r = await api("/api/listings");
+  check("Sample listings are flagged, real ones are not", r.data.listings.find((u) => u.id === "00000000-0000-4000-8000-000000000099")?.sample === true && r.data.listings.find((u) => u.id === unitA.id)?.sample === false);
   const listingKeys = Object.keys(r.data.listings[0] || {}).sort().join(",");
-  check("Listings expose only listing fields (no landlord id/email/status)", listingKeys === "area,description,id,monthly_rent,move_in_date,name,rooms_available", listingKeys);
+  check("Listings expose only listing fields (no landlord id/email/status)", listingKeys === "area,description,id,monthly_rent,move_in_date,name,rooms_available,sample", listingKeys);
 
   // ── Renter preferences & matches ──────────────────────────────────────────
   r = await api("/api/renter/preferences", { as: renterA });
@@ -265,7 +268,8 @@ try {
   r = await api("/api/landlord/units", { as: cookieFor(expiredToken) });
   check("Expired session cannot use landlord API (401 session_expired)", r.status === 401 && r.data.error === "session_expired");
   r = await api("/api/admin/users", { as: admin });
-  check("Admin can open the user list", r.status === 200 && Array.isArray(r.data.users) && r.data.users.length === Object.keys(people).length);
+  check("Admin can open the user list", r.status === 200 && Array.isArray(r.data.users) && r.data.users.length === Object.keys(people).length + 1);
+  check("Admin list flags sample accounts", r.data.users.filter((u) => u.isSample).map((u) => u.email).join() === "landlord99@sample.example");
   const adminText = JSON.stringify(r.data);
   const leaked = ["budget", "sleep_schedule", "smoking", "token", "session", "expiresAt", "monthly_rent", "\"id\"", "accountId", "Waltham"].filter((k) => adminText.includes(k));
   check("Admin list contains no questionnaire answers, unit details, ids, tokens or sessions", leaked.length === 0, leaked.join(","));

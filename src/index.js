@@ -167,7 +167,9 @@ async function handleAuth(request, env, url) {
 // ── App API ─────────────────────────────────────────────────────────────────
 
 const UNIT_OWNER_FIELDS = "id, name, area, monthly_rent, rooms_available, move_in_date, description, status, created_at, updated_at";
-const LISTING_FIELDS = "id, name, area, monthly_rent, rooms_available, move_in_date, description";
+// "sample" marks fictional demo listings (owned by users whose id starts with "sample-"; see scripts/sample-data.mjs).
+const LISTING_FIELDS = "id, name, area, monthly_rent, rooms_available, move_in_date, description, (landlord_user_id LIKE 'sample-%') AS sample";
+const asListing = (u) => ({ ...u, sample: !!u.sample });
 const PREF_FIELDS =
   "budget_min, budget_max, move_in_month, area, rooms_needed, sleep_schedule, cleanliness, noise, guests, pets, smoking, updated_at";
 
@@ -295,7 +297,7 @@ async function handleApi(request, env, url) {
     const { results } = await db
       .prepare(`SELECT ${LISTING_FIELDS} FROM units WHERE status = 'active' ORDER BY move_in_date, id LIMIT 100`)
       .all();
-    return reply({ listings: results });
+    return reply({ listings: results.map(asListing) });
   }
 
   // Renter: own preferences only.
@@ -335,7 +337,7 @@ async function handleApi(request, env, url) {
     const { results } = await db
       .prepare(`SELECT ${LISTING_FIELDS} FROM units WHERE status = 'active' ORDER BY move_in_date, id LIMIT 200`)
       .all();
-    return reply({ matches: rankUnits(prefs, results) });
+    return reply({ matches: rankUnits(prefs, results.map(asListing)) });
   }
 
   // Admin: read-only user list. No questionnaire answers, unit details, sessions or tokens.
@@ -344,7 +346,7 @@ async function handleApi(request, env, url) {
     if (user.role !== "admin") throw new HttpError(403, "forbidden", "You don't have access to this page.");
     const { results } = await db
       .prepare(
-        `SELECT u.name, u.email, u.account_type AS accountType, u.role, u."createdAt" AS joinedAt,
+        `SELECT u.name, u.email, u.account_type AS accountType, u.role, u."createdAt" AS joinedAt, (u.id LIKE 'sample-%') AS isSample,
            CASE WHEN u.account_type = 'landlord'
              THEN (SELECT COUNT(*) FROM units WHERE landlord_user_id = u.id) END AS unitCount,
            CASE WHEN u.account_type = 'renter'
@@ -352,7 +354,7 @@ async function handleApi(request, env, url) {
          FROM "user" u ORDER BY u."createdAt" DESC LIMIT 500`
       )
       .all();
-    return reply({ users: results.map((r) => ({ ...r, hasPreferences: r.hasPreferences == null ? null : !!r.hasPreferences })) });
+    return reply({ users: results.map((r) => ({ ...r, isSample: !!r.isSample, hasPreferences: r.hasPreferences == null ? null : !!r.hasPreferences })) });
   }
 
   throw new HttpError(404, "not_found", "Not found.");
