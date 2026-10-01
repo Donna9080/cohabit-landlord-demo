@@ -583,7 +583,7 @@
       <a class="back" href="/landlord">${icon("left", 16)} Back to your units</a>
       <div class="heading"><h1 tabindex="-1">${isNew ? "Add a unit" : "Edit unit"}</h1></div>
       <form class="form" id="unit-form" novalidate data-unit-id="${esc(id || "")}">
-        ${field("name", "Unit name", input("name", 'type="text" maxlength="80" required autocomplete="off"', u.name), "A short name renters will see, like “Sunny 3-bedroom near campus”.")}
+        ${field("name", "Unit name", input("name", 'type="text" maxlength="80" required autocomplete="off"', u.name), "A short name renters will see, like “Sunny 3-bedroom near campus”. Don't use the street address.")}
         ${field("area", "General area", input("area", 'type="text" maxlength="80" required autocomplete="off"', u.area), "Neighborhood or city only, like “Waltham, MA”. Don't enter a street address.")}
         <div class="field-row">
           ${field("monthly_rent", "Monthly rent per room ($)", input("monthly_rent", 'type="number" min="1" max="50000" step="1" required inputmode="numeric"', u.monthly_rent))}

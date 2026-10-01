@@ -298,6 +298,10 @@ try {
     [{ status: "published" }, "unknown status"],
     [{ move_in_date: "2027-02-30" }, "impossible date"],
     [{ area: "14 Elm Street, Waltham" }, "street address as area"],
+    [{ name: "225 South St, Waltham MA 02453" }, "street address as unit name"],
+    [{ name: "12 Main street" }, "street address as unit name (no city)"],
+    [{ name: "Room in Waltham 02453" }, "ZIP code in unit name"],
+    [{ description: "Come by 14 Elm Street any time." }, "street address in description"],
     [{ name: "" }, "empty name"],
     [{ name: "x".repeat(81) }, "name too long"],
     [{ description: "x".repeat(1001) }, "description too long"],
@@ -310,6 +314,10 @@ try {
   check("Budget min > max rejected", r.status === 400);
   r = await api("/api/renter/preferences", { method: "PUT", as: renterB, body: prefsBody({ pets: "dragons" }) });
   check("Unknown questionnaire answer rejected", r.status === 400);
+  for (const name of ["3 bedroom on Elm Street side of town", "Sunny room, 10 min walk to Main St", "2 rooms near South Street station"]) {
+    r = await api("/api/landlord/units", { method: "POST", as: landlordB, body: unitBody({ name }) });
+    check(`Normal unit name accepted: ${name}`, r.status === 201, JSON.stringify(r.data));
+  }
   const inj = `Robert'); DROP TABLE units;--`;
   r = await api("/api/landlord/units", { method: "POST", as: landlordB, body: unitBody({ name: inj, description: `<script>alert(1)</script>` }) });
   check("SQL injection text stored as plain text", r.status === 201 && r.data.unit.name === inj);

@@ -52,11 +52,21 @@ function month(body, field) {
   return v;
 }
 
-// Streets look like "14 Elm Street" or "22 Oak Ave". Areas should be a neighborhood or city.
-const STREET = /\b\d+\s+\w+.*\b(st|street|ave|avenue|rd|road|blvd|boulevard|ln|lane|dr|drive|ct|court|way|pl|place|ter|terrace)\b\.?/i;
+// Streets look like "14 Elm Street" or "225 South St": a house number, up to three words, then a street word.
+// The number must not be a count ("3 bedroom on Elm Street", "10 min to Main St" are fine).
+const STREET =
+  /\b\d{1,6}[a-z]?\s+(?!(?:bed|beds|bedroom|bedrooms|br|bath|baths|bathroom|room|rooms|min|mins|minute|minutes|mi|mile|miles|block|blocks|person|people|story|floor)\b)(?:[a-z.'-]+\s+){1,3}(?:st|street|ave|avenue|rd|road|blvd|boulevard|ln|lane|dr|drive|ct|court|ter|terrace|hwy|highway|pkwy|parkway|cir|circle)\b/i;
+const ZIP = /\b\d{5}(?:-\d{4})?\b/;
+const hasAddress = (s) => STREET.test(s) || ZIP.test(s);
+
 function area(body, field) {
   const s = text(body, field, { min: 1, max: 80 });
-  if (STREET.test(s)) throw new InvalidInput(field, "Enter a neighborhood or city, not a street address.");
+  if (hasAddress(s)) throw new InvalidInput(field, "Enter a neighborhood or city, not a street address or ZIP code.");
+  return s;
+}
+
+function noAddress(s, field) {
+  if (hasAddress(s)) throw new InvalidInput(field, "Leave out the street address and ZIP code. Use the general area instead.");
   return s;
 }
 
@@ -65,12 +75,12 @@ export const UNIT_STATUSES = ["active", "inactive"];
 export function parseUnit(body) {
   if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
   return {
-    name: text(body, "name", { min: 1, max: 80 }),
+    name: noAddress(text(body, "name", { min: 1, max: 80 }), "name"),
     area: area(body, "area"),
     monthly_rent: int(body, "monthly_rent", { min: 1, max: 50000 }),
     rooms_available: int(body, "rooms_available", { min: 1, max: 20 }),
     move_in_date: date(body, "move_in_date"),
-    description: body.description == null ? "" : text(body, "description", { max: 1000 }),
+    description: body.description == null ? "" : noAddress(text(body, "description", { max: 1000 }), "description"),
     status: oneOf(body, "status", UNIT_STATUSES),
   };
 }

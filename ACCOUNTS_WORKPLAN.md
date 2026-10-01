@@ -13,12 +13,15 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [x] Worker API with server-side permissions, validation, CSRF/origin checks, D1 rate limits, daily cleanup
 - [x] UI: sign in/out, one-time landlord/renter choice, units dashboard + form, renter questionnaire + matches,
       public listings, How it works, admin user list; sample dashboard moved to `/sample`
-- [x] Local tests: `npm test` 102/102 passing (local D1), plus browser check of each screen (desktop + phone)
+- [x] Local tests: `npm test` 109/109 passing (local D1), plus browser check of each screen (desktop + phone)
 - [x] Handoff docs (this file, ACCOUNTS_SETUP.md)
 - [x] Owner: created Google OAuth client, set 3 secrets (2026-09-30)
 - [x] Applied migration `--remote`, deployed version `dcb965ea-d350-4e36-b56e-3458f7f7c423`, signed-out live checks pass
 - [x] Owner signed in on the live site with Google (landlord); promoted to admin with the D1 command; read-back shows `role = admin`
-- [ ] Owner confirms `/admin` opens and add/edit/reload of a unit works on the live site
+- [x] Live: owner (landlord, admin) added 2 units; second Google account signed in as renter and saved preferences (seen in D1)
+- [x] Google app published (**In production**, External) after adding home page, `/privacy`, `/terms` and authorized domain on Branding
+- [ ] Owner confirms in the browser: `/admin` opens for the owner; `/landlord` and `/admin` refuse the renter account
+- [ ] Rename the two test units that have street addresses in their names (now refused for new saves)
 - [ ] Live test with a second Google account as renter
 
 ## Decisions
@@ -53,7 +56,7 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 
 ## Tests completed (local, 2026-09-29)
 
-`npm test` → **102/102 passed** against Wrangler's local D1 (`.wrangler/test-state`).
+`npm test` → **109/109 passed** against Wrangler's local D1 (`.wrangler/test-state`).
 Covers: public pages; Google authorization URL (scopes exactly openid/email/profile,
 PKCE S256, state, no offline access, correct redirect URI, injected scope dropped);
 forged OAuth state rejected; non-allowlisted Better Auth endpoints 404; one-time account
@@ -89,11 +92,14 @@ by the live test.
 - CPU time per sign-in request measured 6 to 57 ms (higher right after a deploy). Workers Free lists 10 ms per
   request; no request was cut off, but if sign-in ever fails with error 1102 this is why.
 
+- 2026-10-01: found on live data that street addresses were refused in the area field but accepted in the unit name
+  and description. Fixed in `src/validate.js` (house-number + street-word pattern, and ZIP codes), 7 new tests,
+  `npm test` 109/109, redeployed.
+- One request (a forged callback right after the first deploy) hung and returned 502; not reproduced in later tries.
+
 ## Blockers
 
-- Google app is still in **Testing**: only accounts listed under Audience → Test users can sign in. Not ready
-  for outside users until **Publish app** works (see ACCOUNTS_SETUP.md, Google sign-in setup, step 5).
-- Second-account (renter) live test not done yet.
+- Sign-in by an account that was never a test user has not been observed yet (app is published; ask a classmate to try).
 - Plan check: Wrangler's token can't read the account's subscriptions. Confirm **Workers Free** in the dashboard.
 
 ## Next safe step
