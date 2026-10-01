@@ -61,6 +61,13 @@ h1:focus { outline: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .muted a, .hint a, .notice a, .empty a, .prose a { font-weight: 500; }
 
+.skip {
+  position: absolute; left: 12px; top: -60px; z-index: 20; padding: 10px 14px; border-radius: var(--radius);
+  background: var(--navy); color: var(--white); font-weight: 600; text-decoration: none;
+}
+.skip:focus { top: 12px; }
+[hidden] { display: none !important; }
+
 /* ── Top bar and navigation ─────────────────────────────────────────────── */
 .topbar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px 24px;
@@ -122,6 +129,8 @@ section { min-width: 0; }
 .btn-quiet:hover { background: var(--subtle); border-color: var(--navy); }
 .btn-danger { background: var(--white); color: var(--red); border-color: var(--red-border); margin-left: auto; }
 .btn-danger:hover { background: var(--red-bg); border-color: var(--red); }
+.btn-danger-solid { background: var(--red); border-color: var(--red); color: var(--white); }
+.btn-danger-solid:hover { background: #912018; border-color: #912018; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .back {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px 0 8px;
@@ -243,6 +252,14 @@ a.card-link:hover { text-decoration: underline; }
 .notice-close { flex: none; width: 28px; height: 28px; margin: -3px -6px -3px 0; border: 0; border-radius: 6px; background: transparent; color: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
 .notice-close:hover { background: rgba(15, 30, 61, 0.08); }
 .container > .notice + .back { margin-top: 0; }
+.dialog {
+  width: min(440px, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--border); border-radius: 16px;
+  background: var(--white); color: var(--text); box-shadow: 0 16px 48px rgba(15, 30, 61, 0.24);
+}
+.dialog::backdrop { background: rgba(15, 30, 61, 0.45); }
+.dialog form { display: flex; flex-direction: column; gap: 10px; }
+.dialog p { color: var(--sub); }
+.dialog .actions { justify-content: flex-end; margin-top: 10px; }
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px); max-width: calc(100vw - 32px);
   padding: 12px 18px; border-radius: var(--radius-card); background: var(--text); color: var(--white); font-size: 15px;
@@ -298,6 +315,22 @@ a.card-link:hover { text-decoration: underline; }
 .check input { flex: none; width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--navy); }
 .check input:disabled + span { color: var(--muted); }
 .check strong { font-weight: 600; }
+
+/* Search and sort above a list */
+.toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--gap); flex-wrap: wrap; }
+.toolbar .search { flex: 1 1 260px; max-width: 420px; }
+.sort { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; white-space: nowrap; }
+.sort select {
+  min-height: 42px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--white); color: var(--text); font: inherit; font-weight: 400;
+}
+.sort select:focus { outline: none; border-color: var(--blue); box-shadow: var(--focus); }
+.toolbar + #listing-count:empty { display: none; }
+.heading-row > .section-heading { margin-bottom: 0; }
+section > .heading-row { margin-bottom: var(--gap); }
+.summary { display: flex; flex-direction: column; gap: var(--gap); padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-card); }
+.summary > .heading-row { margin-bottom: 0; align-items: center; }
+.choices-one { grid-template-columns: minmax(0, 480px); justify-content: center; }
 
 /* "I'm interested" on a listing card */
 .interest { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; }
@@ -355,6 +388,13 @@ p.interest { display: block; }
   .rows li, .contacted li { flex-wrap: wrap; }
   .title-row { flex-direction: column; align-items: flex-start; }
 
+  .choices-one { grid-template-columns: 1fr; }
+  .toolbar .search { max-width: none; }
+  .dialog .actions .btn { flex: 1; }
+}
+
+/* Tables turn into cards a little earlier than the rest, so long emails never squeeze */
+@media (max-width: 900px) {
   /* A table becomes one card per row, with each value labeled */
   .tenants, .tenants tbody, .tenants tr, .tenants td { display: block; }
   .tenants { border: 0; border-radius: 0; overflow: visible; }

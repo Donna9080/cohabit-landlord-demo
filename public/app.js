@@ -144,6 +144,39 @@
   const sampleFootnote = `<p class="footnote">All names, addresses, and contact details shown are fictional sample data.</p>`;
   const sampleTag = `<span class="tag">Fictional sample data</span>`;
 
+  // An in-page "are you sure?" box. Resolves true only when the confirm button is pressed.
+  function confirmDialog({ title, text, confirmLabel, danger = false }) {
+    const dialog = document.getElementById("confirm");
+    if (!dialog || !dialog.showModal) return Promise.resolve(window.confirm(`${title}\n\n${text}`));
+    document.getElementById("confirm-title").textContent = title;
+    document.getElementById("confirm-text").textContent = text;
+    const ok = document.getElementById("confirm-ok");
+    ok.textContent = confirmLabel;
+    ok.className = danger ? "btn btn-danger-solid" : "btn";
+    // Answer on the click itself. (The dialog's own "close" event can arrive late when the page isn't being drawn.)
+    return new Promise((resolve) => {
+      const finish = (answer) => {
+        dialog.removeEventListener("click", onClick);
+        dialog.removeEventListener("cancel", onCancel);
+        if (dialog.open) dialog.close();
+        resolve(answer);
+      };
+      const onClick = (e) => {
+        const button = e.target.closest("button");
+        if (!button) return;
+        e.preventDefault();
+        finish(button.value === "ok");
+      };
+      const onCancel = (e) => {
+        e.preventDefault(); // Escape key
+        finish(false);
+      };
+      dialog.addEventListener("click", onClick);
+      dialog.addEventListener("cancel", onCancel);
+      dialog.showModal();
+    });
+  }
+
   function statusPill(status) {
     return status === "active"
       ? `<span class="pill pill-ok"><span class="dot" aria-hidden="true"></span>Active</span>`
@@ -226,32 +259,37 @@
   // ── Public pages ─────────────────────────────────────────────────────────────
   function home() {
     const u = me.user;
+    const role = u && u.accountType;
+    const landlordCard = `
+          <a class="choice" href="/landlord">
+            <span class="choice-top"><span class="choice-icon">${icon("building", 24)}</span></span>
+            <span class="choice-text">
+              <span class="choice-title">${role === "landlord" ? "Your dashboard" : "I have rooms to rent"}</span>
+              <span class="choice-desc">List your units, keep rent and move-in dates current, and hear from interested renters.</span>
+            </span>
+            <span class="choice-cta">${role === "landlord" ? "Open your dashboard" : "Go to the landlord dashboard"} ${icon("right", 16)}</span>
+          </a>`;
+    const renterCard = `
+          <a class="choice" href="/renter">
+            <span class="choice-top"><span class="choice-icon">${icon("user", 24)}</span></span>
+            <span class="choice-text">
+              <span class="choice-title">${role === "renter" ? "Your matches" : "I'm looking for a room"}</span>
+              <span class="choice-desc">Answer a short questionnaire, see rooms that match, and contact the landlord.</span>
+            </span>
+            <span class="choice-cta">${role === "renter" ? "See your matches" : "Find a room"} ${icon("right", 16)}</span>
+          </a>`;
+    // Signed-in people only see the card for their own side.
+    const cards = role === "landlord" ? landlordCard : role === "renter" ? renterCard : landlordCard + renterCard;
     return {
       title: "Welcome",
       html: `
       <div class="home">
         <div class="hero">
           <p class="eyebrow">Shared student housing</p>
-          <h1 tabindex="-1">Welcome to coHabit</h1>
+          <h1 tabindex="-1">${u ? `Welcome back, ${esc((u.name || "").split(" ")[0] || "there")}` : "Welcome to coHabit"}</h1>
           <p class="lead">Landlords list rooms. Renters find ones that fit.</p>
         </div>
-        <div class="choices">
-          <a class="choice" href="/landlord">
-            <span class="choice-top"><span class="choice-icon">${icon("building", 24)}</span></span>
-            <span class="choice-text">
-              <span class="choice-title">I have rooms to rent</span>
-              <span class="choice-desc">List your units, keep rent and move-in dates current, and hear from interested renters.</span>
-            </span>
-            <span class="choice-cta">${u && u.accountType === "landlord" ? "Open your dashboard" : "Go to the landlord dashboard"} ${icon("right", 16)}</span>
-          </a>
-          <a class="choice" href="/renter">
-            <span class="choice-top"><span class="choice-icon">${icon("user", 24)}</span></span>
-            <span class="choice-text">
-              <span class="choice-title">I'm looking for a room</span>
-              <span class="choice-desc">Answer a short questionnaire, see rooms that match, and contact the landlord.</span>
-            </span>
-            <span class="choice-cta">${u && u.accountType === "renter" ? "See your matches" : "Find a room"} ${icon("right", 16)}</span>
-          </a>
+        <div class="choices${role ? " choices-one" : ""}">${cards}
         </div>
         <div class="actions home-actions">
           <a class="btn btn-quiet" href="/listings">Browse listings</a>
@@ -424,7 +462,7 @@
   }
 
   async function withdrawInterest(unitId) {
-    if (!confirm("Withdraw your request? The landlord will no longer see it.")) return;
+    if (!(await confirmDialog({ title: "Withdraw your request?", text: "The landlord will no longer see it. You can send a new one later.", confirmLabel: "Withdraw" }))) return;
     try {
       await api(`/api/renter/interests/${encodeURIComponent(unitId)}`, { method: "DELETE" });
     } catch (e) {
@@ -438,7 +476,7 @@
   }
 
   async function removeInterest(id, button) {
-    if (!confirm("Remove this request from your list? The renter is not notified.")) return;
+    if (!(await confirmDialog({ title: "Remove this request?", text: "It disappears from your list. The renter is not notified.", confirmLabel: "Remove" }))) return;
     button.disabled = true;
     try {
       await api(`/api/landlord/interests/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -473,8 +511,32 @@
       </li>`;
   }
 
+  // Sorting and searching happen in the browser on the list already loaded.
+  const sortSelect = (id, value, options) =>
+    `<label class="sort" for="${id}"><span>Sort by</span><select id="${id}">${options
+      .map(([v, l]) => `<option value="${v}"${v === value ? " selected" : ""}>${l}</option>`)
+      .join("")}</select></label>`;
+  const byRent = (a, b) => a.monthly_rent - b.monthly_rent;
+  const byDate = (a, b) => a.move_in_date.localeCompare(b.move_in_date);
+
+  let lastListings = [];
+  let listingSort = "date";
+  let listingQuery = "";
+
+  function listingsGrid() {
+    const q = listingQuery.trim().toLowerCase();
+    const list = lastListings.filter((u) => !q || `${u.area} ${u.name}`.toLowerCase().includes(q)).sort(listingSort === "rent" ? byRent : byDate);
+    const count = document.getElementById("listing-count");
+    if (count) count.textContent = q ? `${plural(list.length, "listing", "listings")} for “${listingQuery.trim()}”` : "";
+    if (!list.length)
+      return emptyState("No listings match your search", "Try a different area, or clear the search to see everything.", `<button class="btn btn-quiet" type="button" data-action="clear-search">Clear search</button>`);
+    return `<ul class="grid" role="list">${list.map((u) => listingCard(u)).join("")}</ul>`;
+  }
+
   async function listings() {
     const [{ listings }] = await Promise.all([api("/api/listings"), loadMyInterests()]);
+    lastListings = listings;
+    listingQuery = "";
     const hasSample = listings.some((u) => u.sample);
     return {
       title: "Listings",
@@ -486,7 +548,12 @@
       ${hasSample ? `<div class="notice notice-info" role="note"><span>Listings tagged <span class="tag">Sample</span> are fictional and can't be contacted.</span></div>` : ""}
       ${
         listings.length
-          ? `<ul class="grid" role="list">${listings.map((u) => listingCard(u)).join("")}</ul>`
+          ? `<div class="toolbar">
+        <div class="field search"><label for="listing-search">Search by area or name</label><input id="listing-search" type="search" placeholder="Waltham" autocomplete="off" /></div>
+        ${sortSelect("listing-sort", listingSort, [["date", "Soonest move-in"], ["rent", "Lowest rent"]])}
+      </div>
+      <p class="muted small" id="listing-count" role="status"></p>
+      <div id="listing-grid">${listingsGrid()}</div>`
           : emptyState("No listings yet", "When a landlord adds an active unit, it shows up here.", `<a class="btn btn-quiet" href="/">Back to home</a>`)
       }`,
     };
@@ -869,7 +936,7 @@
   }
 
   async function deleteUnit(id) {
-    if (!confirm("Delete this unit? Its requests from renters are deleted too. This can't be undone.")) return;
+    if (!(await confirmDialog({ title: "Delete this unit?", text: "Its requests from renters are deleted too. This can't be undone.", confirmLabel: "Delete unit", danger: true }))) return;
     try {
       await api(`/api/landlord/units/${encodeURIComponent(id)}`, { method: "DELETE" });
       setFlash("Unit deleted.");
@@ -889,11 +956,18 @@
     smoking: ["Smoking", [["no_smoking", "No smoking"], ["outside_ok", "OK outside"], ["smoker", "I smoke"]]],
   };
 
+  let lastMatches = null;
+  let matchSort = "best";
+
   function matchesHtml(data) {
-    if (data.needsPreferences) return emptyState("Save your preferences first", "Fill in the questionnaire above and save to see rooms that match.");
+    lastMatches = data;
+    if (data.needsPreferences) return emptyState("Save your preferences first", "Fill in the questionnaire and save to see rooms that match.");
     if (!data.matches.length)
-      return emptyState("No rooms match yet", "Try a wider budget, a different area or another month.", `<a class="btn btn-quiet" href="/listings">Browse all listings</a>`);
-    return `<ul class="grid" role="list">${data.matches
+      return emptyState("No rooms match yet", "Try a wider budget, a different area or another month.", `<button class="btn btn-quiet" type="button" data-action="edit-prefs">Edit preferences</button><a class="btn btn-quiet" href="/listings">Browse all listings</a>`);
+    const list = [...data.matches];
+    if (matchSort === "rent") list.sort((a, b) => byRent(a.unit, b.unit));
+    else if (matchSort === "date") list.sort((a, b) => byDate(a.unit, b.unit));
+    return `<ul class="grid" role="list">${list
       .map((m) =>
         listingCard(
           m.unit,
@@ -906,7 +980,11 @@
   function roommatesHtml(data) {
     if (data.needsPreferences) return emptyState("Save your preferences first", "Roommate matching uses your lifestyle answers.");
     if (!data.optedIn)
-      return emptyState("Roommate matching is off", "Tick “Show me to compatible renters” above and save to see renters you'd get along with. You only see people who turned it on too.");
+      return emptyState(
+        "Roommate matching is off",
+        "Turn on “Show me to compatible renters” in your preferences to see renters you'd get along with. You only see people who turned it on too.",
+        `<button class="btn btn-quiet" type="button" data-action="edit-prefs">Edit preferences</button>`
+      );
     if (!data.roommates.length)
       return emptyState("No compatible renters yet", "Nobody else has your area and move-in month right now. Check back as more people join.");
     return `<ul class="grid" role="list">${data.roommates
@@ -930,8 +1008,35 @@
       .join("")}</ul>`;
   }
 
+  // Saved answers at a glance, so the long form only opens when the renter wants to change something.
+  function prefsSummary(p) {
+    const life = Object.entries(CHOICES)
+      .map(([k, [label, opts]]) => {
+        const answer = (opts.find((o) => o[0] === p[k]) || [])[1];
+        return answer && `${label}: ${answer.toLowerCase()}`;
+      })
+      .filter(Boolean);
+    return `
+      <section class="summary" aria-labelledby="prefs-heading">
+        <div class="heading-row">
+          <div class="section-heading"><h2 id="prefs-heading">Your preferences</h2><span class="muted small">saved ${esc(fmtJoined(p.updated_at))}</span></div>
+          <button class="btn btn-quiet" type="button" data-action="edit-prefs" aria-expanded="false" aria-controls="prefs-form">Edit preferences</button>
+        </div>
+        <dl class="tiles">
+          ${tile("Budget", `${money(p.budget_min)} to ${money(p.budget_max)}`, "per month")}
+          ${tile("Move-in", fmtDate(p.move_in_month))}
+          ${tile("Area", esc(p.area))}
+          ${tile("Rooms needed", p.rooms_needed)}
+        </dl>
+        <ul class="reasons" aria-label="How you like to live">
+          ${life.map((l) => `<li>${esc(l)}</li>`).join("")}
+          <li>${p.roommate_visible ? (p.share_email ? "Roommate matching on, email shared" : "Roommate matching on") : "Roommate matching off"}</li>
+        </ul>
+      </section>`;
+  }
+
   async function renterPage() {
-    const blocked = gate("renter", "Renter");
+    const blocked = gate("renter");
     if (blocked !== undefined) return blocked;
     const [{ preferences: p }, matches, mates, contacted] = await Promise.all([api("/api/renter/preferences"), api("/api/renter/matches"), api("/api/renter/roommates"), loadMyInterests()]);
     const v = p || { budget_min: "", budget_max: "", move_in_month: "", area: "", rooms_needed: 1 };
@@ -940,13 +1045,13 @@
       .join("");
     return {
       title: "Your matches",
-      brand: "Renter",
       html: `
       <div class="heading">
-        <h1 tabindex="-1">Find your room</h1>
-        <p class="muted">${p ? `Preferences saved ${fmtJoined(p.updated_at)}. Edit them any time.` : "Answer these once. We'll save them so you can come back and edit them."}</p>
+        <h1 tabindex="-1">${p ? "Your matches" : "Find your room"}</h1>
+        <p class="muted">${p ? "Rooms and renters that fit the preferences you saved." : "Answer these once. We'll save them so you can come back and edit them."}</p>
       </div>
-      <form class="form" id="prefs-form" novalidate>
+      ${p ? prefsSummary(p) : ""}
+      <form class="form" id="prefs-form" novalidate${p ? " hidden" : ""}>
         <fieldset>
           <legend>The basics</legend>
           <div class="field-row">
@@ -975,11 +1080,14 @@
         <p class="form-error" id="form-error" role="alert"></p>
         <div class="actions">
           <button class="btn" type="submit">${p ? "Save changes" : "Save and see matches"}</button>
-          <span class="saved small muted" id="saved" role="status"></span>
+          ${p ? `<button class="btn btn-quiet" type="button" data-action="edit-prefs">Cancel</button>` : ""}
         </div>
       </form>
       <section aria-labelledby="matches-heading">
-        <div class="section-heading"><h2 id="matches-heading">Matching rooms</h2><span class="muted small" id="match-count">${matches.matches.length ? plural(matches.matches.length, "match", "matches") : ""}</span></div>
+        <div class="heading-row">
+          <div class="section-heading"><h2 id="matches-heading">Matching rooms</h2><span class="muted small" id="match-count">${matches.matches.length ? plural(matches.matches.length, "match", "matches") : ""}</span></div>
+          ${matches.matches.length > 1 ? sortSelect("match-sort", matchSort, [["best", "Best match"], ["rent", "Lowest rent"], ["date", "Soonest move-in"]]) : ""}
+        </div>
         <div id="matches">${matchesHtml(matches)}</div>
       </section>
       <section aria-labelledby="contacted-heading">
@@ -993,30 +1101,40 @@
     };
   }
 
+  // Open or close the questionnaire on the renter page.
+  function togglePrefsForm() {
+    const form = document.getElementById("prefs-form");
+    if (!form) return;
+    form.hidden = !form.hidden;
+    const opener = document.querySelector('.summary [data-action="edit-prefs"]');
+    if (opener) {
+      opener.setAttribute("aria-expanded", String(!form.hidden));
+      opener.textContent = form.hidden ? "Edit preferences" : "Close";
+    }
+    if (!form.hidden) {
+      form.scrollIntoView({ block: "start", behavior: "smooth" });
+      form.querySelector("input").focus({ preventScroll: true });
+    }
+  }
+
   async function submitPrefs(form) {
     const body = formData(form, ["budget_min", "budget_max", "rooms_needed"]);
     body.roommate_visible = form.elements.roommate_visible.checked;
     body.share_email = body.roommate_visible && form.elements.share_email.checked;
     const btn = form.querySelector("[type=submit]");
-    const saved = document.getElementById("saved");
+    const label = btn.textContent;
     btn.disabled = true;
-    saved.textContent = "";
+    btn.textContent = "Saving…";
     try {
       await api("/api/renter/preferences", { method: "PUT", body });
-      showErrors(form, { message: "" });
-      const data = await api("/api/renter/matches");
-      document.getElementById("matches").innerHTML = matchesHtml(data);
-      document.getElementById("match-count").textContent = data.matches.length ? plural(data.matches.length, "match", "matches") : "";
-      const mates = await api("/api/renter/roommates");
-      document.getElementById("roommates").innerHTML = roommatesHtml(mates);
-      document.getElementById("roommate-count").textContent = mates.roommates.length ? plural(mates.roommates.length, "person", "people") : "";
-      saved.textContent = "Saved.";
-      btn.textContent = "Save changes";
+      setFlash("Preferences saved. Your matches are up to date.");
+      render(true);
     } catch (e) {
       if (e.status === 401) return showView(errorView(e));
       showErrors(form, e);
+      btn.disabled = false;
+      btn.textContent = label;
     }
-    btn.disabled = false;
   }
 
   // ── Admin ────────────────────────────────────────────────────────────────────
@@ -1226,10 +1344,17 @@
       else if (a === "interest-remove") removeInterest(action.dataset.id, action);
       else if (a === "reload") render(true);
       else if (a === "dismiss-notice") action.closest(".notice").remove();
+      else if (a === "edit-prefs") togglePrefsForm();
+      else if (a === "clear-search") {
+        listingQuery = "";
+        document.getElementById("listing-search").value = "";
+        document.getElementById("listing-grid").innerHTML = listingsGrid();
+      }
       return;
     }
     const link = e.target.closest("a");
     if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if ((link.getAttribute("href") || "").startsWith("#")) return; // in-page jumps such as "Skip to content"
     const url = new URL(link.href, location.href);
     if (url.origin !== location.origin || link.target || url.pathname.startsWith("/api/")) return;
     e.preventDefault();
@@ -1258,6 +1383,22 @@
     const email = document.getElementById("f-share_email");
     email.disabled = !e.target.checked;
     if (!e.target.checked) email.checked = false;
+  });
+
+  // Sorting and searching lists.
+  document.addEventListener("change", (e) => {
+    if (e.target.id === "match-sort") {
+      matchSort = e.target.value;
+      document.getElementById("matches").innerHTML = matchesHtml(lastMatches);
+    } else if (e.target.id === "listing-sort") {
+      listingSort = e.target.value;
+      document.getElementById("listing-grid").innerHTML = listingsGrid();
+    }
+  });
+  document.addEventListener("input", (e) => {
+    if (e.target.id !== "listing-search") return;
+    listingQuery = e.target.value;
+    document.getElementById("listing-grid").innerHTML = listingsGrid();
   });
 
   window.addEventListener("popstate", () => render(true));
