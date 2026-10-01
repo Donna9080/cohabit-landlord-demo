@@ -326,6 +326,74 @@ try {
   r = await api("/api/renter/roommates", { as: renterB });
   check("Turning it off removes Renter A from others' results immediately", r.data.roommates.length === 0);
 
+  // ── "I'm interested": renter contacts landlord ────────────────────────────
+  const SAMPLE_UNIT = "00000000-0000-4000-8000-000000000099";
+  const interestCount = (where) => d1rows(`SELECT COUNT(*) AS n FROM unit_interests WHERE ${where}`)[0].n;
+  r = await api("/api/renter/interests", { method: "POST", body: { unit_id: unitA.id } });
+  check("Visitor cannot send interest (401)", r.status === 401);
+  r = await api("/api/renter/interests", { method: "POST", as: landlordB, body: { unit_id: unitA.id } });
+  check("Landlord cannot send interest (403)", r.status === 403);
+  r = await api("/api/renter/interests", { method: "POST", as: renterA, body: { unit_id: unitA.id }, origin: "https://evil.example" });
+  check("Cross-origin interest request blocked (403)", r.status === 403);
+  r = await api("/api/renter/interests", { method: "POST", as: renterA, body: { unit_id: unitA.id, message: "Hi, I'd love to see the room. Free most evenings.", renter_user_id: "t_renter_b", id: "forged" } });
+  check("Renter A sends interest in Landlord A's unit", r.status === 201 && r.data.interest.unitId === unitA.id);
+  check("Forged renter id ignored: request belongs to Renter A", interestCount(`renter_user_id='t_renter_a' AND unit_id='${unitA.id}'`) === 1 && interestCount("1=1") === 1);
+  r = await api("/api/renter/interests", { method: "POST", as: renterA, body: { unit_id: unitA.id, message: "again" } });
+  check("Second request for the same unit refused (409)", r.status === 409 && r.data.error === "already_sent");
+  r = await api("/api/renter/interests", { method: "POST", as: renterA, body: { unit_id: inactiveId } });
+  check("Cannot send interest in an inactive unit (404)", r.status === 404);
+  r = await api("/api/renter/interests", { method: "POST", as: renterA, body: { unit_id: SAMPLE_UNIT } });
+  check("Cannot send interest in a sample listing (409)", r.status === 409 && r.data.error === "sample_listing");
+  r = await api("/api/renter/interests", { method: "POST", as: renterA, body: { unit_id: "11111111-1111-4111-8111-111111111111" } });
+  check("Unknown unit → 404", r.status === 404);
+  r = await api("/api/renter/interests", { method: "POST", as: renterA, body: { unit_id: "' OR 1=1 --" } });
+  check("Malformed unit id → 400", r.status === 400);
+  r = await api("/api/renter/interests", { method: "POST", as: renterB, body: { unit_id: unitA.id, message: "Call me on (617) 555-0142" } });
+  check("Phone number in the note refused (400)", r.status === 400 && r.data.field === "message");
+  r = await api("/api/renter/interests", { method: "POST", as: renterB, body: { unit_id: unitA.id, message: "x".repeat(501) } });
+  check("Note over 500 characters refused (400)", r.status === 400);
+
+  r = await api("/api/renter/interests", { as: renterA });
+  const mine = JSON.stringify(r.data);
+  check("Renter A sees own request", r.status === 200 && r.data.interests.length === 1 && r.data.interests[0].unitName === "Test Unit (edited)" && r.data.interests[0].listed === true);
+  check("Renter's view never includes the landlord's name, email or id", !["landlord", "Landlord", "example.test", "t_landlord"].some((k) => mine.includes(k)), mine);
+  r = await api("/api/renter/interests", { as: renterB });
+  check("Renter B does not see Renter A's request", r.data.interests.length === 0);
+
+  r = await api("/api/landlord/interests");
+  check("Visitor cannot read landlord requests (401)", r.status === 401);
+  r = await api("/api/landlord/interests", { as: renterA });
+  check("Renter cannot read landlord requests (403)", r.status === 403);
+  r = await api("/api/landlord/interests", { as: landlordA });
+  const inbox = r.data.interests || [];
+  const inboxText = JSON.stringify(r.data);
+  check("Landlord A sees the request with the renter's name, email and note", inbox.length === 1 && inbox[0].renterName === renterA.name && inbox[0].renterEmail === renterA.email && inbox[0].message.startsWith("Hi, I'd love") && inbox[0].unitName === "Test Unit (edited)");
+  check("Landlord's view has no questionnaire answers or user ids", !["budget", "sleep_schedule", "smoking", "t_renter", "roommate"].some((k) => inboxText.includes(k)), inboxText);
+  r = await api("/api/landlord/interests", { as: landlordB });
+  check("Landlord B does not see requests for Landlord A's units", r.status === 200 && r.data.interests.length === 0);
+  r = await api(`/api/landlord/interests/${inbox[0].id}`, { method: "DELETE", as: landlordB });
+  check("Landlord B cannot remove Landlord A's request (404)", r.status === 404 && interestCount("1=1") === 1);
+  r = await api(`/api/renter/interests/${unitA.id}`, { method: "DELETE", as: renterB });
+  check("Renter B cannot withdraw Renter A's request (404)", r.status === 404 && interestCount("1=1") === 1);
+  r = await api(`/api/landlord/interests/${inbox[0].id}`, { method: "DELETE", as: landlordA });
+  check("Landlord A removes the request", r.status === 200 && interestCount("1=1") === 0);
+  r = await api("/api/renter/interests", { method: "POST", as: renterA, body: { unit_id: unitA.id } });
+  r = await api(`/api/renter/interests/${unitA.id}`, { method: "DELETE", as: renterA });
+  check("Renter A sends again, then withdraws; landlord's list is empty", r.status === 200 && (await api("/api/landlord/interests", { as: landlordA })).data.interests.length === 0);
+
+  r = await api("/api/landlord/units", { method: "POST", as: landlordA, body: unitBody({ name: "Unit that will be deleted" }) });
+  const doomedId = r.data.unit.id;
+  await api("/api/renter/interests", { method: "POST", as: renterB, body: { unit_id: doomedId, message: "Interested" } });
+  r = await api(`/api/landlord/units/${doomedId}`, { method: "DELETE", as: landlordA });
+  check("Deleting a unit removes the requests on it", r.status === 200 && interestCount(`unit_id='${doomedId}'`) === 0);
+  await api(`/api/landlord/units/${inactiveId}`, { method: "PUT", as: landlordA, body: unitBody({ name: "Hidden inactive unit", status: "active" }) });
+  await api("/api/renter/interests", { method: "POST", as: renterB, body: { unit_id: inactiveId } });
+  await api(`/api/landlord/units/${inactiveId}`, { method: "PUT", as: landlordA, body: unitBody({ name: "Hidden inactive unit", status: "inactive" }) });
+  r = await api("/api/renter/interests", { as: renterB });
+  check("A request on a unit that went inactive is shown to the renter as no longer listed", r.data.interests.length === 1 && r.data.interests[0].listed === false);
+  r = await api("/api/renter/interests", { method: "POST", as: renterA, body: { unit_id: unitA.id, message: "Still interested" } });
+  check("Renter A has one open request before the account-deletion tests", r.status === 201);
+
   // ── Admin ─────────────────────────────────────────────────────────────────
   r = await api("/api/admin/users");
   check("Visitor cannot open admin API (401)", r.status === 401);
@@ -446,6 +514,7 @@ try {
   r = await api("/api/me/delete", { method: "POST", as: renterA, body: { confirm: "DELETE" } });
   check("Renter A deletes own account; questionnaire answers are gone", r.status === 200 && count(`SELECT COUNT(*) AS n FROM match_preferences WHERE user_id='t_renter_a'`) === 0 && count(`SELECT COUNT(*) AS n FROM "user" WHERE id='t_renter_a'`) === 0);
   check("Other renters' answers untouched", count(`SELECT COUNT(*) AS n FROM match_preferences WHERE user_id='t_renter_b'`) === 1);
+  check("Deleted renter's requests to landlords are gone; other renters' requests stay", count(`SELECT COUNT(*) AS n FROM unit_interests WHERE renter_user_id='t_renter_a'`) === 0 && count(`SELECT COUNT(*) AS n FROM unit_interests WHERE renter_user_id='t_renter_b'`) === 1);
 
   // ── Rate limits ───────────────────────────────────────────────────────────
   // The limiter counts per clock minute, so the burst must start and finish inside one minute.

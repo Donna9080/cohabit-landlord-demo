@@ -285,6 +285,24 @@ button.choice:disabled { opacity: 0.6; cursor: progress; }
 .field-error:empty, .form-error:empty { display: none; }
 .saved { color: var(--green); font-weight: 500; }
 
+/* "I'm interested" */
+.interest { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; }
+.interest a { color: var(--navy); font-weight: 500; }
+.interest-form { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.interest-form label { font-weight: 600; }
+.interest-form textarea {
+  width: 100%; padding: 8px 10px; border: 1px solid #c9d1de; border-radius: 8px; font: inherit; font-size: 14px; resize: vertical;
+}
+.interest-form textarea:focus { outline: none; border-color: var(--navy); box-shadow: var(--focus); }
+.contacted { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.contacted li {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px;
+}
+.contacted .desc { margin-top: 4px; }
+.interests td.note { max-width: 320px; overflow-wrap: anywhere; color: var(--sub); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
 /* Tick boxes */
 .check { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.5; cursor: pointer; }
 .check input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--navy); }

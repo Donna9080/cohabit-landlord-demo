@@ -44,6 +44,20 @@ dates of birth, financial or health details, profile photos.
 The fictional sample dashboard (`/sample`, `/properties/<id>`) is still in
 `public/data.js`. It is not in the database and is labeled "Fictional sample data".
 
+## Renter contacts landlord ("I'm interested")
+
+- A renter clicks **I'm interested** on an active, non-sample unit and can add a note of up to 500 characters
+  (phone numbers are refused). Stored in `unit_interests` (migration `0003`), one request per renter per unit,
+  at most 20 open requests per renter.
+- The unit's landlord sees it under **Interested renters** on their dashboard: the renter's name, email and note.
+  This is the only place a landlord sees a renter's identity, and only for renters who sent a request. Landlords
+  never see questionnaire answers.
+- Renters never receive the landlord's name or email. The landlord replies by email if they choose to.
+- The renter can withdraw a request; the landlord can remove one from their list. Deleting the unit or either
+  account removes the requests that belong to it.
+- Routes: `GET/POST /api/renter/interests`, `DELETE /api/renter/interests/<unit id>`,
+  `GET /api/landlord/interests`, `DELETE /api/landlord/interests/<request id>`. Admin sees none of it.
+
 ## Roommate matching (opt-in)
 
 Renters can be matched with each other on their lifestyle answers. The code is in `src/roommates.js`; the rules and a
@@ -89,6 +103,8 @@ Remove it before counting users or listings for anything you report as real trac
 | Create/view/edit/delete **own** units | | ✓ | | |
 | Save/edit **own** preferences, see matches | | | ✓ | |
 | See possible roommates (only after opting in; only others who opted in) | | | ✓ | |
+| Tell a unit's landlord "I'm interested"; withdraw it | | | ✓ | |
+| See and remove requests from renters on **own** units | | ✓ | | |
 | Delete **own** account and everything saved with it (`/account`) | | ✓ | ✓ | ✓ (not the last admin) |
 | Read-only user list (`/admin`) | | | | ✓ |
 
@@ -214,7 +230,7 @@ npm install
 copy .dev.vars.example .dev.vars        # then fill in the values (BETTER_AUTH_SECRET: any long random string)
 npm run db:migrate:local                # = wrangler d1 migrations apply DB --local
 npm run dev                             # http://localhost:8787
-npm test                                # 158 automated checks (see below)
+npm test                                # 186 automated checks (see below)
 ```
 
 `npm test` (`tests/run-local.mjs`) wipes and recreates a separate local database in
@@ -269,8 +285,8 @@ Cloudflare dashboard (Workers & Pages → Plans). Alerts are not a spending cap.
 
 ## Not built (on purpose)
 
-Landlord tenant preferences, applicant or match tracking, private notes, saved matches,
-messaging, listing photos / R2 uploads, landlord approval or verification, admin moderation/editing/deleting, admin stats,
+Landlord tenant preferences, applicant tracking beyond the request list, private notes, saved matches,
+in-app messaging threads, email notifications, listing photos / R2 uploads, landlord approval or verification, admin moderation/editing/deleting, admin stats,
 role-management UI, admin deleting other people's accounts, changing account type, payments.
 
 ## Manual test for a group member (about 10 minutes)

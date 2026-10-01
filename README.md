@@ -30,8 +30,8 @@ Landlords list rooms; renters answer a short questionnaire and see rooms that fi
 | Sample dashboard (fictional data) | `/sample`, `/properties/<id>` | Anyone |
 | Choose landlord or renter (once) | `/welcome` | Signed in |
 | Your account, delete my account | `/account` | Signed in |
-| Your units | `/landlord`, `/landlord/units/new` | Landlords |
-| Questionnaire, matching rooms, possible roommates (opt-in) | `/renter` | Renters |
+| Your units, interested renters | `/landlord`, `/landlord/units/new` | Landlords |
+| Questionnaire, matching rooms, "I'm interested", possible roommates (opt-in) | `/renter` | Renters |
 | User list (read only) | `/admin` | Admin |
 
 This is separate from the other coHabit app in `Documents\cohabit`. It runs on Cloudflare's free plan as its own Worker (`cohabit-landlord-demo`) with its own database (`cohabit-db`).

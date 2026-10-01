@@ -123,4 +123,14 @@ export function parseAccountType(body) {
   return oneOf(body, "accountType", ["landlord", "renter"]);
 }
 
+// A renter's note to a landlord. Optional, short, and no phone numbers (coHabit does not collect them).
+const PHONE = /(?:\+?\d[\s().-]*){10,}/;
+export function parseInterest(body) {
+  if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
+  if (!isUnitId(body.unit_id)) throw new InvalidInput("unit_id", "Unknown unit.");
+  const message = body.message == null ? "" : text(body, "message", { max: 500 });
+  if (PHONE.test(message)) throw new InvalidInput("message", "Leave out phone numbers. The landlord gets your email and can reply there.");
+  return { unit_id: body.unit_id, message };
+}
+
 export const isUnitId = (s) => typeof s === "string" && /^[0-9a-f-]{36}$/.test(s);

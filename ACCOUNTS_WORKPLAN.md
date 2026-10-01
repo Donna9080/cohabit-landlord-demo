@@ -13,7 +13,7 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [x] Worker API with server-side permissions, validation, CSRF/origin checks, D1 rate limits, daily cleanup
 - [x] UI: sign in/out, one-time landlord/renter choice, units dashboard + form, renter questionnaire + matches,
       public listings, How it works, admin user list; sample dashboard moved to `/sample`
-- [x] Local tests: `npm test` 158/158 passing (local D1), plus browser check of each screen (desktop + phone)
+- [x] Local tests: `npm test` 186/186 passing (local D1), plus browser check of each screen (desktop + phone)
 - [x] Handoff docs (this file, ACCOUNTS_SETUP.md)
 - [x] Owner: created Google OAuth client, set 3 secrets (2026-09-30)
 - [x] Applied migration `--remote`, first deployed version `dcb965ea-d350-4e36-b56e-3458f7f7c423` (current: `1eb287af-f083-4312-a309-46cf923ab3b1`), signed-out live checks pass
@@ -34,6 +34,10 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       sharing. Migration `0002_roommate_matching.sql` (additive) applied to production; restore bookmark from just
       before: `0000001b-00000000-000050f7-feece982737cca1dec57a2acec082e86`. Deployed as
       `6832c654-d97a-401f-b9be-3c835daeabaf`. 24 new tests. Not seen live by a signed-in renter yet.
+- [x] Renter contacts landlord (2026-10-01): "I'm interested" request with optional note; landlord sees name, email
+      and note on the dashboard. Migration `0003_unit_interests.sql` (additive) applied to production; restore
+      bookmark from just before: `0000001c-00000000-000050f7-0238b86f496e2fcb6962edd600450c3b`. Deployed as
+      `aea82468-c5b8-4dce-b517-6a99c62e6445`. 28 new tests. Not exercised live by signed-in accounts yet.
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
 - [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works
 - [ ] Live test with a second Google account as renter
@@ -65,6 +69,9 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - **Roommate matching** (owner's choices, 2026-10-01): a renter is shown to others only after opting in, and must opt
   in to see anyone. Others see first name, a score and what the two have in common. Email is a second, separate
   opt-in. Gates: shared area word, move-in within one month, no pet or smoking dealbreaker, score 60+.
+- **Renter contacts landlord**: a one-way request, not a message thread. The renter's name and email go to that
+  landlord at the moment the renter sends it (stated on the form). The landlord's email is never shown; they reply
+  by email. Sample listings can't be contacted. No email notification is sent (no mail service, $0).
 - **Public listings**: visitors and renters see active units' listing fields only.
 - **Google tokens are not stored**; IP/user agent not stored on sessions; Google photo not stored.
 - **No implicit account linking**: one Google subject ID = one user.
@@ -75,7 +82,7 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 
 ## Tests completed (local, 2026-09-29)
 
-`npm test` → **158/158 passed** against Wrangler's local D1 (`.wrangler/test-state`).
+`npm test` → **186/186 passed** against Wrangler's local D1 (`.wrangler/test-state`).
 Covers: public pages; Google authorization URL (scopes exactly openid/email/profile,
 PKCE S256, state, no offline access, correct redirect URI, injected scope dropped);
 forged OAuth state rejected; non-allowlisted Better Auth endpoints 404; one-time account
@@ -123,6 +130,6 @@ by the live test.
 
 ## Next safe step
 
-A way for a renter to tell a landlord they're interested (and for two matched renters to talk without
-sharing an email address). If admins ever get write actions, add an audit
+Tell the landlord when a new request arrives (today they only see it when they open the dashboard), and let
+two matched renters talk without sharing an email address. If admins ever get write actions, add an audit
 table in that change.

@@ -196,6 +196,7 @@
           <li><strong>Sign in with Google</strong> and choose “I'm a landlord”.</li>
           <li><strong>Add your units:</strong> the neighborhood, rent, rooms available and move-in date. No street address needed.</li>
           <li><strong>Keep them current.</strong> Active units show up for renters; set a unit to inactive to hide it.</li>
+          <li><strong>Hear from renters.</strong> When a renter says they're interested, you get their name, email and note on your dashboard.</li>
         </ol>
       </section>
       <section class="step-col" aria-labelledby="how-renters">
@@ -279,7 +280,7 @@
           <li><strong>From Google when you sign in:</strong> your name, your email address, and Google's ID for your account. We ask Google only for basic sign-in information (openid, email, profile). We do not keep Google access tokens or your profile photo, and we never see your Google password.</li>
           <li><strong>Your account type:</strong> whether you chose landlord or renter.</li>
           <li><strong>If you are a landlord:</strong> the units you add: name, general area, monthly rent, rooms available, move-in date, description and status.</li>
-          <li><strong>If you are a renter:</strong> your questionnaire answers: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets and smoking.</li>
+          <li><strong>If you are a renter:</strong> your questionnaire answers: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets and smoking. Also any “I'm interested” requests you send, with your note.</li>
           <li><strong>To keep you signed in:</strong> one cookie that holds your session. It can't be read by scripts and expires after 7 days without use.</li>
           <li><strong>To limit abuse:</strong> short-lived request counters that include your IP address. They are deleted within about a day.</li>
         </ul>
@@ -290,6 +291,8 @@
           <li><strong>Everyone:</strong> active units' listing details (name, area, rent, rooms, move-in date, description). Never the landlord's name or email.</li>
           <li><strong>Only you:</strong> your inactive units, and your questionnaire answers. Landlords cannot see your answers. Other renters cannot either, unless you turn on roommate matching.</li>
           <li><strong>Other renters, only if you turn on roommate matching:</strong> renters who also turned it on can see your first name, a compatibility score, and the things you have in common (for example “Both early birds”). They see your email address only if you tick the separate box to share it. Both are off by default and you can turn them off again at any time.</li>
+          <li><strong>A landlord, only when you click “I'm interested” on their unit:</strong> that landlord sees your name, your email address and the note you wrote, so they can reply. You can withdraw the request at any time and it disappears from their list. Landlords never see your questionnaire answers.</li>
+          <li><strong>Renters never see a landlord's name or email</strong> through coHabit. A renter only learns it if the landlord chooses to reply.</li>
           <li><strong>The coHabit admin:</strong> a list of users with name, email, account type, join date, and either a count of units or whether preferences are saved. Not your questionnaire answers.</li>
         </ul>
 
@@ -337,6 +340,122 @@
       </dl>`;
   }
 
+  // ── "I'm interested": a renter contacts a unit's landlord ────────────────────
+  // Unit ids this renter has already sent a request for (loaded on the renter and listings pages).
+  let myInterests = new Set();
+  const isRenter = () => !!me.user && me.user.accountType === "renter";
+
+  async function loadMyInterests() {
+    if (!isRenter()) return [];
+    const { interests } = await api("/api/renter/interests");
+    myInterests = new Set(interests.map((i) => i.unitId));
+    return interests;
+  }
+
+  function interestState(unitId) {
+    return myInterests.has(unitId)
+      ? `<span class="saved small">Request sent</span><button class="btn btn-small btn-quiet" type="button" data-action="interest-withdraw" data-unit="${esc(unitId)}">Withdraw</button>`
+      : `<button class="btn btn-small" type="button" data-action="interest-open" data-unit="${esc(unitId)}">I'm interested</button>`;
+  }
+
+  // What goes under a listing card, depending on who is looking.
+  function interestFooter(u) {
+    if (u.sample) return `<p class="small muted interest">Sample listing: there is no landlord to contact.</p>`;
+    if (!me.user) return `<p class="small interest"><a href="/renter">Sign in as a renter</a> to tell the landlord you're interested.</p>`;
+    if (!isRenter()) return "";
+    return `<div class="interest" data-interest="${esc(u.id)}">${interestState(u.id)}</div>`;
+  }
+
+  function interestForm(unitId) {
+    const id = esc(unitId);
+    return `
+      <form class="interest-form" data-unit="${id}" novalidate>
+        <label class="small" for="note-${id}">Note to the landlord (optional)</label>
+        <textarea id="note-${id}" name="message" maxlength="500" rows="3" placeholder="A line about you and when you'd like to move in"></textarea>
+        <p class="hint">The landlord will see your name and your email (${esc(me.user.email)}) so they can reply. Don't include phone numbers.</p>
+        <p class="field-error" role="alert"></p>
+        <div class="actions">
+          <button class="btn btn-small" type="submit">Send</button>
+          <button class="btn btn-small btn-quiet" type="button" data-action="interest-cancel" data-unit="${id}">Cancel</button>
+        </div>
+      </form>`;
+  }
+
+  const interestBox = (unitId) => document.querySelector(`[data-interest="${CSS.escape(unitId)}"]`);
+
+  function contactedHtml(interests) {
+    if (!interests.length) return `<p class="empty">You haven't contacted any landlords yet. Click “I'm interested” on a room above.</p>`;
+    return `<ul class="contacted" role="list">${interests
+      .map(
+        (i) => `
+      <li>
+        <div>
+          <strong>${esc(i.unitName)}</strong> <span class="muted small">${esc(i.unitArea)} · sent ${esc(fmtJoined(i.createdAt))}</span>${i.listed ? "" : ` <span class="badge badge-sample">No longer listed</span>`}
+          ${i.message ? `<p class="small desc">“${esc(i.message)}”</p>` : ""}
+        </div>
+        <button class="btn btn-small btn-quiet" type="button" data-action="interest-withdraw" data-unit="${esc(i.unitId)}">Withdraw</button>
+      </li>`
+      )
+      .join("")}</ul>`;
+  }
+
+  async function refreshContacted() {
+    const el = document.getElementById("contacted");
+    const interests = await loadMyInterests();
+    if (el) el.innerHTML = contactedHtml(interests);
+  }
+
+  async function sendInterest(form) {
+    const unitId = form.dataset.unit;
+    const btn = form.querySelector("[type=submit]");
+    const errorEl = form.querySelector(".field-error");
+    btn.disabled = true;
+    errorEl.textContent = "";
+    try {
+      await api("/api/renter/interests", { method: "POST", body: { unit_id: unitId, message: form.elements.message.value } });
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      if (e.code !== "already_sent") {
+        errorEl.textContent = e.message;
+        btn.disabled = false;
+        return;
+      }
+    }
+    myInterests.add(unitId);
+    const box = interestBox(unitId);
+    if (box) box.innerHTML = interestState(unitId);
+    refreshContacted().catch(() => {});
+  }
+
+  async function withdrawInterest(unitId) {
+    if (!confirm("Withdraw your request? The landlord will no longer see it.")) return;
+    try {
+      await api(`/api/renter/interests/${encodeURIComponent(unitId)}`, { method: "DELETE" });
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      if (e.status !== 404) return alert(e.message);
+    }
+    myInterests.delete(unitId);
+    const box = interestBox(unitId);
+    if (box) box.innerHTML = interestState(unitId);
+    refreshContacted().catch(() => {});
+  }
+
+  async function removeInterest(id, button) {
+    if (!confirm("Remove this request from your list? The renter is not notified.")) return;
+    button.disabled = true;
+    try {
+      await api(`/api/landlord/interests/${encodeURIComponent(id)}`, { method: "DELETE" });
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      if (e.status !== 404) {
+        button.disabled = false;
+        return alert(e.message);
+      }
+    }
+    render(false);
+  }
+
   function listingCard(u, extra = "") {
     return `
       <li>
@@ -352,12 +471,13 @@
           ${u.description ? `<p class="small desc">${esc(u.description)}</p>` : ""}
           <hr />
           ${unitStats(u)}
+          ${interestFooter(u)}
         </article>
       </li>`;
   }
 
   async function listings() {
-    const { listings } = await api("/api/listings");
+    const [{ listings }] = await Promise.all([api("/api/listings"), loadMyInterests()]);
     return {
       title: "Listings",
       brand: "",
@@ -517,8 +637,21 @@
   async function landlordDashboard() {
     const blocked = gate("landlord", "Landlord portal");
     if (blocked !== undefined) return blocked;
-    const { units } = await api("/api/landlord/units");
+    const [{ units }, { interests }] = await Promise.all([api("/api/landlord/units"), api("/api/landlord/interests")]);
     const active = units.filter((u) => u.status === "active").length;
+    const interestRows = interests
+      .map(
+        (i) => `
+        <tr>
+          <td><span class="person"><span class="avatar" aria-hidden="true">${esc(initials(i.renterName || i.renterEmail))}</span><span class="name">${esc(i.renterName)}</span></span></td>
+          <td data-label="Unit">${esc(i.unitName)}</td>
+          <td data-label="Note" class="note">${i.message ? esc(i.message) : `<span class="muted">No note</span>`}</td>
+          <td data-label="Email"><a href="mailto:${esc(i.renterEmail)}">${esc(i.renterEmail)}</a></td>
+          <td data-label="Received">${esc(fmtJoined(i.createdAt))}</td>
+          <td><button class="btn btn-small btn-quiet" type="button" data-action="interest-remove" data-id="${esc(i.id)}">Remove</button></td>
+        </tr>`
+      )
+      .join("");
     const cards = units
       .map(
         (u) => `
@@ -554,7 +687,19 @@
         units.length
           ? `<ul class="grid" role="list">${cards}</ul>`
           : `<div class="empty">You haven't added any units yet. <a href="/landlord/units/new">Add your first unit</a>. Want to see how it looks? <a href="/sample">View the sample dashboard</a>.</div>`
-      }`,
+      }
+      <section aria-labelledby="interests-heading">
+        <div class="section-heading"><h2 id="interests-heading">Interested renters</h2><span class="muted small">${interests.length ? plural(interests.length, "request", "requests") : ""}</span></div>
+        ${
+          interests.length
+            ? `<table class="tenants interests">
+          <thead><tr><th scope="col">Renter</th><th scope="col">Unit</th><th scope="col">Note</th><th scope="col">Email</th><th scope="col">Received</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+          <tbody>${interestRows}</tbody>
+        </table>
+        <p class="hint">Reply to a renter by email. Renters never see your email address unless you write to them.</p>`
+            : `<p class="empty">No requests yet. When a renter clicks “I'm interested” on one of your active units, they show up here with their name, email and note.</p>`
+        }
+      </section>`,
     };
   }
 
@@ -708,7 +853,7 @@
   async function renterPage() {
     const blocked = gate("renter", "Renter");
     if (blocked !== undefined) return blocked;
-    const [{ preferences: p }, matches, mates] = await Promise.all([api("/api/renter/preferences"), api("/api/renter/matches"), api("/api/renter/roommates")]);
+    const [{ preferences: p }, matches, mates, contacted] = await Promise.all([api("/api/renter/preferences"), api("/api/renter/matches"), api("/api/renter/roommates"), loadMyInterests()]);
     const v = p || { budget_min: "", budget_max: "", move_in_month: "", area: "", rooms_needed: 1 };
     const lifestyle = Object.entries(CHOICES)
       .map(([k, [label, opts]]) => field(k, label, select(k, (p ? [] : [["", "Choose…"]]).concat(opts), v[k] || "")))
@@ -756,6 +901,10 @@
       <section aria-labelledby="matches-heading">
         <div class="section-heading"><h2 id="matches-heading">Matching rooms</h2><span class="muted small" id="match-count">${matches.matches.length ? plural(matches.matches.length, "match", "matches") : ""}</span></div>
         <div id="matches">${matchesHtml(matches)}</div>
+      </section>
+      <section aria-labelledby="contacted-heading">
+        <div class="section-heading"><h2 id="contacted-heading">Landlords you've contacted</h2></div>
+        <div id="contacted">${contactedHtml(contacted)}</div>
       </section>
       <section aria-labelledby="roommates-heading">
         <div class="section-heading"><h2 id="roommates-heading">Possible roommates</h2><span class="muted small" id="roommate-count">${mates.roommates.length ? plural(mates.roommates.length, "person", "people") : ""}</span></div>
@@ -980,6 +1129,13 @@
       else if (a === "sign-out") signOut();
       else if (a === "choose-type") chooseType(action.dataset.type, action);
       else if (a === "delete-unit") deleteUnit(action.dataset.id);
+      else if (a === "interest-open") {
+        const box = interestBox(action.dataset.unit);
+        box.innerHTML = interestForm(action.dataset.unit);
+        box.querySelector("textarea").focus();
+      } else if (a === "interest-cancel") interestBox(action.dataset.unit).innerHTML = interestState(action.dataset.unit);
+      else if (a === "interest-withdraw") withdrawInterest(action.dataset.unit);
+      else if (a === "interest-remove") removeInterest(action.dataset.id, action);
       else if (a === "reload") render(true);
       return;
     }
@@ -1001,6 +1157,9 @@
     } else if (e.target.id === "delete-account-form") {
       e.preventDefault();
       submitDeleteAccount(e.target);
+    } else if (e.target.classList.contains("interest-form")) {
+      e.preventDefault();
+      sendInterest(e.target);
     }
   });
 

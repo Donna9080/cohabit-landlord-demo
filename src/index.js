@@ -4,6 +4,8 @@
 //   /api/auth/*   Google sign-in, sign-out, session (Better Auth, allowlisted paths only)
 //   /api/me       who is signed in; one-time landlord/renter choice; delete my account
 //   /api/landlord/units[/<id>]   a landlord's own units
+//   /api/landlord/interests      renters who said "I'm interested" in this landlord's units
+//   /api/renter/interests        a renter's own "I'm interested" requests
 //   /api/listings                active units, listing fields only (public)
 //   /api/renter/preferences      a renter's own questionnaire answers
 //   /api/renter/matches          active units ranked against those answers
@@ -12,10 +14,11 @@
 import { getAuth } from "./auth.js";
 import { rankUnits } from "./match.js";
 import { firstNameOf, rankRoommates } from "./roommates.js";
-import { InvalidInput, isUnitId, parseAccountType, parsePreferences, parseUnit } from "./validate.js";
+import { InvalidInput, isUnitId, parseAccountType, parseInterest, parsePreferences, parseUnit } from "./validate.js";
 
 const MAX_BODY = 16 * 1024;
 const MAX_UNITS_PER_LANDLORD = 50;
+const MAX_INTERESTS_PER_RENTER = 20;
 const LIMITS = { read: 120, write: 30 }; // requests per minute per user (or per IP when signed out)
 
 class HttpError extends Error {
@@ -221,6 +224,7 @@ async function handleApi(request, env, url) {
     }
     // One batch = one transaction in D1. Children first, then the user row.
     await db.batch([
+      db.prepare(`DELETE FROM unit_interests WHERE renter_user_id = ?1 OR unit_id IN (SELECT id FROM units WHERE landlord_user_id = ?1)`).bind(user.id),
       db.prepare(`DELETE FROM units WHERE landlord_user_id = ?1`).bind(user.id),
       db.prepare(`DELETE FROM match_preferences WHERE user_id = ?1`).bind(user.id),
       db.prepare(`DELETE FROM "session" WHERE "userId" = ?1`).bind(user.id),
@@ -288,11 +292,99 @@ async function handleApi(request, env, url) {
       return reply({ unit: updated });
     }
     if (method === "DELETE") {
-      const res = await db.prepare(`DELETE FROM units WHERE id = ?1 AND landlord_user_id = ?2`).bind(id, user.id).run();
+      const [, res] = await db.batch([
+        db.prepare(`DELETE FROM unit_interests WHERE unit_id IN (SELECT id FROM units WHERE id = ?1 AND landlord_user_id = ?2)`).bind(id, user.id),
+        db.prepare(`DELETE FROM units WHERE id = ?1 AND landlord_user_id = ?2`).bind(id, user.id),
+      ]);
       if (res.meta.changes !== 1) throw notFound;
       return reply({ deleted: true });
     }
     throw new HttpError(405, "method_not_allowed", "Not allowed.");
+  }
+
+  // Landlord: renters who said "I'm interested" in this landlord's own units. This is the one place a
+  // landlord sees a renter's name and email, and only because that renter chose to send the request.
+  if (path === "/api/landlord/interests" && method === "GET") {
+    const user = requireType(viewer, "landlord");
+    const { results } = await db
+      .prepare(
+        `SELECT i.id, i.unit_id AS unitId, un.name AS unitName, i.message, i.created_at AS createdAt,
+           r.name AS renterName, r.email AS renterEmail
+         FROM unit_interests i
+         JOIN units un ON un.id = i.unit_id
+         JOIN "user" r ON r.id = i.renter_user_id
+         WHERE un.landlord_user_id = ?1
+         ORDER BY i.created_at DESC LIMIT 200`
+      )
+      .bind(user.id)
+      .all();
+    return reply({ interests: results });
+  }
+
+  const landlordInterest = path.match(/^\/api\/landlord\/interests\/([^/]+)$/);
+  if (landlordInterest && method === "DELETE") {
+    const user = requireType(viewer, "landlord");
+    const id = landlordInterest[1];
+    const res = isUnitId(id)
+      ? await db
+          .prepare(`DELETE FROM unit_interests WHERE id = ?1 AND unit_id IN (SELECT id FROM units WHERE landlord_user_id = ?2)`)
+          .bind(id, user.id)
+          .run()
+      : null;
+    if (!res || res.meta.changes !== 1) throw new HttpError(404, "not_found", "Request not found.");
+    return reply({ deleted: true });
+  }
+
+  // Renter: own "I'm interested" requests. The renter never receives the landlord's identity.
+  if (path === "/api/renter/interests") {
+    const user = requireType(viewer, "renter");
+    if (method === "GET") {
+      const { results } = await db
+        .prepare(
+          `SELECT i.unit_id AS unitId, i.message, i.created_at AS createdAt, un.name AS unitName, un.area AS unitArea,
+             (un.status = 'active') AS listed
+           FROM unit_interests i JOIN units un ON un.id = i.unit_id
+           WHERE i.renter_user_id = ?1 ORDER BY i.created_at DESC LIMIT ${MAX_INTERESTS_PER_RENTER}`
+        )
+        .bind(user.id)
+        .all();
+      return reply({ interests: results.map((r) => ({ ...r, listed: !!r.listed })) });
+    }
+    if (method === "POST") {
+      const { unit_id, message } = parseInterest(await readJson(request));
+      const unit = await db
+        .prepare(`SELECT id, (landlord_user_id LIKE 'sample-%') AS sample FROM units WHERE id = ?1 AND status = 'active'`)
+        .bind(unit_id)
+        .first();
+      if (!unit) throw new HttpError(404, "not_found", "This unit is no longer listed.");
+      if (unit.sample) throw new HttpError(409, "sample_listing", "This is a sample listing, so there is no landlord to contact.");
+      const { n } = await db.prepare(`SELECT COUNT(*) AS n FROM unit_interests WHERE renter_user_id = ?1`).bind(user.id).first();
+      if (n >= MAX_INTERESTS_PER_RENTER) {
+        throw new HttpError(409, "too_many_interests", `You can have up to ${MAX_INTERESTS_PER_RENTER} open requests. Withdraw one first.`);
+      }
+      const now = Date.now();
+      const res = await db
+        .prepare(
+          `INSERT INTO unit_interests (id, unit_id, renter_user_id, message, created_at) VALUES (?1, ?2, ?3, ?4, ?5)
+           ON CONFLICT (unit_id, renter_user_id) DO NOTHING`
+        )
+        .bind(crypto.randomUUID(), unit_id, user.id, message, now)
+        .run();
+      if (res.meta.changes !== 1) throw new HttpError(409, "already_sent", "You already told this landlord you're interested.");
+      return reply({ interest: { unitId: unit_id, message, createdAt: now } }, 201);
+    }
+    throw new HttpError(405, "method_not_allowed", "Not allowed.");
+  }
+
+  const renterInterest = path.match(/^\/api\/renter\/interests\/([^/]+)$/);
+  if (renterInterest && method === "DELETE") {
+    const user = requireType(viewer, "renter");
+    const unitId = renterInterest[1];
+    const res = isUnitId(unitId)
+      ? await db.prepare(`DELETE FROM unit_interests WHERE unit_id = ?1 AND renter_user_id = ?2`).bind(unitId, user.id).run()
+      : null;
+    if (!res || res.meta.changes !== 1) throw new HttpError(404, "not_found", "Request not found.");
+    return reply({ deleted: true });
   }
 
   // Anyone: active units, listing fields only. Never landlord identity.
