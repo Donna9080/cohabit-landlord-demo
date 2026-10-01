@@ -16,12 +16,12 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [x] Local tests: `npm test` 109/109 passing (local D1), plus browser check of each screen (desktop + phone)
 - [x] Handoff docs (this file, ACCOUNTS_SETUP.md)
 - [x] Owner: created Google OAuth client, set 3 secrets (2026-09-30)
-- [x] Applied migration `--remote`, deployed version `dcb965ea-d350-4e36-b56e-3458f7f7c423`, signed-out live checks pass
+- [x] Applied migration `--remote`, first deployed version `dcb965ea-d350-4e36-b56e-3458f7f7c423` (current: `1eb287af-f083-4312-a309-46cf923ab3b1`), signed-out live checks pass
 - [x] Owner signed in on the live site with Google (landlord); promoted to admin with the D1 command; read-back shows `role = admin`
 - [x] Live: owner (landlord, admin) added 2 units; second Google account signed in as renter and saved preferences (seen in D1)
 - [x] Google app published (**In production**, External) after adding home page, `/privacy`, `/terms` and authorized domain on Branding
 - [ ] Owner confirms in the browser: `/admin` opens for the owner; `/landlord` and `/admin` refuse the renter account
-- [ ] Rename the two test units that have street addresses in their names (now refused for new saves)
+- [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works
 - [ ] Live test with a second Google account as renter
 
 ## Decisions
