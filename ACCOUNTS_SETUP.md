@@ -198,7 +198,7 @@ npm install
 copy .dev.vars.example .dev.vars        # then fill in the values (BETTER_AUTH_SECRET: any long random string)
 npm run db:migrate:local                # = wrangler d1 migrations apply DB --local
 npm run dev                             # http://localhost:8787
-npm test                                # 124 automated checks (see below)
+npm test                                # 134 automated checks (see below)
 ```
 
 `npm test` (`tests/run-local.mjs`) wipes and recreates a separate local database in

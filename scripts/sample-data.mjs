@@ -11,7 +11,7 @@
 // in the admin list. Every row passes the same validation as real input (src/validate.js).
 import { mkdirSync, writeFileSync } from "node:fs";
 import { parsePreferences, parseUnit } from "../src/validate.js";
-import { rankUnits } from "../src/match.js";
+import { MIN_SCORE, rankUnits } from "../src/match.js";
 
 const landlords = [
   "Riverside Rooms", "Maple House Rentals", "Prospect Hill Homes",
@@ -149,16 +149,23 @@ Each active unit gets a score out of 100 for a renter:
 | Move-in is one month earlier or later | 10 |
 | Unit has at least as many rooms as the renter needs | 15 |
 
-A unit is shown only if it scores 40 or more. Results are sorted by score, then by lower rent,
-and the top 20 are shown. The "budget from" figure and the lifestyle answers (sleep, cleanliness,
-noise, guests, pets, smoking) are saved but not used yet; they are for future roommate matching.
+A unit is shown only if all three of these hold:
+
+1. **Affordable:** rent is no more than 10% over the renter's "budget up to".
+2. **Big enough:** it has at least as many rooms as the renter needs.
+3. **Relevant:** it scores ${MIN_SCORE} or more. An affordable, big-enough unit starts at 55 (or 30 if slightly over budget),
+   so it also has to be in the renter's area or available in the exact month they want.
+
+Results are sorted by score, then by lower rent, and the top 20 are shown. The "budget from" figure
+and the lifestyle answers (sleep, cleanliness, noise, guests, pets, smoking) are saved but not used
+yet; they are for future roommate matching.
 
 ## Summary
 
 - ${units.length} sample units: ${["Waltham", "Belmont", "Cambridge"].map((c) => `${units.filter((u) => u.area.includes(c)).length} in ${c}`).join(", ")}. Rent ${money(Math.min(...units.map((u) => u.monthly_rent)))} to ${money(Math.max(...units.map((u) => u.monthly_rent)))} per room.
 - ${renters.length} sample renters. ${withMatches.length} get at least one match; ${perfect.length} have a 100% top match; ${renters.length - withMatches.length} get none.
 
-## What the sample shows about the current rules
+## What tightening the rules changed
 
 ${(() => {
   const all = results.flatMap(({ r, matches }) => matches.map((m) => ({ r, m })));
@@ -167,11 +174,31 @@ ${(() => {
   const offArea = all.filter(({ m }) => !m.reasons.includes("In your area"));
   const topOver = results.filter(({ r, matches }) => matches[0] && matches[0].unit.monthly_rent > r.prefs.budget_max);
   const avg = (all.length / renters.length).toFixed(1);
-  return `- Renters see ${avg} units each on average, out of ${units.length}. The 40-point bar is low: being within budget is enough on its own.
-- ${offArea.length} of the ${all.length} matches shown (${Math.round((offArea.length / all.length) * 100)}%) are outside the area the renter asked for.
-- ${over.length} matches shown are over the renter's budget, and ${wayOver.length} of those are more than 10% over. A unit can reach 40 points on area, month and rooms without being affordable.
-- ${topOver.length} renter${topOver.length === 1 ? "'s" : "s'"} top match is over budget: ${topOver.map(({ r }) => r.name.replace(" (sample)", "")).join(", ") || "none"}.
-- When the budget, area, month and rooms all line up, the top match is 100% and it is the unit a person would pick by hand.`;
+  const tooSmall = all.filter(({ r, m }) => m.unit.rooms_available < r.prefs.rooms_needed);
+  const none = results.filter((x) => !x.matches.length);
+  const why = ({ r }) => {
+    const p = r.prefs;
+    const affordable = units.filter((u) => u.monthly_rent <= p.budget_max * 1.1 && u.rooms_available >= p.rooms_needed);
+    if (!affordable.length) return "no unit is within 10% of the budget with enough rooms";
+    return "units they can afford are neither in their area nor free in their month";
+  };
+  const pct = (n) => `${Math.round((n / all.length) * 100)}%`;
+  return `The first version of the rules showed any unit scoring 40 or more, with no limits. Same data, before and after:
+
+| | Before (score 40+) | Now |
+| --- | --- | --- |
+| Units shown per renter, on average (out of ${units.length}) | 14.1 | ${avg} |
+| Matches outside the area the renter asked for | 209 of 424 (49%) | ${offArea.length} of ${all.length} (${pct(offArea.length)}) |
+| Matches over the renter's budget | 84 | ${over.length} |
+| Matches more than 10% over budget | 52 | ${wayOver.length} |
+| Matches with too few rooms | not checked | ${tooSmall.length} |
+| Renters whose top match is over budget | 1 | ${topOver.length} |
+| Renters with a 100% top match | 23 | ${perfect.length} |
+| Renters with no match | 0 | ${none.length} |
+
+- Over-budget matches still shown (${over.length}) are within 10% of the budget and are labeled "Slightly over budget".
+- Out-of-area matches still shown (${offArea.length}) are affordable, big enough, and free in the exact month the renter wants.
+${none.length ? `- Renters who now get no match, and why:\n${none.map((x) => `  - **${x.r.name.replace(" (sample)", "")}** (${x.r.prefs.area}, up to ${money(x.r.prefs.budget_max)}, ${month(x.r.prefs.move_in_month)}, ${x.r.prefs.rooms_needed} room${x.r.prefs.rooms_needed === 1 ? "" : "s"}): ${why(x)}.`).join("\n")}\n  The site tells them to widen their budget or area, or browse all listings.` : ""}`;
 })()}
 
 ## The units
@@ -189,7 +216,7 @@ ${results
     const p = r.prefs;
     const wants = `${p.area}, up to ${money(p.budget_max)}, ${month(p.move_in_month)}, ${p.rooms_needed} room${p.rooms_needed === 1 ? "" : "s"}`;
     const best = matches[0];
-    return `| ${r.name.replace(" (sample)", "")} | ${wants} | ${matches.length} | ${best ? `${best.unit.name} (${best.unit.area}, ${money(best.unit.monthly_rent)})` : "none"} | ${best ? best.score + "%" : ""} | ${best ? best.reasons.join("; ") : "Nothing reaches 40 points"} |`;
+    return `| ${r.name.replace(" (sample)", "")} | ${wants} | ${matches.length} | ${best ? `${best.unit.name} (${best.unit.area}, ${money(best.unit.monthly_rent)})` : "none"} | ${best ? best.score + "%" : ""} | ${best ? best.reasons.join("; ") : "No unit passes all three checks"} |`;
   })
   .join("\n")}
 

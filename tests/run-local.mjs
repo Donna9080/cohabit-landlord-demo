@@ -6,6 +6,7 @@ import { spawn, execFileSync } from "node:child_process";
 import { createHmac, randomBytes } from "node:crypto";
 import { rmSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
+import { rankUnits } from "../src/match.js";
 
 const PORT = 8788;
 const BASE = `http://localhost:${PORT}`;
@@ -127,6 +128,24 @@ for (let i = 0; i < 60; i++) {
 const { landlordA, landlordB, renterA, renterB, newbie, admin, rater } = people;
 
 try {
+  // ── Matching rules (pure function, no server) ─────────────────────────────
+  {
+    const want = { budget_min: 900, budget_max: 1000, move_in_month: "2027-06", area: "Waltham", rooms_needed: 2 };
+    const unit = (over) => ({ id: "u", name: "n", area: "Waltham, MA", monthly_rent: 1000, rooms_available: 2, move_in_date: "2027-06-01", ...over });
+    const shown = (over) => rankUnits(want, [unit(over)]);
+    check("Match: budget, area, month and rooms all fit → 100%", shown({})[0]?.score === 100);
+    check("Match: up to 10% over budget is shown, labeled slightly over", shown({ monthly_rent: 1100 })[0]?.reasons.includes("Slightly over budget"));
+    check("Match: more than 10% over budget is never shown", shown({ monthly_rent: 1101 }).length === 0);
+    check("Match: too few rooms is never shown", shown({ rooms_available: 1 }).length === 0);
+    check("Match: affordable but wrong area and wrong month is not shown", shown({ area: "Belmont, MA", move_in_date: "2027-01-01" }).length === 0);
+    check("Match: affordable, wrong area, exact month is shown", shown({ area: "Belmont, MA" })[0]?.score === 75);
+    check("Match: affordable, right area, wrong month is shown", shown({ move_in_date: "2027-01-01" })[0]?.score === 80);
+    check("Match: affordable, wrong area, month one off is not shown", shown({ area: "Belmont, MA", move_in_date: "2027-07-01" }).length === 0);
+    const ranked = rankUnits(want, [unit({ id: "far", area: "Belmont, MA" }), unit({ id: "best" }), unit({ id: "cheaper", monthly_rent: 950 })]);
+    check("Match: sorted by score, then lower rent", ranked.map((m) => m.unit.id).join() === "cheaper,best,far");
+    check("Match: result carries only unit, score and reasons", Object.keys(ranked[0]).sort().join() === "reasons,score,unit");
+  }
+
   // ── Public pages ──────────────────────────────────────────────────────────
   for (const p of ["/", "/how-it-works", "/listings", "/sample", "/properties/14-elm-street"]) {
     const r = await fetch(BASE + p);

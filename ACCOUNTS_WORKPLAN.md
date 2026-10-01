@@ -13,7 +13,7 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [x] Worker API with server-side permissions, validation, CSRF/origin checks, D1 rate limits, daily cleanup
 - [x] UI: sign in/out, one-time landlord/renter choice, units dashboard + form, renter questionnaire + matches,
       public listings, How it works, admin user list; sample dashboard moved to `/sample`
-- [x] Local tests: `npm test` 124/124 passing (local D1), plus browser check of each screen (desktop + phone)
+- [x] Local tests: `npm test` 134/134 passing (local D1), plus browser check of each screen (desktop + phone)
 - [x] Handoff docs (this file, ACCOUNTS_SETUP.md)
 - [x] Owner: created Google OAuth client, set 3 secrets (2026-09-30)
 - [x] Applied migration `--remote`, first deployed version `dcb965ea-d350-4e36-b56e-3458f7f7c423` (current: `1eb287af-f083-4312-a309-46cf923ab3b1`), signed-out live checks pass
@@ -27,7 +27,9 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [x] Fictional sample data loaded in production (2026-10-01): 6 landlords, 20 units, 30 renters, all tagged Sample;
       matching write-up in `docs/SAMPLE_MATCHING.md`. Restore bookmark from just before the load:
       `00000019-00000000-000050f7-8f1857dca024c6a8f827bb00861ff290`. Removal command in ACCOUNTS_SETUP.md.
-- [ ] Decide whether to tighten matching (sample run: 49% of shown matches are outside the renter's area, 84 are over budget)
+- [x] Matching tightened (2026-10-01): on the sample data, units shown per renter 14.1 → 4.2, out-of-area matches
+      49% → 22%, over-budget matches 84 → 1 (within 10%), 100% top matches unchanged at 23, 3 renters now get none.
+      Before/after table in `docs/SAMPLE_MATCHING.md`.
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
 - [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works
 - [ ] Live test with a second Google account as renter
@@ -51,7 +53,9 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - **Unit fields**: name, general area, monthly rent (whole dollars, per room), rooms
   available (1–20), move-in date, description (≤1000 chars), status active/inactive.
   Up to 50 units per landlord.
-- **Matching**: rule-based (budget 40, area 25, move-in 20, rooms 15; shown if ≥40).
+- **Matching**: rule-based (budget 40, area 25, move-in 20, rooms 15). Tightened 2026-10-01 after the sample run:
+  a unit is shown only if rent is at most 10% over budget, it has enough rooms, and it scores 70 or more
+  (so it is also in the renter's area or free in their exact month). Was: shown if ≥40, no limits.
   No AI API, so no key and no cost. Lifestyle answers are stored for future roommate
   matching but not used yet, and nobody else sees them.
 - **Public listings**: visitors and renters see active units' listing fields only.
@@ -64,7 +68,7 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 
 ## Tests completed (local, 2026-09-29)
 
-`npm test` → **124/124 passed** against Wrangler's local D1 (`.wrangler/test-state`).
+`npm test` → **134/134 passed** against Wrangler's local D1 (`.wrangler/test-state`).
 Covers: public pages; Google authorization URL (scopes exactly openid/email/profile,
 PKCE S256, state, no offline access, correct redirect URI, injected scope dropped);
 forged OAuth state rejected; non-allowlisted Better Auth endpoints 404; one-time account
