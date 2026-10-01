@@ -31,7 +31,7 @@ Landlords list rooms; renters answer a short questionnaire and see rooms that fi
 | Choose landlord or renter (once) | `/welcome` | Signed in |
 | Your account, delete my account | `/account` | Signed in |
 | Your units | `/landlord`, `/landlord/units/new` | Landlords |
-| Questionnaire and matches | `/renter` | Renters |
+| Questionnaire, matching rooms, possible roommates (opt-in) | `/renter` | Renters |
 | User list (read only) | `/admin` | Admin |
 
 This is separate from the other coHabit app in `Documents\cohabit`. It runs on Cloudflare's free plan as its own Worker (`cohabit-landlord-demo`) with its own database (`cohabit-db`).
@@ -85,6 +85,7 @@ src/index.js        Worker: the /api/* routes and permission checks
 src/auth.js         Google sign-in settings (Better Auth)
 src/validate.js     checks every field sent by the browser
 src/match.js        renter-to-unit matching rules
+src/roommates.js    renter-to-renter (roommate) matching rules, opt-in
 migrations/         database tables (D1)
 tests/run-local.mjs automated local tests (npm test)
 scripts/sample-data.mjs  fictional sample landlords, units and renters (see ACCOUNTS_SETUP.md)

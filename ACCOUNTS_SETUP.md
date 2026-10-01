@@ -36,13 +36,28 @@ matching is a small rule-based scorer in `src/match.js`.
 | `verification` | Short-lived OAuth state for sign-in in progress | Nobody |
 | `rateLimit`, `app_rate_limits` | Request counters | Nobody |
 | `units` | A landlord's units: name, general area, monthly rent, rooms available, move-in date, description, status | Owner: everything. Everyone: active units' listing fields only (no owner, no status). Admin: a count per landlord |
-| `match_preferences` | A renter's questionnaire: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets, smoking | Only that renter. Not landlords, not other renters, not admin (admin sees "saved yes/no") |
+| `match_preferences` | A renter's questionnaire: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets, smoking | Only that renter. Not landlords, not admin (admin sees "saved yes/no"). Other renters see nothing unless the renter turns on roommate matching (see below) |
 
 Not collected: street addresses (rejected by validation), phone numbers, IDs,
 dates of birth, financial or health details, profile photos.
 
 The fictional sample dashboard (`/sample`, `/properties/<id>`) is still in
 `public/data.js`. It is not in the database and is labeled "Fictional sample data".
+
+## Roommate matching (opt-in)
+
+Renters can be matched with each other on their lifestyle answers. The code is in `src/roommates.js`; the rules and a
+worked example on the sample data are in [docs/SAMPLE_MATCHING.md](docs/SAMPLE_MATCHING.md).
+
+- Two switches on the renter's questionnaire, stored in `match_preferences` (migration `0002`), both **off by default**:
+  `roommate_visible` ("Show me to compatible renters") and `share_email` ("Let my roommate matches see my email").
+  `share_email` cannot be on without `roommate_visible`.
+- `GET /api/renter/roommates` only works for a signed-in renter who has `roommate_visible` on, and only compares them
+  with other renters who have it on. A renter who has it off sees nobody and is seen by nobody.
+- What it returns about another renter: first name, score, the list of things the two have in common, a sample flag,
+  and the email only if that renter turned on `share_email`. Never an id, last name, budget figures or raw answers.
+- Admin still sees none of this. Turning the switch off, or deleting the account, removes the renter from other
+  people's results on the next request.
 
 ## Sample data (fictional)
 
@@ -73,6 +88,7 @@ Remove it before counting users or listings for anything you report as real trac
 | Sign in with Google, choose landlord/renter once | ✓ | | | |
 | Create/view/edit/delete **own** units | | ✓ | | |
 | Save/edit **own** preferences, see matches | | | ✓ | |
+| See possible roommates (only after opting in; only others who opted in) | | | ✓ | |
 | Delete **own** account and everything saved with it (`/account`) | | ✓ | ✓ | ✓ (not the last admin) |
 | Read-only user list (`/admin`) | | | | ✓ |
 
@@ -198,7 +214,7 @@ npm install
 copy .dev.vars.example .dev.vars        # then fill in the values (BETTER_AUTH_SECRET: any long random string)
 npm run db:migrate:local                # = wrangler d1 migrations apply DB --local
 npm run dev                             # http://localhost:8787
-npm test                                # 134 automated checks (see below)
+npm test                                # 158 automated checks (see below)
 ```
 
 `npm test` (`tests/run-local.mjs`) wipes and recreates a separate local database in
@@ -254,8 +270,7 @@ Cloudflare dashboard (Workers & Pages → Plans). Alerts are not a spending cap.
 ## Not built (on purpose)
 
 Landlord tenant preferences, applicant or match tracking, private notes, saved matches,
-messaging, listing photos / R2 uploads, landlord approval or verification, roommate
-(person-to-person) matching, admin moderation/editing/deleting, admin stats,
+messaging, listing photos / R2 uploads, landlord approval or verification, admin moderation/editing/deleting, admin stats,
 role-management UI, admin deleting other people's accounts, changing account type, payments.
 
 ## Manual test for a group member (about 10 minutes)

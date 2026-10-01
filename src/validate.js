@@ -105,7 +105,17 @@ export function parsePreferences(body) {
   };
   if (p.budget_max < p.budget_min) throw new InvalidInput("budget_max", "Must be at least the minimum.");
   for (const [field, allowed] of Object.entries(PREFERENCE_CHOICES)) p[field] = oneOf(body, field, allowed);
+  // Roommate matching is opt-in: both are off unless sent as true. Email sharing needs the first switch on.
+  p.roommate_visible = flag(body, "roommate_visible");
+  p.share_email = flag(body, "share_email") && p.roommate_visible;
   return p;
+}
+
+function flag(body, field) {
+  const v = body[field];
+  if (v === undefined || v === null) return false;
+  if (typeof v !== "boolean") throw new InvalidInput(field, "Must be true or false.");
+  return v;
 }
 
 export function parseAccountType(body) {

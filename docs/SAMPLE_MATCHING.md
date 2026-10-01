@@ -142,3 +142,79 @@ The first version of the rules showed any unit scoring 40 or more, with no limit
 - **Isabella Silva:** Room with private bath (100%), Bright room near Belmont Center (80%)
 - **Ryan Murphy:** Shared apartment in Cambridgeport (80%), Room near Porter Square station (80%)
 - **Caleb Johnson:** Renovated 4-bedroom by Moody Street shops (90%), Large room in Victorian house (80%)
+
+# Roommate matching
+
+Roommate matching compares renters with each other using the lifestyle answers. It is opt-in:
+a renter is only compared and shown after ticking "Show me to compatible renters", and only sees
+people who ticked it too. All 30 sample renters have it on; every other one also shares a
+(fictional) email address.
+
+## The rules
+
+Two renters are a possible match only if all of these hold:
+
+1. **Same area:** their areas share a word (for example both say "Waltham").
+2. **Same timing:** their move-in months are the same or one month apart.
+3. **No dealbreaker:** not "has a pet" with "no pets, please", and not "I smoke" with "no smoking".
+4. **Compatible:** the score is 60 or more out of 100.
+
+| Part of the score | Points |
+| --- | --- |
+| Cleanliness: same answer 20, one step apart 10, opposite 0 | up to 20 |
+| Sleep schedule: same 15, one of you flexible 10, early bird with night owl 0 | up to 15 |
+| Noise at home: same 15, one step apart 7.5, opposite 0 | up to 15 |
+| Guests: same 10, one step apart 5, opposite 0 | up to 10 |
+| Pets: no clash | 10 |
+| Smoking: same answer 10, one step apart 6 | up to 10 |
+| Budget ranges overlap | 10 |
+| Same move-in month | 10 |
+
+## What another renter sees
+
+Only this: first name, the score, and the things the two have in common. Never the last name,
+never an answer the two do not share, and the email only if that person ticked the separate box.
+
+## Summary
+
+- 435 possible pairs among 30 renters. 19 pairs pass all four checks.
+- 22 renters have at least one possible roommate; 8 have none (nobody else wants their area in their month, or the lifestyle fit is too low).
+- Dealbreakers removed 56 pairs for pets and 80 pairs for smoking, before area and timing were even considered.
+
+## Every renter's best roommate match
+
+| Renter | Looking for | Lifestyle | Possible roommates | Best fit | Score | What they have in common |
+| --- | --- | --- | --- | --- | --- | --- |
+| Maya | Waltham, Nov 2026 | early bird, very tidy, quiet, guests often, ok with pets, no smoking | 0 | none |  |  |
+| Jordan | Waltham, Jan 2027 | night owl, very tidy, lively, guests sometimes, no pets, no smoking | 1 | Noah | 80% | Both looking in Waltham; Both moving in Jan 2027; Budgets overlap; Both like a lively home; Both want no smoking |
+| Priya | Waltham, Jun 2027 | early bird, very tidy, some noise ok, guests rarely, no pets, no smoking | 0 | none |  |  |
+| Sam | Waltham, Dec 2026 | night owl, relaxed, lively, guests sometimes, has a pet, smoking outside ok | 3 | Diego | 75% | Both looking in Waltham; Moving within a month of each other; Both night owls; Both relaxed about tidiness; Both like a lively home; Both fine with smoking outside |
+| Ethan | Waltham, Jun 2027 | flexible sleep, very tidy, lively, guests rarely, has a pet, smokes | 0 | none |  |  |
+| Lina | Waltham, Sep 2027 | flexible sleep, average tidiness, quiet, guests often, ok with pets, no smoking | 2 | Yuki | 80% | Both looking in Waltham; Moving within a month of each other; Budgets overlap; Similar tidiness; Both like a quiet home; Both want no smoking |
+| Noah | Waltham or Belmont, Jan 2027 | flexible sleep, average tidiness, lively, guests rarely, ok with pets, no smoking | 3 | Jordan | 80% | Both looking in Waltham; Both moving in Jan 2027; Budgets overlap; Both like a lively home; Both want no smoking |
+| Ava | Waltham, Sep 2027 | night owl, average tidiness, quiet, guests rarely, no pets, smoking outside ok | 1 | Lina | 71% | Both looking in Waltham; Both moving in Sep 2027; Similar tidiness; Both like a quiet home |
+| Diego | Waltham, Nov 2026 | night owl, relaxed, lively, guests often, ok with pets, smoking outside ok | 1 | Sam | 75% | Both looking in Waltham; Moving within a month of each other; Both night owls; Both relaxed about tidiness; Both like a lively home; Both fine with smoking outside |
+| Grace | Waltham, Jun 2027 | night owl, relaxed, lively, guests often, ok with pets, no smoking | 0 | none |  |  |
+| Omar | Belmont, Nov 2026 | flexible sleep, very tidy, lively, guests rarely, ok with pets, smokes | 0 | none |  |  |
+| Hannah | Belmont, Jan 2027 | flexible sleep, relaxed, quiet, guests sometimes, ok with pets, no smoking | 3 | Arjun | 66% | Both looking in Belmont; Both moving in Jan 2027; Budgets overlap; Both like a quiet home; Both fine with pets |
+| Kenji | Belmont, Feb 2027 | early bird, relaxed, lively, guests often, ok with pets, smoking outside ok | 2 | Emily | 61% | Both looking in Belmont; Moving within a month of each other; Both early birds; Both relaxed about tidiness; Both often have guests |
+| Sofia | Belmont, Jun 2027 | flexible sleep, average tidiness, some noise ok, guests sometimes, ok with pets, no smoking | 1 | Tunde | 70% | Both looking in Belmont; Both moving in Jun 2027; Both fine with some noise; Both want no smoking |
+| Tunde | Belmont, Jun 2027 | night owl, very tidy, some noise ok, guests often, has a pet, no smoking | 1 | Sofia | 70% | Both looking in Belmont; Both moving in Jun 2027; Both fine with some noise; Both want no smoking |
+| Chloe | Belmont, Sep 2027 | flexible sleep, average tidiness, quiet, guests sometimes, ok with pets, smoking outside ok | 1 | Yuki | 81% | Both looking in Belmont; Moving within a month of each other; Budgets overlap; Similar tidiness; Both like a quiet home; Both have guests sometimes |
+| Arjun | Belmont or Cambridge, Jan 2027 | night owl, very tidy, quiet, guests often, ok with pets, smoking outside ok | 3 | Daniel | 90% | Both looking in Cambridge; Both moving in Jan 2027; Budgets overlap; Both night owls; Both very tidy; Both like a quiet home; Both fine with smoking outside |
+| Emily | Belmont, Mar 2027 | early bird, relaxed, quiet, guests often, no pets, no smoking | 1 | Kenji | 61% | Both looking in Belmont; Moving within a month of each other; Both early birds; Both relaxed about tidiness; Both often have guests |
+| Lucas | Cambridge, Nov 2026 | night owl, relaxed, lively, guests rarely, ok with pets, smokes | 0 | none |  |  |
+| Zoe | Cambridge, Jan 2027 | early bird, average tidiness, quiet, guests sometimes, ok with pets, smoking outside ok | 3 | Mateo | 76% | Both looking in Cambridge; Moving within a month of each other; Budgets overlap; Similar tidiness; Both like a quiet home |
+| Mateo | Cambridge, Feb 2027 | flexible sleep, average tidiness, quiet, guests rarely, no pets, no smoking | 2 | Zoe | 76% | Both looking in Cambridge; Moving within a month of each other; Budgets overlap; Similar tidiness; Both like a quiet home |
+| Aisha | Cambridge, Jun 2027 | night owl, very tidy, quiet, guests rarely, ok with pets, smokes | 1 | Isabella | 73% | Both looking in Cambridge; Both moving in Jun 2027; Budgets overlap; Both night owls; Both smoke |
+| Ben | Cambridge, Sep 2027 | night owl, very tidy, some noise ok, guests often, ok with pets, smoking outside ok | 1 | Mei | 79% | Both looking in Cambridge; Both moving in Sep 2027; Both night owls; Both very tidy; Both often have guests |
+| Mei | Cambridge, Sep 2027 | night owl, very tidy, quiet, guests often, has a pet, no smoking | 1 | Ben | 79% | Both looking in Cambridge; Both moving in Sep 2027; Both night owls; Both very tidy; Both often have guests |
+| Daniel | Cambridge, Jan 2027 | night owl, very tidy, quiet, guests rarely, no pets, smoking outside ok | 3 | Arjun | 90% | Both looking in Cambridge; Both moving in Jan 2027; Budgets overlap; Both night owls; Both very tidy; Both like a quiet home; Both fine with smoking outside |
+| Isabella | Cambridge or Belmont, Jun 2027 | night owl, average tidiness, some noise ok, guests often, has a pet, smokes | 1 | Aisha | 73% | Both looking in Cambridge; Both moving in Jun 2027; Budgets overlap; Both night owls; Both smoke |
+| Ryan | Cambridge, Apr 2027 | flexible sleep, average tidiness, lively, guests sometimes, no pets, no smoking | 0 | none |  |  |
+| Nadia | Watertown, May 2027 | night owl, average tidiness, some noise ok, guests rarely, no pets, no smoking | 0 | none |  |  |
+| Caleb | Waltham or Cambridge, Dec 2026 | night owl, relaxed, quiet, guests sometimes, has a pet, no smoking | 1 | Sam | 71% | Both looking in Waltham; Both moving in Dec 2026; Both night owls; Both relaxed about tidiness; Both have guests sometimes; Both have a pet |
+| Yuki | Belmont or Waltham, Aug 2027 | early bird, average tidiness, quiet, guests sometimes, has a pet, no smoking | 2 | Chloe | 81% | Both looking in Belmont; Moving within a month of each other; Budgets overlap; Similar tidiness; Both like a quiet home; Both have guests sometimes |
+
+The "Lifestyle" column is shown here only because this is fictional data. On the site a renter never
+sees another renter's full answers, only the last column.

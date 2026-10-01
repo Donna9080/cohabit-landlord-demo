@@ -9,9 +9,11 @@
 // address at the reserved domain sample.example. Sample people have no Google link and no
 // session, so nobody can sign in as them. The app shows a "Sample" tag on their listings and
 // in the admin list. Every row passes the same validation as real input (src/validate.js).
+// All sample renters have roommate matching turned on; every other one also shares a (fictional) email.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { parsePreferences, parseUnit } from "../src/validate.js";
 import { MIN_SCORE, rankUnits } from "../src/match.js";
+import { MIN_ROOMMATE_SCORE, firstNameOf, rankRoommates, scoreRoommate } from "../src/roommates.js";
 
 const landlords = [
   "Riverside Rooms", "Maple House Rentals", "Prospect Hill Homes",
@@ -80,9 +82,33 @@ const LIFESTYLE = {
   cleanliness: ["tidy", "average", "relaxed"],
   noise: ["quiet", "moderate", "lively"],
   guests: ["rarely", "sometimes", "often"],
-  pets: ["no_pets", "ok_with_pets", "have_pets"],
-  smoking: ["no_smoking", "no_smoking", "outside_ok", "no_smoking", "smoker"],
+  // Repeated entries make an answer more common, roughly as it would be among real renters.
+  pets: ["no_pets", "ok_with_pets", "ok_with_pets", "have_pets"],
+  smoking: ["no_smoking", "no_smoking", "no_smoking", "outside_ok", "outside_ok", "smoker"],
 };
+
+// Small seeded random generator, so the sample is varied but identical on every run.
+function seeded(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const random = seeded(20261001);
+const seenLifestyles = new Set();
+function lifestyle() {
+  for (;;) {
+    const life = Object.fromEntries(Object.entries(LIFESTYLE).map(([k, opts]) => [k, opts[Math.floor(random() * opts.length)]]));
+    const key = Object.values(life).join("|");
+    if (seenLifestyles.has(key)) continue; // every sample renter gets a different combination
+    seenLifestyles.add(key);
+    return life;
+  }
+}
 
 // Build and validate with the server's own rules.
 const units = unitRows.map(([landlord, name, area, monthly_rent, rooms_available, move_in_date, description], i) => ({
@@ -91,9 +117,9 @@ const units = unitRows.map(([landlord, name, area, monthly_rent, rooms_available
   ...parseUnit({ name, area, monthly_rent, rooms_available, move_in_date, description, status: "active" }),
 }));
 const renters = renterRows.map(([name, budget_min, budget_max, move_in_month, area, rooms_needed], i) => {
-  const life = Object.fromEntries(Object.entries(LIFESTYLE).map(([k, opts], j) => [k, opts[(i * (j + 2) + j) % opts.length]]));
+  const life = lifestyle();
   const n = String(i + 1).padStart(2, "0");
-  return { id: `sample-renter-${n}`, name: `${name} (sample)`, email: `renter${n}@sample.example`, prefs: parsePreferences({ budget_min, budget_max, move_in_month, area, rooms_needed, ...life }) };
+  return { id: `sample-renter-${n}`, name: `${name} (sample)`, email: `renter${n}@sample.example`, prefs: parsePreferences({ budget_min, budget_max, move_in_month, area, rooms_needed, ...life, roommate_visible: true, share_email: i % 2 === 0 }) };
 });
 
 // ── SQL ─────────────────────────────────────────────────────────────────────
@@ -118,7 +144,7 @@ for (const u of units)
 for (const r of renters) {
   const p = r.prefs;
   lines.push(
-    `INSERT INTO match_preferences (user_id, budget_min, budget_max, move_in_month, area, rooms_needed, sleep_schedule, cleanliness, noise, guests, pets, smoking, created_at, updated_at) VALUES (${[r.id, p.budget_min, p.budget_max, p.move_in_month, p.area, p.rooms_needed, p.sleep_schedule, p.cleanliness, p.noise, p.guests, p.pets, p.smoking, nowMs, nowMs].map(q).join(", ")});`
+    `INSERT INTO match_preferences (user_id, budget_min, budget_max, move_in_month, area, rooms_needed, sleep_schedule, cleanliness, noise, guests, pets, smoking, created_at, updated_at, roommate_visible, share_email) VALUES (${[r.id, p.budget_min, p.budget_max, p.move_in_month, p.area, p.rooms_needed, p.sleep_schedule, p.cleanliness, p.noise, p.guests, p.pets, p.smoking, nowMs, nowMs, p.roommate_visible ? 1 : 0, p.share_email ? 1 : 0].map(q).join(", ")});`
   );
 }
 writeFileSync(new URL("./sample-data.sql", import.meta.url), lines.join("\n") + "\n");
@@ -227,9 +253,85 @@ ${results
   .map(({ r, matches }) => `- **${r.name.replace(" (sample)", "")}:** ${matches.slice(1, 3).map((m) => `${m.unit.name} (${m.score}%)`).join(", ")}`)
   .join("\n")}
 `;
+// ── Roommate matching section ───────────────────────────────────────────────
+const asOther = (r) => ({ prefs: r.prefs, firstName: firstNameOf(r.name), email: r.prefs.share_email ? r.email : null, sample: true });
+const mates = renters.map((r) => ({ r, list: rankRoommates(r.prefs, renters.filter((o) => o !== r).map(asOther)) }));
+const pairs = [];
+for (let i = 0; i < renters.length; i++) for (let j = i + 1; j < renters.length; j++) pairs.push([renters[i], renters[j]]);
+const clash = (a, b, field, x, y) => [a.prefs[field], b.prefs[field]].includes(x) && [a.prefs[field], b.prefs[field]].includes(y);
+const petClashes = pairs.filter(([a, b]) => clash(a, b, "pets", "no_pets", "have_pets")).length;
+const smokeClashes = pairs.filter(([a, b]) => clash(a, b, "smoking", "no_smoking", "smoker")).length;
+const goodPairs = pairs.filter(([a, b]) => scoreRoommate(a.prefs, b.prefs).eligible).length;
+const withMates = mates.filter((m) => m.list.length);
+const LABELS = {
+  sleep_schedule: { early: "early bird", flexible: "flexible sleep", late: "night owl" },
+  cleanliness: { relaxed: "relaxed", average: "average tidiness", tidy: "very tidy" },
+  noise: { quiet: "quiet", moderate: "some noise ok", lively: "lively" },
+  guests: { rarely: "guests rarely", sometimes: "guests sometimes", often: "guests often" },
+  pets: { no_pets: "no pets", ok_with_pets: "ok with pets", have_pets: "has a pet" },
+  smoking: { no_smoking: "no smoking", outside_ok: "smoking outside ok", smoker: "smokes" },
+};
+const lifestyleOf = (p) => Object.keys(LABELS).map((k) => LABELS[k][p[k]]).join(", ");
+
+md += `
+# Roommate matching
+
+Roommate matching compares renters with each other using the lifestyle answers. It is opt-in:
+a renter is only compared and shown after ticking "Show me to compatible renters", and only sees
+people who ticked it too. All ${renters.length} sample renters have it on; every other one also shares a
+(fictional) email address.
+
+## The rules
+
+Two renters are a possible match only if all of these hold:
+
+1. **Same area:** their areas share a word (for example both say "Waltham").
+2. **Same timing:** their move-in months are the same or one month apart.
+3. **No dealbreaker:** not "has a pet" with "no pets, please", and not "I smoke" with "no smoking".
+4. **Compatible:** the score is ${MIN_ROOMMATE_SCORE} or more out of 100.
+
+| Part of the score | Points |
+| --- | --- |
+| Cleanliness: same answer 20, one step apart 10, opposite 0 | up to 20 |
+| Sleep schedule: same 15, one of you flexible 10, early bird with night owl 0 | up to 15 |
+| Noise at home: same 15, one step apart 7.5, opposite 0 | up to 15 |
+| Guests: same 10, one step apart 5, opposite 0 | up to 10 |
+| Pets: no clash | 10 |
+| Smoking: same answer 10, one step apart 6 | up to 10 |
+| Budget ranges overlap | 10 |
+| Same move-in month | 10 |
+
+## What another renter sees
+
+Only this: first name, the score, and the things the two have in common. Never the last name,
+never an answer the two do not share, and the email only if that person ticked the separate box.
+
+## Summary
+
+- ${pairs.length} possible pairs among ${renters.length} renters. ${goodPairs} pairs pass all four checks.
+- ${withMates.length} renters have at least one possible roommate; ${renters.length - withMates.length} have none (nobody else wants their area in their month, or the lifestyle fit is too low).
+- Dealbreakers removed ${petClashes} pairs for pets and ${smokeClashes} pairs for smoking, before area and timing were even considered.
+
+## Every renter's best roommate match
+
+| Renter | Looking for | Lifestyle | Possible roommates | Best fit | Score | What they have in common |
+| --- | --- | --- | --- | --- | --- | --- |
+${mates
+  .map(({ r, list }) => {
+    const p = r.prefs;
+    const best = list[0];
+    return `| ${firstNameOf(r.name)} | ${p.area}, ${month(p.move_in_month)} | ${lifestyleOf(p)} | ${list.length} | ${best ? best.firstName : "none"} | ${best ? best.score + "%" : ""} | ${best ? best.shared.join("; ") : ""} |`;
+  })
+  .join("\n")}
+
+The "Lifestyle" column is shown here only because this is fictional data. On the site a renter never
+sees another renter's full answers, only the last column.
+`;
+
 mkdirSync(new URL("../docs/", import.meta.url), { recursive: true });
 writeFileSync(new URL("../docs/SAMPLE_MATCHING.md", import.meta.url), md);
 
 console.log(`${landlords.length} landlords, ${units.length} units, ${renters.length} renters -> scripts/sample-data.sql, docs/SAMPLE_MATCHING.md`);
 console.log(`${withMatches.length} renters with matches, ${perfect.length} with a 100% top match, ${renters.length - withMatches.length} with none`);
+console.log(`roommates: ${goodPairs} compatible pairs of ${pairs.length}; ${withMates.length} renters have at least one`);
 for (const { r, matches } of results) console.log(`${r.name.padEnd(28)} ${String(matches.length).padStart(2)} matches  top: ${matches[0] ? matches[0].score + "% " + matches[0].unit.name : "-"}`);

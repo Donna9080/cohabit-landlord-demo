@@ -13,7 +13,7 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [x] Worker API with server-side permissions, validation, CSRF/origin checks, D1 rate limits, daily cleanup
 - [x] UI: sign in/out, one-time landlord/renter choice, units dashboard + form, renter questionnaire + matches,
       public listings, How it works, admin user list; sample dashboard moved to `/sample`
-- [x] Local tests: `npm test` 134/134 passing (local D1), plus browser check of each screen (desktop + phone)
+- [x] Local tests: `npm test` 158/158 passing (local D1), plus browser check of each screen (desktop + phone)
 - [x] Handoff docs (this file, ACCOUNTS_SETUP.md)
 - [x] Owner: created Google OAuth client, set 3 secrets (2026-09-30)
 - [x] Applied migration `--remote`, first deployed version `dcb965ea-d350-4e36-b56e-3458f7f7c423` (current: `1eb287af-f083-4312-a309-46cf923ab3b1`), signed-out live checks pass
@@ -30,6 +30,10 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [x] Matching tightened (2026-10-01): on the sample data, units shown per renter 14.1 → 4.2, out-of-area matches
       49% → 22%, over-budget matches 84 → 1 (within 10%), 100% top matches unchanged at 23, 3 renters now get none.
       Before/after table in `docs/SAMPLE_MATCHING.md`.
+- [x] Roommate matching (2026-10-01): opt-in, first name + score + what two renters have in common, optional email
+      sharing. Migration `0002_roommate_matching.sql` (additive) applied to production; restore bookmark from just
+      before: `0000001b-00000000-000050f7-feece982737cca1dec57a2acec082e86`. Deployed as
+      `6832c654-d97a-401f-b9be-3c835daeabaf`. 24 new tests. Not seen live by a signed-in renter yet.
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
 - [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works
 - [ ] Live test with a second Google account as renter
@@ -58,6 +62,9 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
   (so it is also in the renter's area or free in their exact month). Was: shown if ≥40, no limits.
   No AI API, so no key and no cost. Lifestyle answers are stored for future roommate
   matching but not used yet, and nobody else sees them.
+- **Roommate matching** (owner's choices, 2026-10-01): a renter is shown to others only after opting in, and must opt
+  in to see anyone. Others see first name, a score and what the two have in common. Email is a second, separate
+  opt-in. Gates: shared area word, move-in within one month, no pet or smoking dealbreaker, score 60+.
 - **Public listings**: visitors and renters see active units' listing fields only.
 - **Google tokens are not stored**; IP/user agent not stored on sessions; Google photo not stored.
 - **No implicit account linking**: one Google subject ID = one user.
@@ -68,7 +75,7 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 
 ## Tests completed (local, 2026-09-29)
 
-`npm test` → **134/134 passed** against Wrangler's local D1 (`.wrangler/test-state`).
+`npm test` → **158/158 passed** against Wrangler's local D1 (`.wrangler/test-state`).
 Covers: public pages; Google authorization URL (scopes exactly openid/email/profile,
 PKCE S256, state, no offline access, correct redirect URI, injected scope dropped);
 forged OAuth state rejected; non-allowlisted Better Auth endpoints 404; one-time account
@@ -116,6 +123,6 @@ by the live test.
 
 ## Next safe step
 
-Roommate matching using the saved lifestyle answers (decide first what one renter may see about another),
-then a way for a renter to tell a landlord they're interested. If admins ever get write actions, add an audit
+A way for a renter to tell a landlord they're interested (and for two matched renters to talk without
+sharing an email address). If admins ever get write actions, add an audit
 table in that change.

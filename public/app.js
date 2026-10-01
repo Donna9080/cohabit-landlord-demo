@@ -203,7 +203,7 @@
         <ol>
           <li><strong>Sign in with Google</strong> and choose “I'm a renter”.</li>
           <li><strong>Answer a short questionnaire:</strong> budget range, move-in month, area, and how you like to live.</li>
-          <li><strong>See matching rooms,</strong> ranked by budget, area, move-in and rooms. Your answers are saved so you can come back and edit them.</li>
+          <li><strong>See matching rooms,</strong> ranked by budget, area, move-in and rooms. If you choose to, also see renters you'd get along with as roommates.</li>
         </ol>
       </section>
     </div>`;
@@ -288,7 +288,8 @@
         <h2>Who can see it</h2>
         <ul>
           <li><strong>Everyone:</strong> active units' listing details (name, area, rent, rooms, move-in date, description). Never the landlord's name or email.</li>
-          <li><strong>Only you:</strong> your inactive units, and your questionnaire answers. Other renters and landlords cannot see your answers.</li>
+          <li><strong>Only you:</strong> your inactive units, and your questionnaire answers. Landlords cannot see your answers. Other renters cannot either, unless you turn on roommate matching.</li>
+          <li><strong>Other renters, only if you turn on roommate matching:</strong> renters who also turned it on can see your first name, a compatibility score, and the things you have in common (for example “Both early birds”). They see your email address only if you tick the separate box to share it. Both are off by default and you can turn them off again at any time.</li>
           <li><strong>The coHabit admin:</strong> a list of users with name, email, account type, join date, and either a count of units or whether preferences are saved. Not your questionnaire answers.</li>
         </ul>
 
@@ -677,10 +678,37 @@
       .join("")}</ul>`;
   }
 
+  function roommatesHtml(data) {
+    if (data.needsPreferences) return `<p class="empty">Save your preferences to use roommate matching.</p>`;
+    if (!data.optedIn)
+      return `<p class="empty">Roommate matching is off. Tick “Show me to compatible renters” above and save to see renters you'd get along with. You only see people who turned it on too.</p>`;
+    if (!data.roommates.length)
+      return `<p class="empty">No compatible renters yet for your area and move-in month. Check back as more people join.</p>`;
+    return `<ul class="grid" role="list">${data.roommates
+      .map(
+        (m) => `
+      <li>
+        <article class="card">
+          <div class="card-top">
+            <span class="person"><span class="avatar" aria-hidden="true">${esc(initials(m.firstName))}</span><span class="name">${esc(m.firstName)}</span></span>
+            <span class="card-tags">${m.sample ? `<span class="tag" title="Fictional person for demonstration">Sample</span>` : ""}<span class="pill pill-ok" title="Compatibility score out of 100">${m.score}% compatible</span></span>
+          </div>
+          <div>
+            <p class="small muted">What you have in common</p>
+            <ul class="reasons">${m.shared.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+          </div>
+          <hr />
+          ${m.email ? `<a class="card-link" href="mailto:${esc(m.email)}">${esc(m.email)}</a>` : `<span class="small muted">Hasn't shared contact details</span>`}
+        </article>
+      </li>`
+      )
+      .join("")}</ul>`;
+  }
+
   async function renterPage() {
     const blocked = gate("renter", "Renter");
     if (blocked !== undefined) return blocked;
-    const [{ preferences: p }, matches] = await Promise.all([api("/api/renter/preferences"), api("/api/renter/matches")]);
+    const [{ preferences: p }, matches, mates] = await Promise.all([api("/api/renter/preferences"), api("/api/renter/matches"), api("/api/renter/roommates")]);
     const v = p || { budget_min: "", budget_max: "", move_in_month: "", area: "", rooms_needed: 1 };
     const lifestyle = Object.entries(CHOICES)
       .map(([k, [label, opts]]) => field(k, label, select(k, (p ? [] : [["", "Choose…"]]).concat(opts), v[k] || "")))
@@ -708,8 +736,16 @@
         </fieldset>
         <fieldset>
           <legend>How you like to live</legend>
-          <p class="hint">Saved for roommate matching, which is coming soon. Room matches below use the basics.</p>
+          <p class="hint">Used for roommate matching. Room matches use the basics above.</p>
           <div class="field-grid">${lifestyle}</div>
+        </fieldset>
+        <fieldset>
+          <legend>Roommate matching (optional)</legend>
+          <label class="check"><input type="checkbox" id="f-roommate_visible" name="roommate_visible" ${p && p.roommate_visible ? "checked" : ""} />
+            <span><strong>Show me to compatible renters.</strong> They see your first name, a compatibility score and what you have in common. Not your last name, and not answers you don't share.</span></label>
+          <label class="check"><input type="checkbox" id="f-share_email" name="share_email" ${p && p.share_email ? "checked" : ""} ${p && p.roommate_visible ? "" : "disabled"} />
+            <span><strong>Let my roommate matches see my email</strong> (${esc(me.user.email)}) so they can contact me.</span></label>
+          <p class="hint">Both are off unless you tick them. You can turn them off again at any time.</p>
         </fieldset>
         <p class="form-error" id="form-error" role="alert"></p>
         <div class="actions">
@@ -720,12 +756,18 @@
       <section aria-labelledby="matches-heading">
         <div class="section-heading"><h2 id="matches-heading">Matching rooms</h2><span class="muted small" id="match-count">${matches.matches.length ? plural(matches.matches.length, "match", "matches") : ""}</span></div>
         <div id="matches">${matchesHtml(matches)}</div>
+      </section>
+      <section aria-labelledby="roommates-heading">
+        <div class="section-heading"><h2 id="roommates-heading">Possible roommates</h2><span class="muted small" id="roommate-count">${mates.roommates.length ? plural(mates.roommates.length, "person", "people") : ""}</span></div>
+        <div id="roommates">${roommatesHtml(mates)}</div>
       </section>`,
     };
   }
 
   async function submitPrefs(form) {
     const body = formData(form, ["budget_min", "budget_max", "rooms_needed"]);
+    body.roommate_visible = form.elements.roommate_visible.checked;
+    body.share_email = body.roommate_visible && form.elements.share_email.checked;
     const btn = form.querySelector("[type=submit]");
     const saved = document.getElementById("saved");
     btn.disabled = true;
@@ -736,6 +778,9 @@
       const data = await api("/api/renter/matches");
       document.getElementById("matches").innerHTML = matchesHtml(data);
       document.getElementById("match-count").textContent = data.matches.length ? plural(data.matches.length, "match", "matches") : "";
+      const mates = await api("/api/renter/roommates");
+      document.getElementById("roommates").innerHTML = roommatesHtml(mates);
+      document.getElementById("roommate-count").textContent = mates.roommates.length ? plural(mates.roommates.length, "person", "people") : "";
       saved.textContent = "Saved.";
       btn.textContent = "Save changes";
     } catch (e) {
@@ -957,6 +1002,14 @@
       e.preventDefault();
       submitDeleteAccount(e.target);
     }
+  });
+
+  // Email sharing only makes sense once roommate matching is on.
+  document.addEventListener("change", (e) => {
+    if (e.target.id !== "f-roommate_visible") return;
+    const email = document.getElementById("f-share_email");
+    email.disabled = !e.target.checked;
+    if (!e.target.checked) email.checked = false;
   });
 
   window.addEventListener("popstate", () => render(true));

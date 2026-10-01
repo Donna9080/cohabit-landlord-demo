@@ -285,6 +285,15 @@ button.choice:disabled { opacity: 0.6; cursor: progress; }
 .field-error:empty, .form-error:empty { display: none; }
 .saved { color: var(--green); font-weight: 500; }
 
+/* Tick boxes */
+.check { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.5; cursor: pointer; }
+.check input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--navy); }
+.check input:disabled + span { color: var(--muted); }
+.check strong { font-weight: 600; }
+.card .person .name { font-size: 17px; font-weight: 600; }
+a.card-link { text-decoration: none; overflow-wrap: anywhere; }
+a.card-link:hover { text-decoration: underline; }
+
 /* Account page */
 .facts { flex-wrap: wrap; }
 .fact dd.wrap { overflow-wrap: anywhere; font-size: 15px; }

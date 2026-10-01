@@ -7,6 +7,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { rmSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { rankUnits } from "../src/match.js";
+import { rankRoommates, scoreRoommate } from "../src/roommates.js";
 
 const PORT = 8788;
 const BASE = `http://localhost:${PORT}`;
@@ -146,6 +147,25 @@ try {
     check("Match: result carries only unit, score and reasons", Object.keys(ranked[0]).sort().join() === "reasons,score,unit");
   }
 
+  // ── Roommate rules (pure function, no server) ─────────────────────────────
+  {
+    const a = { budget_min: 900, budget_max: 1300, move_in_month: "2027-06", area: "Waltham", sleep_schedule: "early", cleanliness: "tidy", noise: "quiet", guests: "rarely", pets: "no_pets", smoking: "no_smoking" };
+    const s = (over) => scoreRoommate(a, { ...a, ...over });
+    check("Roommate: identical answers → 100%", s({}).score === 100 && s({}).eligible);
+    check("Roommate: different area is never a match", !s({ area: "Cambridge" }).eligible);
+    check("Roommate: move-in two months apart is never a match", !s({ move_in_month: "2027-08" }).eligible);
+    check("Roommate: move-in one month apart is allowed", s({ move_in_month: "2027-07" }).eligible && s({ move_in_month: "2027-07" }).score === 90);
+    check("Roommate: has a pet vs no pets is a dealbreaker", !s({ pets: "have_pets" }).eligible);
+    check("Roommate: smoker vs no smoking is a dealbreaker", !s({ smoking: "smoker" }).eligible);
+    check("Roommate: opposite lifestyle falls below the bar", !s({ sleep_schedule: "late", cleanliness: "relaxed", noise: "lively", guests: "often" }).eligible);
+    check("Roommate: 'in common' lists only shared things", !s({ cleanliness: "average", noise: "moderate" }).shared.some((t) => /tid|noise|quiet/i.test(t)) && s({}).shared.includes("Both very tidy"));
+    const ranked = rankRoommates(a, [
+      { prefs: { ...a, guests: "often" }, firstName: "Lower", email: "lower@example.test", sample: false },
+      { prefs: { ...a }, firstName: "Top", email: null, sample: true },
+    ]);
+    check("Roommate: ranked by score; result has only firstName, score, shared, email, sample", ranked.map((m) => m.firstName).join() === "Top,Lower" && Object.keys(ranked[0]).sort().join() === "email,firstName,sample,score,shared");
+  }
+
   // ── Public pages ──────────────────────────────────────────────────────────
   for (const p of ["/", "/how-it-works", "/listings", "/sample", "/properties/14-elm-street"]) {
     const r = await fetch(BASE + p);
@@ -272,6 +292,40 @@ try {
   r = await api("/api/renter/matches", { as: landlordA });
   check("Landlord cannot call renter matches (403)", r.status === 403);
 
+  // ── Roommate matching (opt-in) ────────────────────────────────────────────
+  r = await api("/api/renter/roommates");
+  check("Visitor cannot call roommates (401)", r.status === 401);
+  r = await api("/api/renter/roommates", { as: landlordA });
+  check("Landlord cannot call roommates (403)", r.status === 403);
+  r = await api("/api/renter/preferences", { as: renterA });
+  check("Roommate matching and email sharing are off by default", r.data.preferences.roommate_visible === false && r.data.preferences.share_email === false);
+  r = await api("/api/renter/roommates", { as: renterA });
+  check("Not opted in → sees nobody", r.status === 200 && r.data.optedIn === false && r.data.roommates.length === 0);
+  r = await api("/api/renter/preferences", { method: "PUT", as: renterA, body: prefsBody({ budget_max: 1300, roommate_visible: true }) });
+  check("Renter A opts in to roommate matching (email sharing stays off)", r.data.preferences.roommate_visible === true && r.data.preferences.share_email === false);
+  r = await api("/api/renter/roommates", { as: renterA });
+  check("Opted-in renter does not see a renter who has not opted in", r.data.optedIn === true && r.data.roommates.length === 0);
+  r = await api("/api/renter/preferences", { method: "PUT", as: renterB, body: prefsBody({ budget_max: 999, share_email: true }) });
+  check("Email sharing cannot be on without roommate matching", r.data.preferences.share_email === false && r.data.preferences.roommate_visible === false);
+  r = await api("/api/renter/preferences", { method: "PUT", as: renterB, body: prefsBody({ budget_max: 999, roommate_visible: "yes" }) });
+  check("Non-boolean opt-in value rejected (400)", r.status === 400);
+  r = await api("/api/renter/preferences", { method: "PUT", as: renterB, body: prefsBody({ budget_max: 999, roommate_visible: true, share_email: true }) });
+  check("Renter B opts in and shares email", r.data.preferences.roommate_visible === true && r.data.preferences.share_email === true);
+  r = await api("/api/renter/roommates", { as: renterA });
+  const seenB = r.data.roommates[0];
+  check("Renter A now sees Renter B as a possible roommate", r.data.roommates.length === 1 && seenB.score >= 60 && seenB.firstName === "Test");
+  check("B's email is shown because B chose to share it", seenB.email === renterB.email);
+  const mateText = JSON.stringify(r.data);
+  const mateLeaks = ["Renter B", "t_renter", "budget_", "sleep_schedule", "cleanliness", "user_id", "999", "\"id\""].filter((k) => mateText.includes(k));
+  check("Roommate result has no last name, ids, budget figures or raw answers", mateLeaks.length === 0 && Object.keys(seenB).sort().join() === "email,firstName,sample,score,shared", mateLeaks.join(","));
+  r = await api("/api/renter/roommates", { as: renterB });
+  check("Renter B sees Renter A without an email (A did not share it)", r.data.roommates.length === 1 && r.data.roommates[0].email === null);
+  r = await api("/api/renter/roommates?user_id=t_renter_b&share_email=1", { as: rater });
+  check("A renter with no saved preferences sees nobody, whatever the query says", r.data.roommates.length === 0 && r.data.optedIn === false);
+  r = await api("/api/renter/preferences", { method: "PUT", as: renterA, body: prefsBody({ budget_max: 1300 }) });
+  r = await api("/api/renter/roommates", { as: renterB });
+  check("Turning it off removes Renter A from others' results immediately", r.data.roommates.length === 0);
+
   // ── Admin ─────────────────────────────────────────────────────────────────
   r = await api("/api/admin/users");
   check("Visitor cannot open admin API (401)", r.status === 401);
@@ -394,9 +448,17 @@ try {
   check("Other renters' answers untouched", count(`SELECT COUNT(*) AS n FROM match_preferences WHERE user_id='t_renter_b'`) === 1);
 
   // ── Rate limits ───────────────────────────────────────────────────────────
+  // The limiter counts per clock minute, so the burst must start and finish inside one minute.
+  // If the minute rolls over mid-burst the counter resets; wait for a fresh minute and try once more.
   let statuses = [];
-  for (let i = 0; i < 32; i++) statuses.push((await api("/api/renter/preferences", { method: "PUT", as: rater, body: prefsBody() })).status);
-  check("App write rate limit: 31st write in a minute → 429", statuses.slice(0, 30).every((s) => s === 200) && statuses[30] === 429, statuses.join(","));
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (new Date().getSeconds() > 45) await sleep((61 - new Date().getSeconds()) * 1000);
+    const minute = Math.floor(Date.now() / 60000);
+    statuses = [];
+    for (let i = 0; i < 32; i++) statuses.push((await api("/api/renter/preferences", { method: "PUT", as: rater, body: prefsBody() })).status);
+    if (Math.floor(Date.now() / 60000) === minute) break;
+  }
+  check("App write rate limit: more than 30 writes in a minute → 429", statuses[0] === 200 && statuses.includes(429) && statuses.indexOf(429) <= 30, statuses.join(","));
   statuses = [];
   for (let i = 0; i < 12; i++) statuses.push((await api("/api/auth/sign-in/social", { method: "POST", body: { provider: "google" } })).status);
   check("Better Auth sign-in rate limit → 429 after 10/min", statuses.includes(429), statuses.join(","));

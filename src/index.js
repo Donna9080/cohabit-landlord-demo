@@ -7,9 +7,11 @@
 //   /api/listings                active units, listing fields only (public)
 //   /api/renter/preferences      a renter's own questionnaire answers
 //   /api/renter/matches          active units ranked against those answers
+//   /api/renter/roommates        other opted-in renters ranked by lifestyle fit (opt-in, limited fields)
 //   /api/admin/users             read-only user list (admin only)
 import { getAuth } from "./auth.js";
 import { rankUnits } from "./match.js";
+import { firstNameOf, rankRoommates } from "./roommates.js";
 import { InvalidInput, isUnitId, parseAccountType, parsePreferences, parseUnit } from "./validate.js";
 
 const MAX_BODY = 16 * 1024;
@@ -171,7 +173,8 @@ const UNIT_OWNER_FIELDS = "id, name, area, monthly_rent, rooms_available, move_i
 const LISTING_FIELDS = "id, name, area, monthly_rent, rooms_available, move_in_date, description, (landlord_user_id LIKE 'sample-%') AS sample";
 const asListing = (u) => ({ ...u, sample: !!u.sample });
 const PREF_FIELDS =
-  "budget_min, budget_max, move_in_month, area, rooms_needed, sleep_schedule, cleanliness, noise, guests, pets, smoking, updated_at";
+  "budget_min, budget_max, move_in_month, area, rooms_needed, sleep_schedule, cleanliness, noise, guests, pets, smoking, roommate_visible, share_email, updated_at";
+const asPrefs = (p) => p && { ...p, roommate_visible: !!p.roommate_visible, share_email: !!p.share_email };
 
 async function handleApi(request, env, url) {
   const method = request.method;
@@ -305,7 +308,7 @@ async function handleApi(request, env, url) {
     const user = requireType(viewer, "renter");
     if (method === "GET") {
       const prefs = await db.prepare(`SELECT ${PREF_FIELDS} FROM match_preferences WHERE user_id = ?1`).bind(user.id).first();
-      return reply({ preferences: prefs ?? null });
+      return reply({ preferences: asPrefs(prefs) ?? null });
     }
     if (method === "PUT") {
       const p = parsePreferences(await readJson(request));
@@ -313,19 +316,20 @@ async function handleApi(request, env, url) {
       const saved = await db
         .prepare(
           `INSERT INTO match_preferences (user_id, budget_min, budget_max, move_in_month, area, rooms_needed,
-             sleep_schedule, cleanliness, noise, guests, pets, smoking, created_at, updated_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)
+             sleep_schedule, cleanliness, noise, guests, pets, smoking, created_at, updated_at, roommate_visible, share_email)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, ?14, ?15)
            ON CONFLICT (user_id) DO UPDATE SET
              budget_min = excluded.budget_min, budget_max = excluded.budget_max, move_in_month = excluded.move_in_month,
              area = excluded.area, rooms_needed = excluded.rooms_needed, sleep_schedule = excluded.sleep_schedule,
              cleanliness = excluded.cleanliness, noise = excluded.noise, guests = excluded.guests, pets = excluded.pets,
-             smoking = excluded.smoking, updated_at = excluded.updated_at
+             smoking = excluded.smoking, updated_at = excluded.updated_at,
+             roommate_visible = excluded.roommate_visible, share_email = excluded.share_email
            RETURNING ${PREF_FIELDS}`
         )
         .bind(user.id, p.budget_min, p.budget_max, p.move_in_month, p.area, p.rooms_needed,
-          p.sleep_schedule, p.cleanliness, p.noise, p.guests, p.pets, p.smoking, now)
+          p.sleep_schedule, p.cleanliness, p.noise, p.guests, p.pets, p.smoking, now, p.roommate_visible ? 1 : 0, p.share_email ? 1 : 0)
         .first();
-      return reply({ preferences: saved });
+      return reply({ preferences: asPrefs(saved) });
     }
     throw new HttpError(405, "method_not_allowed", "Not allowed.");
   }
@@ -338,6 +342,28 @@ async function handleApi(request, env, url) {
       .prepare(`SELECT ${LISTING_FIELDS} FROM units WHERE status = 'active' ORDER BY move_in_date, id LIMIT 200`)
       .all();
     return reply({ matches: rankUnits(prefs, results.map(asListing)) });
+  }
+
+  // Renter: possible roommates. Opt-in on both sides: you must have turned it on to see anyone,
+  // and only renters who turned it on are compared. Returns first name, score, what the two have
+  // in common, and an email only if that person chose to share it. Never ids or raw answers.
+  if (path === "/api/renter/roommates" && method === "GET") {
+    const user = requireType(viewer, "renter");
+    const mine = await db.prepare(`SELECT ${PREF_FIELDS} FROM match_preferences WHERE user_id = ?1`).bind(user.id).first();
+    if (!mine) return reply({ roommates: [], needsPreferences: true, optedIn: false });
+    if (!mine.roommate_visible) return reply({ roommates: [], optedIn: false });
+    const { results } = await db
+      .prepare(
+        `SELECT p.budget_min, p.budget_max, p.move_in_month, p.area, p.sleep_schedule, p.cleanliness, p.noise, p.guests,
+           p.pets, p.smoking, p.share_email, u.name, u.email, (u.id LIKE 'sample-%') AS sample
+         FROM match_preferences p JOIN "user" u ON u.id = p.user_id
+         WHERE p.roommate_visible = 1 AND p.user_id != ?1 AND u.account_type = 'renter'
+         ORDER BY p.updated_at DESC LIMIT 500`
+      )
+      .bind(user.id)
+      .all();
+    const others = results.map((r) => ({ prefs: r, firstName: firstNameOf(r.name), email: r.share_email ? r.email : null, sample: !!r.sample }));
+    return reply({ roommates: rankRoommates(mine, others), optedIn: true });
   }
 
   // Admin: read-only user list. No questionnaire answers, unit details, sessions or tokens.
