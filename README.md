@@ -24,13 +24,15 @@ Landlords list rooms; renters answer a short questionnaire and see rooms that fi
 
 | Page | Address | Who |
 | --- | --- | --- |
-| Front page, How it works | `/`, `/how-it-works` | Anyone |
+| Front page | `/` | Anyone |
 | Privacy policy, Terms of use | `/privacy`, `/terms` | Anyone |
 | Current listings (active units) | `/listings` | Anyone |
 | Sample dashboard (fictional data) | `/sample`, `/properties/<id>` | Anyone |
 | Choose landlord or renter (once) | `/welcome` | Signed in |
 | Your account, delete my account | `/account` | Signed in |
-| Your units, interested renters | `/landlord`, `/landlord/units/new` | Landlords |
+| Dashboard: your units and recent requests | `/landlord` | Landlords |
+| One unit: details and its interested renters | `/landlord/units/<id>` | Landlords |
+| Add or edit a unit | `/landlord/units/new`, `/landlord/units/<id>/edit` | Landlords |
 | Questionnaire, matching rooms, "I'm interested", possible roommates (opt-in) | `/renter` | Renters |
 | User list (read only) | `/admin` | Admin |
 

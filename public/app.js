@@ -2,21 +2,22 @@
 // every address, so refreshing any page works. Data comes from /api/* (src/index.js).
 //
 //   /                        Front page (public)
-//   /how-it-works            How coHabit works (public)
 //   /privacy, /terms         Privacy policy and terms of use (public)
 //   /listings                Active units, listing fields only (public)
 //   /sample, /properties/<id>  Fictional sample dashboard (public, clearly labeled)
 //   /welcome                 After Google sign-in: choose landlord or renter (once)
 //   /account                 Your name, email, account type; delete my account
-//   /landlord                A landlord's own units
+//   /landlord                Dashboard: a landlord's own units and recent requests
 //   /landlord/units/new      Add a unit
-//   /landlord/units/<id>     Edit or delete a unit
+//   /landlord/units/<id>     One unit: details and the renters interested in it
+//   /landlord/units/<id>/edit  Edit or delete a unit
 //   /renter                  A renter's match preferences and matching units
 //   /admin                   Read-only user list (admins only; enforced by the server)
 (function () {
   const app = document.getElementById("app");
   const brandSub = document.getElementById("brand-sub");
   const accountEl = document.getElementById("account");
+  const navEl = document.getElementById("nav");
   const sample = (window.COHABIT_DATA && window.COHABIT_DATA.properties) || [];
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -86,7 +87,7 @@
       const data = await api("/api/auth/sign-in/social", { method: "POST", body: { provider: "google", callbackURL } });
       if (data && data.url) location.assign(data.url);
     } catch (e) {
-      alert(e.message);
+      toast(e.message);
     }
   }
 
@@ -101,18 +102,42 @@
     navigate("/");
   }
 
+  // Top bar: the same links on every page and every screen size.
+  function navItems() {
+    const u = me.user;
+    const items = [];
+    if (u && u.accountType === "landlord") items.push(["/landlord", "Dashboard"]);
+    else if (u && u.accountType === "renter") items.push(["/renter", "My matches"]);
+    else if (u) items.push(["/welcome", "Get started"]);
+    items.push(["/listings", "Listings"]);
+    if (u && u.isAdmin) items.push(["/admin", "Admin"]);
+    return items;
+  }
+
   function renderAccount() {
     const u = me.user;
-    if (!u) {
-      accountEl.innerHTML = `<button class="btn btn-small" type="button" data-action="sign-in">Sign in</button>`;
-      return;
-    }
-    const home = u.accountType === "landlord" ? "/landlord" : u.accountType === "renter" ? "/renter" : "/welcome";
-    accountEl.innerHTML = `
-      ${u.isAdmin ? `<a class="nav-link" href="/admin">Admin</a>` : ""}
-      <a class="nav-link nav-home" href="${home}">${u.accountType === "landlord" ? "My units" : u.accountType === "renter" ? "My matches" : "Get started"}</a>
-      <a class="nav-link who" href="/account" title="Your account: ${esc(u.email)}"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(u.name || u.email))}</span><span class="who-name">${esc(u.name)}</span></a>
-      <button class="btn btn-small btn-quiet" type="button" data-action="sign-out">Sign out</button>`;
+    const path = location.pathname.replace(/\/+$/, "") || "/";
+    const current = (href) => (path === href || path.startsWith(href + "/") ? ' aria-current="page"' : "");
+    navEl.innerHTML = navItems()
+      .map(([href, label]) => `<a class="nav-item" href="${href}"${current(href)}>${label}</a>`)
+      .join("");
+    accountEl.innerHTML = u
+      ? `<a class="nav-item who" href="/account"${current("/account")} title="Your account: ${esc(u.email)}"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(u.name || u.email))}</span><span class="who-name">${esc(u.name)}</span><span class="sr-only">Your account</span></a>
+         <button class="btn btn-small btn-quiet" type="button" data-action="sign-out">Sign out</button>`
+      : `<button class="btn btn-small" type="button" data-action="sign-in">Sign in</button>`;
+  }
+
+  // ── Messages: success banner on the next screen, and short pop-up notes ──────
+  let flash = null;
+  const setFlash = (text) => (flash = text);
+
+  let toastTimer;
+  function toast(text) {
+    const el = document.getElementById("toast");
+    el.textContent = text;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 5000);
   }
 
   // ── Shared view pieces ───────────────────────────────────────────────────────
@@ -124,6 +149,17 @@
       ? `<span class="pill pill-ok"><span class="dot" aria-hidden="true"></span>Active</span>`
       : `<span class="pill pill-off"><span class="dot" aria-hidden="true"></span>Inactive</span>`;
   }
+
+  // One block for every "nothing here yet" situation: what it is, why, and what to do next.
+  function emptyState(title, text, action = "") {
+    return `<div class="empty"><p class="empty-title">${title}</p><p>${text}</p>${action ? `<div class="actions">${action}</div>` : ""}</div>`;
+  }
+
+  const tile = (label, value, note = "") =>
+    `<div class="tile"><dt>${label}</dt><dd>${value}</dd>${note ? `<span class="tile-note">${note}</span>` : ""}</div>`;
+
+  const sampleNotice = (extra = "") =>
+    `<div class="notice notice-info" role="note"><span><strong>Sample data.</strong> Everything on this page is fictional and only shows how coHabit looks. ${extra}</span></div>`;
 
   function samplePill(status) {
     const kind = status === "All clear" ? "ok" : "warn";
@@ -188,34 +224,10 @@
   }
 
   // ── Public pages ─────────────────────────────────────────────────────────────
-  const howSteps = `
-    <div class="steps">
-      <section class="step-col" aria-labelledby="how-landlords">
-        <h2 id="how-landlords">${icon("building", 20)} For landlords</h2>
-        <ol>
-          <li><strong>Sign in with Google</strong> and choose “I'm a landlord”.</li>
-          <li><strong>Add your units:</strong> the neighborhood, rent, rooms available and move-in date. No street address needed.</li>
-          <li><strong>Keep them current.</strong> Active units show up for renters; set a unit to inactive to hide it.</li>
-          <li><strong>Hear from renters.</strong> When a renter says they're interested, you get their name, email and note on your dashboard.</li>
-        </ol>
-      </section>
-      <section class="step-col" aria-labelledby="how-renters">
-        <h2 id="how-renters">${icon("user", 20)} For renters</h2>
-        <ol>
-          <li><strong>Sign in with Google</strong> and choose “I'm a renter”.</li>
-          <li><strong>Answer a short questionnaire:</strong> budget range, move-in month, area, and how you like to live.</li>
-          <li><strong>See matching rooms,</strong> ranked by budget, area, move-in and rooms. If you choose to, also see renters you'd get along with as roommates.</li>
-        </ol>
-      </section>
-    </div>`;
-
   function home() {
     const u = me.user;
-    const landlordHref = "/landlord";
-    const renterHref = "/renter";
     return {
       title: "Welcome",
-      brand: "",
       html: `
       <div class="home">
         <div class="hero">
@@ -224,44 +236,28 @@
           <p class="lead">Landlords list rooms. Renters find ones that fit.</p>
         </div>
         <div class="choices">
-          <a class="choice" href="${landlordHref}">
+          <a class="choice" href="/landlord">
             <span class="choice-top"><span class="choice-icon">${icon("building", 24)}</span></span>
             <span class="choice-text">
-              <span class="choice-title">Landlord</span>
-              <span class="choice-desc">List your units and keep rent, rooms and move-in dates up to date.</span>
+              <span class="choice-title">I have rooms to rent</span>
+              <span class="choice-desc">List your units, keep rent and move-in dates current, and hear from interested renters.</span>
             </span>
-            <span class="choice-cta">${u && u.accountType === "landlord" ? "Open your dashboard" : "Open landlord dashboard"} ${icon("right", 16)}</span>
+            <span class="choice-cta">${u && u.accountType === "landlord" ? "Open your dashboard" : "Go to the landlord dashboard"} ${icon("right", 16)}</span>
           </a>
-          <a class="choice" href="${renterHref}">
+          <a class="choice" href="/renter">
             <span class="choice-top"><span class="choice-icon">${icon("user", 24)}</span></span>
             <span class="choice-text">
-              <span class="choice-title">Renter</span>
-              <span class="choice-desc">Answer a short questionnaire and see rooms that match your budget and timing.</span>
+              <span class="choice-title">I'm looking for a room</span>
+              <span class="choice-desc">Answer a short questionnaire, see rooms that match, and contact the landlord.</span>
             </span>
             <span class="choice-cta">${u && u.accountType === "renter" ? "See your matches" : "Find a room"} ${icon("right", 16)}</span>
           </a>
         </div>
-        <section class="how" aria-labelledby="how-heading">
-          <h2 id="how-heading">How it works</h2>
-          ${howSteps}
-        </section>
-        <p class="links"><a href="/listings">Browse current listings</a> · <a href="/sample">See a sample landlord dashboard</a></p>
-        <p class="links small"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+        <div class="actions home-actions">
+          <a class="btn btn-quiet" href="/listings">Browse listings</a>
+          <a class="btn btn-quiet" href="/sample">View a sample dashboard</a>
+        </div>
       </div>`,
-    };
-  }
-
-  function howItWorks() {
-    return {
-      title: "How it works",
-      brand: "",
-      html: `
-      <div class="heading">
-        <h1 tabindex="-1">How coHabit works</h1>
-        <p class="muted">Anyone can look around. Sign in with Google when you want to save something.</p>
-      </div>
-      ${howSteps}
-      <p class="links"><a href="/listings">Browse current listings</a> · <a href="/">Back to home</a></p>`,
     };
   }
 
@@ -384,7 +380,7 @@
   const interestBox = (unitId) => document.querySelector(`[data-interest="${CSS.escape(unitId)}"]`);
 
   function contactedHtml(interests) {
-    if (!interests.length) return `<p class="empty">You haven't contacted any landlords yet. Click “I'm interested” on a room above.</p>`;
+    if (!interests.length) return emptyState("No landlords contacted yet", "Click “I'm interested” on a room to send the landlord your name, email and a note.");
     return `<ul class="contacted" role="list">${interests
       .map(
         (i) => `
@@ -433,7 +429,7 @@
       await api(`/api/renter/interests/${encodeURIComponent(unitId)}`, { method: "DELETE" });
     } catch (e) {
       if (e.status === 401) return showView(errorView(e));
-      if (e.status !== 404) return alert(e.message);
+      if (e.status !== 404) return toast(e.message);
     }
     myInterests.delete(unitId);
     const box = interestBox(unitId);
@@ -450,9 +446,10 @@
       if (e.status === 401) return showView(errorView(e));
       if (e.status !== 404) {
         button.disabled = false;
-        return alert(e.message);
+        return toast(e.message);
       }
     }
+    setFlash("Request removed.");
     render(false);
   }
 
@@ -478,21 +475,27 @@
 
   async function listings() {
     const [{ listings }] = await Promise.all([api("/api/listings"), loadMyInterests()]);
+    const hasSample = listings.some((u) => u.sample);
     return {
       title: "Listings",
-      brand: "",
       html: `
       <div class="heading">
-        <h1 tabindex="-1">Current listings</h1>
-        <p class="muted">${plural(listings.length, "active unit", "active units")}. Renters: <a href="/renter">answer the questionnaire</a> to see which fit you best.</p>
+        <h1 tabindex="-1">Listings</h1>
+        <p class="muted">${plural(listings.length, "room listing", "room listings")} available now.${isRenter() ? "" : ` Looking for a room? <a href="/renter">See which ones match you</a>.`}</p>
       </div>
-      ${listings.length ? `<ul class="grid" role="list">${listings.map((u) => listingCard(u)).join("")}</ul>` : `<p class="empty">No units are listed right now. Check back soon.</p>`}`,
+      ${hasSample ? `<div class="notice notice-info" role="note"><span>Listings tagged <span class="tag">Sample</span> are fictional and can't be contacted.</span></div>` : ""}
+      ${
+        listings.length
+          ? `<ul class="grid" role="list">${listings.map((u) => listingCard(u)).join("")}</ul>`
+          : emptyState("No listings yet", "When a landlord adds an active unit, it shows up here.", `<a class="btn btn-quiet" href="/">Back to home</a>`)
+      }`,
     };
   }
 
-  // ── Sample (fictional) dashboard: the original demo, kept as-is ──────────────
+  // ── Sample (fictional) dashboard and tenant page ─────────────────────────────
   function sampleDashboard() {
     const tenantTotal = sample.reduce((sum, p) => sum + p.tenants.length, 0);
+    const ending = sample.filter((p) => p.status !== "All clear").length;
     const cards = sample
       .map(
         (p) => `
@@ -500,7 +503,7 @@
         <a class="card" href="/properties/${encodeURIComponent(p.id)}">
           <div class="card-top">
             <span class="icon-tile">${icon("house", 20)}</span>
-            ${samplePill(p.status)}
+            <span class="card-tags"><span class="tag">Sample</span>${samplePill(p.status)}</span>
           </div>
           <div>
             <h2 class="card-title">${esc(p.address)}</h2>
@@ -511,7 +514,7 @@
             <div><dt>Tenants</dt><dd>${p.tenants.length}</dd></div>
             <div><dt>Lease ends</dt><dd>${esc(p.leaseEnd)}</dd></div>
           </dl>
-          <span class="card-link">View property &amp; tenants ${icon("chevron", 16)}</span>
+          <span class="card-link">View tenants ${icon("chevron", 16)}</span>
         </a>
       </li>`
       )
@@ -519,18 +522,22 @@
 
     return {
       title: "Sample dashboard",
-      brand: "Sample",
       html: `
+      ${sampleNotice(`<a href="/landlord">Open your own dashboard</a>`)}
       <div class="heading">
-        <div class="title-row"><h1 tabindex="-1">Sample landlord dashboard</h1>${sampleTag}</div>
-        <p class="muted">${plural(sample.length, "sample property", "sample properties")} in Waltham, MA · ${plural(tenantTotal, "tenant", "tenants")}. This is a preview with made-up data. <a href="/landlord">Open your real dashboard</a>.</p>
+        <h1 tabindex="-1">Sample landlord dashboard</h1>
+        <p class="muted">Choose a property to see who lives there.</p>
       </div>
-      <ul class="grid" role="list">${cards}</ul>
-      ${sampleFootnote}`,
+      <dl class="tiles">
+        ${tile("Properties", sample.length)}
+        ${tile("Tenants", tenantTotal)}
+        ${tile("Leases ending soon", ending)}
+      </dl>
+      <ul class="grid" role="list">${cards}</ul>`,
     };
   }
 
-  const sampleBack = `<a class="back" href="/sample">${icon("left", 16)} Back to sample dashboard</a>`;
+  const sampleBack = `<a class="back" href="/sample">${icon("left", 16)} Sample dashboard</a>`;
 
   function samplePropertyPage(p) {
     const rows = p.tenants
@@ -547,20 +554,19 @@
 
     return {
       title: p.address,
-      brand: "Sample",
       html: `
       ${sampleBack}
+      ${sampleNotice()}
       <div class="title-block">
         <div class="title-row">
           <h1 tabindex="-1">${esc(p.address)}</h1>
           ${samplePill(p.status)}
-          ${sampleTag}
         </div>
         <p class="muted">${esc(p.city)}</p>
       </div>
-      <dl class="facts">
-        <div class="fact"><dt>Lease end date</dt><dd>${esc(p.leaseEnd)}</dd></div>
-        <div class="fact"><dt>Tenants</dt><dd>${p.tenants.length} living here</dd></div>
+      <dl class="tiles">
+        ${tile("Lease end date", esc(p.leaseEnd))}
+        ${tile("Tenants", p.tenants.length, "living here")}
       </dl>
       <section aria-labelledby="tenants-heading">
         <div class="section-heading">
@@ -573,10 +579,9 @@
           <thead><tr><th scope="col">Name</th><th scope="col">Room</th><th scope="col">Email</th><th scope="col">Phone</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>`
-            : `<p class="empty">No tenants listed for this property.</p>`
+            : emptyState("No tenants listed", "This sample property has no tenants.")
         }
-      </section>
-      ${sampleFootnote}`,
+      </section>`,
     };
   }
 
@@ -633,28 +638,20 @@
     render(true);
   }
 
-  // ── Landlord ─────────────────────────────────────────────────────────────────
+  // ── Landlord: dashboard → unit page (details + interested renters) → dashboard ─
+  const requestsLabel = (n) => (n ? plural(n, "request", "requests") : "No requests yet");
+
   async function landlordDashboard() {
-    const blocked = gate("landlord", "Landlord portal");
+    const blocked = gate("landlord");
     if (blocked !== undefined) return blocked;
     const [{ units }, { interests }] = await Promise.all([api("/api/landlord/units"), api("/api/landlord/interests")]);
     const active = units.filter((u) => u.status === "active").length;
-    const interestRows = interests
-      .map(
-        (i) => `
-        <tr>
-          <td><span class="person"><span class="avatar" aria-hidden="true">${esc(initials(i.renterName || i.renterEmail))}</span><span class="name">${esc(i.renterName)}</span></span></td>
-          <td data-label="Unit">${esc(i.unitName)}</td>
-          <td data-label="Note" class="note">${i.message ? esc(i.message) : `<span class="muted">No note</span>`}</td>
-          <td data-label="Email"><a href="mailto:${esc(i.renterEmail)}">${esc(i.renterEmail)}</a></td>
-          <td data-label="Received">${esc(fmtJoined(i.createdAt))}</td>
-          <td><button class="btn btn-small btn-quiet" type="button" data-action="interest-remove" data-id="${esc(i.id)}">Remove</button></td>
-        </tr>`
-      )
-      .join("");
+    const perUnit = new Map();
+    for (const i of interests) perUnit.set(i.unitId, (perUnit.get(i.unitId) || 0) + 1);
     const cards = units
-      .map(
-        (u) => `
+      .map((u) => {
+        const n = perUnit.get(u.id) || 0;
+        return `
       <li>
         <a class="card" href="/landlord/units/${encodeURIComponent(u.id)}">
           <div class="card-top">
@@ -667,37 +664,109 @@
           </div>
           <hr />
           ${unitStats(u)}
-          <span class="card-link">Edit unit ${icon("chevron", 16)}</span>
+          <span class="card-link">${n ? `${requestsLabel(n)} · view` : "View unit"} ${icon("chevron", 16)}</span>
         </a>
+      </li>`;
+      })
+      .join("");
+    const recent = interests
+      .slice(0, 5)
+      .map(
+        (i) => `
+      <li>
+        <span class="person"><span class="avatar" aria-hidden="true">${esc(initials(i.renterName || i.renterEmail))}</span>
+          <span><span class="name">${esc(i.renterName)}</span><span class="muted small block">${esc(i.unitName)} · ${esc(fmtJoined(i.createdAt))}</span></span></span>
+        <a class="btn btn-small btn-quiet" href="/landlord/units/${encodeURIComponent(i.unitId)}">View</a>
       </li>`
       )
       .join("");
     return {
-      title: "Your units",
-      brand: "Landlord portal",
+      title: "Dashboard",
       html: `
       <div class="heading-row">
         <div class="heading">
           <h1 tabindex="-1">Your units</h1>
-          <p class="muted">${plural(units.length, "unit", "units")} · ${active} active and visible to renters</p>
+          <p class="muted">Choose a unit to see its details and the renters interested in it.</p>
         </div>
         <a class="btn" href="/landlord/units/new">${icon("plus", 18)} Add a unit</a>
       </div>
       ${
         units.length
-          ? `<ul class="grid" role="list">${cards}</ul>`
-          : `<div class="empty">You haven't added any units yet. <a href="/landlord/units/new">Add your first unit</a>. Want to see how it looks? <a href="/sample">View the sample dashboard</a>.</div>`
-      }
-      <section aria-labelledby="interests-heading">
-        <div class="section-heading"><h2 id="interests-heading">Interested renters</h2><span class="muted small">${interests.length ? plural(interests.length, "request", "requests") : ""}</span></div>
+          ? `<dl class="tiles">
+        ${tile("Units", units.length)}
+        ${tile("Active", active, "visible to renters")}
+        ${tile("Requests", interests.length, "from renters")}
+      </dl>
+      <ul class="grid" role="list">${cards}</ul>
+      <section aria-labelledby="recent-heading">
+        <div class="section-heading"><h2 id="recent-heading">Recent requests</h2></div>
         ${
           interests.length
-            ? `<table class="tenants interests">
-          <thead><tr><th scope="col">Renter</th><th scope="col">Unit</th><th scope="col">Note</th><th scope="col">Email</th><th scope="col">Received</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
-          <tbody>${interestRows}</tbody>
-        </table>
-        <p class="hint">Reply to a renter by email. Renters never see your email address unless you write to them.</p>`
-            : `<p class="empty">No requests yet. When a renter clicks “I'm interested” on one of your active units, they show up here with their name, email and note.</p>`
+            ? `<ul class="rows" role="list">${recent}</ul>${interests.length > 5 ? `<p class="hint">Showing the 5 newest. Open a unit to see all of its requests.</p>` : ""}`
+            : emptyState("No requests yet", "When a renter clicks “I'm interested” on one of your active units, they appear here with their name, email and note.")
+        }
+      </section>`
+          : emptyState(
+              "Add your first unit",
+              "List a room or unit with its area, rent and move-in date. Active units are shown to renters right away.",
+              `<a class="btn" href="/landlord/units/new">${icon("plus", 18)} Add a unit</a><a class="btn btn-quiet" href="/sample">View a sample dashboard</a>`
+            )
+      }`,
+    };
+  }
+
+  async function unitPage(id) {
+    const blocked = gate("landlord");
+    if (blocked !== undefined) return blocked;
+    const [{ unit: u }, { interests }] = await Promise.all([api(`/api/landlord/units/${encodeURIComponent(id)}`), api("/api/landlord/interests")]);
+    const mine = interests.filter((i) => i.unitId === u.id);
+    const people = mine
+      .map(
+        (i) => `
+      <li class="request">
+        <div class="request-top">
+          <span class="person"><span class="avatar" aria-hidden="true">${esc(initials(i.renterName || i.renterEmail))}</span>
+            <span><span class="name">${esc(i.renterName)}</span><a class="small block" href="mailto:${esc(i.renterEmail)}">${esc(i.renterEmail)}</a></span></span>
+          <span class="muted small">${esc(fmtJoined(i.createdAt))}</span>
+        </div>
+        <p class="request-note">${i.message ? `“${esc(i.message)}”` : `<span class="muted">No note.</span>`}</p>
+        <div class="actions">
+          <a class="btn btn-small" href="mailto:${esc(i.renterEmail)}">Reply by email</a>
+          <button class="btn btn-small btn-quiet" type="button" data-action="interest-remove" data-id="${esc(i.id)}">Remove</button>
+        </div>
+      </li>`
+      )
+      .join("");
+    return {
+      title: u.name,
+      html: `
+      <a class="back" href="/landlord">${icon("left", 16)} Dashboard</a>
+      <div class="heading-row">
+        <div class="title-block">
+          <div class="title-row">
+            <h1 tabindex="-1">${esc(u.name)}</h1>
+            ${statusPill(u.status)}
+          </div>
+          <p class="muted">${esc(u.area)}${u.status === "active" ? "" : " · hidden from renters"}</p>
+        </div>
+        <a class="btn" href="/landlord/units/${encodeURIComponent(u.id)}/edit">Edit unit</a>
+      </div>
+      <dl class="tiles">
+        ${tile("Rent", money(u.monthly_rent), "per room, per month")}
+        ${tile("Rooms available", u.rooms_available)}
+        ${tile("Move-in date", fmtDate(u.move_in_date))}
+      </dl>
+      ${u.description ? `<section aria-labelledby="desc-heading"><div class="section-heading"><h2 id="desc-heading">Description</h2></div><p class="desc">${esc(u.description)}</p></section>` : ""}
+      <section aria-labelledby="requests-heading">
+        <div class="section-heading"><h2 id="requests-heading">Interested renters</h2><span class="muted small">${mine.length ? plural(mine.length, "request", "requests") : ""}</span></div>
+        ${
+          mine.length
+            ? `<ul class="requests" role="list">${people}</ul><p class="hint">Renters don't see your email address unless you write to them.</p>`
+            : emptyState(
+                "No requests for this unit yet",
+                u.status === "active" ? "Renters who click “I'm interested” on this unit appear here with their name, email and note." : "This unit is inactive, so renters can't see it. Set it to active to start receiving requests.",
+                u.status === "active" ? "" : `<a class="btn btn-quiet" href="/landlord/units/${encodeURIComponent(u.id)}/edit">Edit unit</a>`
+              )
         }
       </section>`,
     };
@@ -718,34 +787,40 @@
       .join("")}</select>`;
 
   async function unitForm(id) {
-    const blocked = gate("landlord", "Landlord portal");
+    const blocked = gate("landlord");
     if (blocked !== undefined) return blocked;
     const isNew = !id;
     const u = isNew
       ? { name: "", area: "", monthly_rent: "", rooms_available: 1, move_in_date: "", description: "", status: "active" }
       : (await api(`/api/landlord/units/${encodeURIComponent(id)}`)).unit;
+    const backHref = isNew ? "/landlord" : `/landlord/units/${encodeURIComponent(id)}`;
     return {
       title: isNew ? "Add a unit" : `Edit ${u.name}`,
-      brand: "Landlord portal",
       html: `
-      <a class="back" href="/landlord">${icon("left", 16)} Back to your units</a>
-      <div class="heading"><h1 tabindex="-1">${isNew ? "Add a unit" : "Edit unit"}</h1></div>
+      <a class="back" href="${backHref}">${icon("left", 16)} ${isNew ? "Dashboard" : "Back to unit"}</a>
+      <div class="heading">
+        <h1 tabindex="-1">${isNew ? "Add a unit" : "Edit unit"}</h1>
+        <p class="muted">${isNew ? "Renters see everything here except the status." : esc(u.name)}</p>
+      </div>
       <form class="form" id="unit-form" novalidate data-unit-id="${esc(id || "")}">
-        ${field("name", "Unit name", input("name", 'type="text" maxlength="80" required autocomplete="off"', u.name), "A short name renters will see, like “Sunny 3-bedroom near campus”. Don't use the street address.")}
-        ${field("area", "General area", input("area", 'type="text" maxlength="80" required autocomplete="off"', u.area), "Neighborhood or city only, like “Waltham, MA”. Don't enter a street address.")}
-        <div class="field-row">
-          ${field("monthly_rent", "Monthly rent per room ($)", input("monthly_rent", 'type="number" min="1" max="50000" step="1" required inputmode="numeric"', u.monthly_rent))}
-          ${field("rooms_available", "Rooms available", input("rooms_available", 'type="number" min="1" max="20" step="1" required inputmode="numeric"', u.rooms_available))}
-        </div>
-        <div class="field-row">
-          ${field("move_in_date", "Move-in date", input("move_in_date", 'type="date" required', u.move_in_date))}
-          ${field("status", "Status", select("status", [["active", "Active: shown to renters"], ["inactive", "Inactive: hidden"]], u.status))}
-        </div>
-        ${field("description", "Short description (optional)", `<textarea id="f-description" name="description" maxlength="1000" rows="4" aria-describedby="h-description e-description">${esc(u.description)}</textarea>`, "Up to 1,000 characters. Don't include phone numbers or addresses.")}
+        <fieldset>
+          <legend>Listing details</legend>
+          ${field("name", "Unit name", input("name", 'type="text" maxlength="80" required autocomplete="off"', u.name), "A short name renters will see, like “Sunny 3-bedroom near campus”. Don't use the street address.")}
+          ${field("area", "General area", input("area", 'type="text" maxlength="80" required autocomplete="off"', u.area), "Neighborhood or city only, like “Waltham, MA”.")}
+          <div class="field-row">
+            ${field("monthly_rent", "Monthly rent per room ($)", input("monthly_rent", 'type="number" min="1" max="50000" step="1" required inputmode="numeric"', u.monthly_rent))}
+            ${field("rooms_available", "Rooms available", input("rooms_available", 'type="number" min="1" max="20" step="1" required inputmode="numeric"', u.rooms_available))}
+          </div>
+          <div class="field-row">
+            ${field("move_in_date", "Move-in date", input("move_in_date", 'type="date" required', u.move_in_date))}
+            ${field("status", "Status", select("status", [["active", "Active: shown to renters"], ["inactive", "Inactive: hidden"]], u.status))}
+          </div>
+          ${field("description", "Short description (optional)", `<textarea id="f-description" name="description" maxlength="1000" rows="4" aria-describedby="h-description e-description">${esc(u.description)}</textarea>`, "Up to 1,000 characters. Leave out phone numbers and addresses.")}
+        </fieldset>
         <p class="form-error" id="form-error" role="alert"></p>
         <div class="actions">
           <button class="btn" type="submit">${isNew ? "Add unit" : "Save changes"}</button>
-          <a class="btn btn-quiet" href="/landlord">Cancel</a>
+          <a class="btn btn-quiet" href="${backHref}">Cancel</a>
           ${isNew ? "" : `<button class="btn btn-danger" type="button" data-action="delete-unit" data-id="${esc(id)}">Delete unit</button>`}
         </div>
       </form>`,
@@ -778,21 +853,26 @@
     const id = form.dataset.unitId;
     const body = formData(form, ["monthly_rent", "rooms_available"]);
     const btn = form.querySelector("[type=submit]");
+    const label = btn.textContent;
     btn.disabled = true;
+    btn.textContent = "Saving…";
     try {
-      await api(id ? `/api/landlord/units/${encodeURIComponent(id)}` : "/api/landlord/units", { method: id ? "PUT" : "POST", body });
-      navigate("/landlord");
+      const { unit } = await api(id ? `/api/landlord/units/${encodeURIComponent(id)}` : "/api/landlord/units", { method: id ? "PUT" : "POST", body });
+      setFlash(id ? "Changes saved." : "Unit added. It's now on your dashboard.");
+      navigate(`/landlord/units/${encodeURIComponent(unit.id)}`);
     } catch (e) {
       if (e.status === 401) return showView(errorView(e));
       showErrors(form, e);
       btn.disabled = false;
+      btn.textContent = label;
     }
   }
 
   async function deleteUnit(id) {
-    if (!confirm("Delete this unit? This can't be undone.")) return;
+    if (!confirm("Delete this unit? Its requests from renters are deleted too. This can't be undone.")) return;
     try {
       await api(`/api/landlord/units/${encodeURIComponent(id)}`, { method: "DELETE" });
+      setFlash("Unit deleted.");
       navigate("/landlord");
     } catch (e) {
       showView(errorView(e));
@@ -810,9 +890,9 @@
   };
 
   function matchesHtml(data) {
-    if (data.needsPreferences) return `<p class="empty">Save your preferences to see matching rooms.</p>`;
+    if (data.needsPreferences) return emptyState("Save your preferences first", "Fill in the questionnaire above and save to see rooms that match.");
     if (!data.matches.length)
-      return `<p class="empty">No rooms match yet. Try a wider budget or area, or <a href="/listings">browse all listings</a>.</p>`;
+      return emptyState("No rooms match yet", "Try a wider budget, a different area or another month.", `<a class="btn btn-quiet" href="/listings">Browse all listings</a>`);
     return `<ul class="grid" role="list">${data.matches
       .map((m) =>
         listingCard(
@@ -824,11 +904,11 @@
   }
 
   function roommatesHtml(data) {
-    if (data.needsPreferences) return `<p class="empty">Save your preferences to use roommate matching.</p>`;
+    if (data.needsPreferences) return emptyState("Save your preferences first", "Roommate matching uses your lifestyle answers.");
     if (!data.optedIn)
-      return `<p class="empty">Roommate matching is off. Tick “Show me to compatible renters” above and save to see renters you'd get along with. You only see people who turned it on too.</p>`;
+      return emptyState("Roommate matching is off", "Tick “Show me to compatible renters” above and save to see renters you'd get along with. You only see people who turned it on too.");
     if (!data.roommates.length)
-      return `<p class="empty">No compatible renters yet for your area and move-in month. Check back as more people join.</p>`;
+      return emptyState("No compatible renters yet", "Nobody else has your area and move-in month right now. Check back as more people join.");
     return `<ul class="grid" role="list">${data.roommates
       .map(
         (m) => `
@@ -941,7 +1021,7 @@
 
   // ── Admin ────────────────────────────────────────────────────────────────────
   async function adminPage() {
-    if (!me.user) return signInView("/admin", "Admin");
+    if (!me.user) return signInView("/admin");
     const { users } = await api("/api/admin/users");
     const detail = (u) =>
       u.accountType === "landlord"
@@ -950,7 +1030,7 @@
           ? u.hasPreferences
             ? "Preferences saved"
             : "No preferences yet"
-          : "—";
+          : "Not started";
     const rows = users
       .map(
         (u) => `
@@ -966,16 +1046,19 @@
     // Counts are real people only; fictional sample accounts are counted separately.
     const real = users.filter((u) => !u.isSample);
     const samples = users.length - real.length;
-    const landlords = real.filter((u) => u.accountType === "landlord").length;
-    const renters = real.filter((u) => u.accountType === "renter").length;
     return {
       title: "Users",
-      brand: "Admin",
       html: `
       <div class="heading">
         <h1 tabindex="-1">Users</h1>
-        <p class="muted">${plural(real.length, "person", "people")} · ${plural(landlords, "landlord", "landlords")} · ${plural(renters, "renter", "renters")}${samples ? ` · plus ${plural(samples, "fictional sample account", "fictional sample accounts")}` : ""}. Read only.</p>
+        <p class="muted">Everyone who has signed in. Read only.</p>
       </div>
+      <dl class="tiles">
+        ${tile("People", real.length)}
+        ${tile("Landlords", real.filter((u) => u.accountType === "landlord").length)}
+        ${tile("Renters", real.filter((u) => u.accountType === "renter").length)}
+        ${samples ? tile("Sample accounts", samples, "fictional, not counted") : ""}
+      </dl>
       <table class="tenants users">
         <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Account type</th><th scope="col">Joined</th><th scope="col">Activity</th></tr></thead>
         <tbody>${rows}</tbody>
@@ -1037,14 +1120,13 @@
   }
 
   function notFound() {
-    return messageView("Page not found", "This page doesn't exist.", `<a class="btn btn-quiet" href="/">Go to home page</a>`, "");
+    return messageView("Page not found", "This page doesn't exist or has moved.", `<a class="btn" href="/">Go to home page</a>`);
   }
 
   // ── Router ───────────────────────────────────────────────────────────────────
   function route(path) {
     const clean = path.replace(/\/+$/, "") || "/";
-    if (clean === "/" || clean === "/index.html") return home();
-    if (clean === "/how-it-works") return howItWorks();
+    if (clean === "/" || clean === "/index.html" || clean === "/how-it-works") return home();
     if (clean === "/privacy") return privacy();
     if (clean === "/terms") return terms();
     if (clean === "/listings") return listings();
@@ -1052,17 +1134,19 @@
     if (clean === "/welcome") return welcome();
     if (clean === "/account") return accountPage();
     if (clean === "/signin-error")
-      return messageView("Sign-in didn't work", "Google sign-in was cancelled or failed. Please try again.", `<button class="btn" type="button" data-action="sign-in">Try again</button>`, "");
+      return messageView("Sign-in didn't work", "Google sign-in was cancelled or failed. Nothing was changed.", `<button class="btn" type="button" data-action="sign-in">Try again</button><a class="btn btn-quiet" href="/">Go to home page</a>`);
     if (clean === "/landlord") return landlordDashboard();
     if (clean === "/landlord/units/new") return unitForm(null);
-    let m = clean.match(/^\/landlord\/units\/([^/]+)$/);
+    let m = clean.match(/^\/landlord\/units\/([^/]+)\/edit$/);
     if (m) return unitForm(safeDecode(m[1]));
+    m = clean.match(/^\/landlord\/units\/([^/]+)$/);
+    if (m) return unitPage(safeDecode(m[1]));
     if (clean === "/renter") return renterPage();
     if (clean === "/admin") return adminPage();
     m = clean.match(/^\/properties\/([^/]+)$/);
     if (m) {
       const p = sample.find((x) => x.id === safeDecode(m[1]));
-      return p ? samplePropertyPage(p) : messageView("Property not found", "This address doesn't match any sample property.", `<a class="btn btn-quiet" href="/sample">Back to sample dashboard</a>`, "Sample");
+      return p ? samplePropertyPage(p) : messageView("Property not found", "This address doesn't match any sample property.", `<a class="btn" href="/sample">Back to sample dashboard</a>`);
     }
     return notFound();
   }
@@ -1078,10 +1162,14 @@
   let renderSeq = 0;
   let pendingFocus = false;
   function showView(view, moveFocus = pendingFocus) {
-    app.innerHTML = view.html;
+    const notice = flash
+      ? `<div class="notice notice-success" role="status"><span>${esc(flash)}</span><button class="notice-close" type="button" data-action="dismiss-notice" aria-label="Dismiss message">×</button></div>`
+      : "";
+    flash = null;
+    app.innerHTML = notice + view.html;
     document.title = `${view.title} · coHabit`;
-    brandSub.textContent = view.brand ?? "";
     app.setAttribute("aria-busy", "false");
+    renderAccount();
     if (moveFocus) {
       window.scrollTo(0, 0);
       const h1 = app.querySelector("h1");
@@ -1102,7 +1190,7 @@
     if (result && typeof result.then === "function") {
       app.setAttribute("aria-busy", "true");
       const t = setTimeout(() => {
-        if (seq === renderSeq) app.innerHTML = `<p class="loading muted" role="status">Loading…</p>`;
+        if (seq === renderSeq) app.innerHTML = `<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading…</div>`;
       }, 150);
       try {
         result = await result;
@@ -1137,6 +1225,7 @@
       else if (a === "interest-withdraw") withdrawInterest(action.dataset.unit);
       else if (a === "interest-remove") removeInterest(action.dataset.id, action);
       else if (a === "reload") render(true);
+      else if (a === "dismiss-notice") action.closest(".notice").remove();
       return;
     }
     const link = e.target.closest("a");

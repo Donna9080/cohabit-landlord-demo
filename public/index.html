@@ -20,12 +20,26 @@
           <span id="brand-sub"></span>
         </span>
       </a>
-      <nav class="account" id="account" aria-label="Account"></nav>
+      <nav class="nav" id="nav" aria-label="Main"></nav>
+      <div class="account" id="account"></div>
     </header>
 
     <main id="app" class="container" tabindex="-1">
       <noscript>coHabit needs JavaScript turned on.</noscript>
     </main>
+
+    <footer class="site-footer">
+      <span>coHabit · shared student housing</span>
+      <nav aria-label="Footer">
+        <a href="/listings">Listings</a>
+        <a href="/sample">Sample dashboard</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+      </nav>
+    </footer>
+
+    <!-- Short messages such as "Request removed" appear here. -->
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <!-- Icons (from the Lucide set, matching the Figma design) -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
