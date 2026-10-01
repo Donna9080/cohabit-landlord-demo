@@ -38,6 +38,11 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       and note on the dashboard. Migration `0003_unit_interests.sql` (additive) applied to production; restore
       bookmark from just before: `0000001c-00000000-000050f7-0238b86f496e2fcb6962edd600450c3b`. Deployed as
       `aea82468-c5b8-4dce-b517-6a99c62e6445`. 28 new tests. Not exercised live by signed-in accounts yet.
+- [x] Interface polish for user testing (2026-10-01): one navigation bar, dashboard with summary tiles, new unit page
+      (details + interested renters), no more How it works, single blue accent, shared loading/empty/error/success
+      states. Frontend only. Deployed as `f72de36f-ce45-453f-a2e7-989b88a96bc7`. Signed-out pages checked live.
+- [ ] After the polish: owner re-checks on the live site with real Google accounts (sign in, first-time landlord/renter
+      choice, dashboard to unit page to edit and back, renter page, admin page)
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
 - [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works
 - [ ] Live test with a second Google account as renter
