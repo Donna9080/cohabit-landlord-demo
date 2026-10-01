@@ -2,19 +2,29 @@
 
 ### [👉 Open the live site](https://cohabit-landlord-demo.dolgorsureng.workers.dev)
 
-[![Front page (earlier version) with Landlord and Tenant choices](docs/front.png)](https://cohabit-landlord-demo.dolgorsureng.workers.dev)
+[![Front page with two choices, "I have rooms to rent" and "I'm looking for a room", plus buttons to browse listings and view a sample dashboard](docs/front.png)](https://cohabit-landlord-demo.dolgorsureng.workers.dev)
 
-[![Sample landlord dashboard showing three fictional Waltham properties with tenant counts, lease end dates and status](docs/dashboard.png)](https://cohabit-landlord-demo.dolgorsureng.workers.dev/sample)
+**Landlord dashboard:** summary tiles, one card per unit, and the latest requests from renters.
 
-[![Property and Tenants page for 22 Oak Avenue, Unit 2, showing the lease end date and a table of three fictional tenants with rooms, emails and phone numbers](docs/property.png)](https://cohabit-landlord-demo.dolgorsureng.workers.dev/properties/22-oak-avenue-unit-2)
+![Landlord dashboard: tiles for 3 units, 2 active and 3 requests, three unit cards with rent, rooms and move-in date, and a list of recent requests](docs/dashboard.png)
+
+**Unit page:** the unit's details and the renters interested in it, each with their note and a reply button.
+
+![Unit page for "Sunny 3-bedroom near campus": rent, rooms and move-in date tiles, a description, and two interested renters with their notes](docs/unit.png)
+
+**Renter's matches:** rooms ranked against the renter's questionnaire, with the reasons for each match and an "I'm interested" button.
+
+![Matching rooms for a renter: cards with a match percentage, reasons such as "Within your budget" and "In your area", and a request already sent for one room](docs/renter.png)
 
 <p align="center">
-  <img src="docs/phone-dashboard.png" width="300" alt="The dashboard on a phone: the three property cards stack in one column" />
+  <img src="docs/phone-dashboard.png" width="300" alt="The landlord dashboard on a phone: navigation on a second row, a full-width Add a unit button, tiles and stacked unit cards" />
   &nbsp;&nbsp;
-  <img src="docs/phone.png" width="300" alt="The property page on a phone: the tenant table becomes one card per tenant with name, room, email and phone" />
+  <img src="docs/phone-unit.png" width="300" alt="The unit page on a phone: back link, title, full-width Edit unit button, tiles and description" />
   <br />
-  <em>On a phone, the property cards stack and the tenant table becomes one card per tenant.</em>
+  <em>The same pieces on a phone, stacked in one column.</em>
 </p>
+
+Screenshots were taken on a local copy with made-up accounts. All names, emails and listings shown are fictional.
 
 Landlords list rooms; renters answer a short questionnaire and see rooms that fit. Sign-in is with Google. Data is stored in Cloudflare D1.
 
