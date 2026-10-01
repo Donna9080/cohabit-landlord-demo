@@ -98,7 +98,7 @@ Remove it before counting users or listings for anything you report as real trac
 
 | | Visitor | Landlord | Renter | Admin |
 | --- | --- | --- | --- | --- |
-| Home, How it works, Listings, Sample dashboard | ✓ | ✓ | ✓ | ✓ |
+| Home, Listings (search and sort), Sample dashboard, Privacy, Terms | ✓ | ✓ | ✓ | ✓ |
 | Sign in with Google, choose landlord/renter once | ✓ | | | |
 | Create/view/edit/delete **own** units | | ✓ | | |
 | Save/edit **own** preferences, see matches | | | ✓ | |
@@ -289,23 +289,75 @@ Landlord tenant preferences, applicant tracking beyond the request list, private
 in-app messaging threads, email notifications, listing photos / R2 uploads, landlord approval or verification, admin moderation/editing/deleting, admin stats,
 role-management UI, admin deleting other people's accounts, changing account type, payments.
 
-## Manual test for a group member (about 10 minutes)
+## Manual test for a group member (about 15 minutes)
 
-Use two Google accounts (A and B) and two browsers (or one normal + one private window).
+Use two Google accounts and two browsers (or one normal window and one private window):
+**A** will be the landlord, **B** the renter. Button and page names below are exactly as they
+appear on the site. Listings and people tagged **Sample** are fictional; ignore them unless a step mentions them.
 
-1. Signed out, open the site. Home, **How it works**, **Browse current listings** and
-   **See a sample landlord dashboard** all load.
-2. Browser 1, account A: **Sign in** → Google → **I'm a landlord**. **Add a unit**
-   (try "12 Main Street" as area: it should be refused; use "Waltham, MA").
-   Reload: unit is there. Edit the rent, save, reload. Add a second unit, set it
-   **Inactive**, then delete it.
-3. Browser 2, account B: sign in → **I'm a renter**. Fill in the questionnaire with a
-   budget that covers A's rent and the same area and month → **Save**. The unit shows
-   under Matching rooms. Reload: answers are still there.
-4. Browser 2: open `/landlord` → "This area is for landlords". Open `/admin` →
-   "Not available". Open **Listings**: A's inactive unit is not there.
-5. Browser 2: **Sign out**, sign in again with B: still a renter, answers still saved.
-6. Browser 1 (A): open the unit edit page URL in browser 2 while signed in as B →
-   "This area is for landlords".
-7. Owner only: open `/admin` → user list with both accounts, unit count for A,
-   "Preferences saved" for B, no questionnaire answers.
+### 1. Signed out (2 minutes)
+
+1. Open the site. The home page shows two cards, **I have rooms to rent** and **I'm looking for a room**,
+   and two buttons, **Browse listings** and **View a sample dashboard**.
+2. Click **Browse listings**. Type an area in **Search by area or name** and change **Sort by**: the list updates.
+   A real (untagged) listing says "Sign in as a renter to tell the landlord you're interested."
+3. Click **View a sample dashboard**, open a property, then use **Sample dashboard** to go back. Both pages
+   start with a "Sample data" notice.
+4. Open `/landlord` and `/admin` directly: both ask you to sign in.
+
+### 2. Landlord, account A in browser 1 (5 minutes)
+
+1. Click **Sign in**, choose account A, then **I'm a landlord**. You land on **Your units** and the top bar
+   shows **Dashboard** and **Listings**.
+2. Click **Add a unit**. Enter "12 Main Street" as the unit name: it is refused with a message under the field.
+   Use a name like "Sunny room near campus", area "Waltham, MA", a rent, rooms and a move-in date, then **Add unit**.
+3. You land on the unit's own page with a green "Unit added" message and tiles for rent, rooms and move-in date.
+4. Click **Edit unit**, change the rent, **Save changes**: back on the unit page with "Changes saved."
+   Click **Dashboard**: the card shows the new rent, and the tiles count your units.
+5. Add a second unit with status **Inactive**. Its page says it is hidden from renters. Leave it for now.
+6. Reload the dashboard: both units are still there, one tagged Active and one Inactive.
+
+### 3. Renter, account B in browser 2 (5 minutes)
+
+1. **Sign in** with account B, then **I'm a renter**. You land on **Find your room**.
+2. Fill in the questionnaire with a budget that covers A's rent, the same area and the same move-in month,
+   then **Save and see matches**. The page now starts with **Your preferences** as a summary and shows
+   "Preferences saved."
+3. Under **Matching rooms**, A's unit appears with a match percentage and reasons. Try **Sort by**.
+4. On A's unit click **I'm interested**, write a short note, **Send**. The card shows "Request sent" and the
+   unit appears under **Landlords you've contacted**. (A note containing a phone number is refused.)
+   Sample listings say there is no landlord to contact.
+5. Click **Edit preferences**, tick **Show me to compatible renters**, **Save changes**.
+   **Possible roommates** now lists people (sample ones are tagged) with a score and what you have in common.
+6. Open `/landlord`: "This area is for landlords". Open `/admin`: "Not available".
+7. Click **Listings**: A's active unit is there, A's inactive unit is not.
+8. **Sign out**, sign in again with B: still a renter, and the preferences and request are still there.
+
+### 4. Back to the landlord, browser 1 (3 minutes)
+
+1. Reload **Dashboard**. The **Requests** tile counts B's request and it appears under **Recent requests**.
+2. Click **View**. Under **Interested renters** you see B's name, email and note, with **Reply by email**
+   and **Remove**. You do not see B's questionnaire answers.
+3. Click **Remove**, confirm in the dialog: "Request removed." In browser 2, B's
+   **Landlords you've contacted** list is empty after a reload.
+4. Go back to **Dashboard**, open the inactive unit, click **Edit unit** → **Delete unit**. A dialog asks
+   "Delete this unit?"; **Cancel** keeps it, **Delete unit** removes it and shows "Unit deleted."
+
+### 5. Account page and admin (1 minute)
+
+1. Click your name or initials in the top bar: **Your account** shows your name, email and account type.
+   **Delete my account** only works after typing DELETE. Only try it with a spare Google account:
+   it removes the account and everything saved with it.
+2. Owner only: **Admin** appears in the top bar. The page shows tiles for people, landlords, renters and
+   sample accounts, and a list with both test accounts: a unit count for A, "Preferences saved" for B,
+   and no questionnaire answers or notes.
+
+### 6. On a phone
+
+Open the site on a phone, or narrow the browser window. The top-bar links move to a second row, cards stack
+in one column, and the admin list becomes one card per person. Nothing should scroll sideways.
+
+### If something fails
+
+Note the page address, what you clicked and what you saw, and tell the owner. For sign-in problems the owner
+can run `npx wrangler tail` and try again to see the reason (see "Secrets and settings" above).
