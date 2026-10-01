@@ -20,7 +20,8 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [x] Owner signed in on the live site with Google (landlord); promoted to admin with the D1 command; read-back shows `role = admin`
 - [x] Live: owner (landlord, admin) added 2 units; second Google account signed in as renter and saved preferences (seen in D1)
 - [x] Google app published (**In production**, External) after adding home page, `/privacy`, `/terms` and authorized domain on Branding
-- [ ] Owner confirms in the browser: `/admin` opens for the owner; `/landlord` and `/admin` refuse the renter account
+- [x] Owner confirmed in the browser (2026-10-01): admin page, landlord dashboard and renter page work as intended
+- [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
 - [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works
 - [ ] Live test with a second Google account as renter
 
