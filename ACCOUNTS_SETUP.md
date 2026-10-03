@@ -60,7 +60,7 @@ The fictional sample dashboard (`/sample`, `/properties/<id>`) is still in
 
 ## Maps and location (MapTiler, Massachusetts only)
 
-**Provider:** MapTiler Cloud, Free plan (checked 2026-10-02): no card, 5,000 map sessions, 1,000 search sessions and
+**Provider:** MapTiler Cloud, Free plan (every Listings page visit loads the map, so counts as one map session) (checked 2026-10-02): no card, 5,000 map sessions, 1,000 search sessions and
 100,000 API requests a month. Over the limit the service **pauses until next month; nothing is charged**. The Free plan is
 for "testing, PoC, prototyping, personal, or non-commercial use", which covers this class project; a commercial coHabit
 would need a paid plan. Billing is not enabled. Maps are drawn with MapLibre GL JS 4.7.1 (open source), loaded from
@@ -86,7 +86,7 @@ There are no server-side map credentials.
 - **Use my location** asks for browser permission only when clicked. The position is used in the browser to filter and
   sort, then forgotten; it is never sent to coHabit's server or saved. Declined, unavailable or outside Massachusetts
   each show a short message, and the search field keeps working.
-- **Show map** opens a map of Greater Boston with the listings shown: approximate ones as a circle with a pin, sample
+- A map of Greater Boston is always shown above the list (loaded after the list, so the list never waits). It shows the listings that match the search: approximate ones as a circle with a pin, sample
   ones in grey and labeled Sample. A pin opens a label; **View listing** scrolls to and highlights that listing's card.
   When the map is open, MapTiler sees which area is being viewed, as with any web map.
 
@@ -348,7 +348,8 @@ appear on the site. Listings and people tagged **Sample** are fictional; ignore 
 2. Click **Browse listings**. Type "Belmont" in **City, neighborhood or ZIP** and pick **Belmont, Massachusetts**:
    the list shows listings within a few km, nearest first, with a **Clear** link. A town outside Massachusetts
    ("Nashua") gives no suggestions. A real (untagged) listing says "Sign in as a renter to tell the landlord you're interested."
-3. Click **Show map**: Greater Boston with circles for approximate listings and grey pins for Sample ones.
+3. Above the list, the map of Greater Boston shows circles for approximate listings and grey pins for Sample ones.
+   After the Belmont search it shows only the matching pins.
    Click a pin, then **View listing**: the page scrolls to that card and highlights it.
 4. Click **Use my location** and allow it: listings near you, nearest first. Try again and block it: a message says
    you can still search by city, neighborhood or ZIP.

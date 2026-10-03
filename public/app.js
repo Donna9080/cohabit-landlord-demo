@@ -848,7 +848,10 @@
     const hasSample = listings.some((u) => u.sample);
     return {
       title: "Listings",
-      mount: mountListings,
+      mount: () => {
+        mountListings();
+        openListingMap();
+      },
       html: `
       <div class="heading">
         <h1 tabindex="-1">Listings</h1>
@@ -861,43 +864,39 @@
         ${placeField({ id: "place-search", label: "City, neighborhood or ZIP", placeholder: "Somerville, Back Bay or 02139" })}
         <div class="toolbar-actions">
           <button class="btn btn-quiet" type="button" data-action="use-location">Use my location</button>
-          <button class="btn btn-quiet" type="button" data-action="toggle-map" aria-pressed="false" aria-controls="listing-map">Show map</button>
           ${sortSelect("listing-sort", listingSort, sortOptions())}
         </div>
       </div>
       <p class="location-msg" id="location-msg" role="status"></p>
       <p class="muted small" id="listing-count" role="status"></p>
-      <div class="map-panel" id="listing-map" hidden><div class="map-canvas" id="listing-map-canvas"></div></div>
+      <div class="map-panel" id="listing-map" role="region" aria-label="Map of listings"><div class="map-canvas" id="listing-map-canvas"></div></div>
       <div id="listing-grid">${listingsGrid()}</div>`
           : emptyState("No listings yet", "When a landlord adds an active unit, it shows up here.", `<a class="btn btn-quiet" href="/">Back to home</a>`)
       }`,
     };
   }
 
-  async function toggleMap(button) {
-    const panel = document.getElementById("listing-map");
+  // The map is always shown above the list. It loads after the list, so the list never waits for it.
+  async function openListingMap() {
     const canvas = document.getElementById("listing-map-canvas");
-    if (!panel || !canvas) return;
-    mapOpen = panel.hidden;
-    panel.hidden = !mapOpen;
-    button.setAttribute("aria-pressed", String(mapOpen));
-    button.textContent = mapOpen ? "Hide map" : "Show map";
-    if (!mapOpen) return;
-    if (listingMap && listingMap.getContainer() === canvas) {
-      listingMap.resize();
-      drawListingMarkers(visibleListings());
-      return;
+    if (!canvas) return;
+    if (listingMap) {
+      try {
+        listingMap.remove(); // the map from a previous visit to this page
+      } catch {}
+      listingMap = null;
     }
-    if (listingMap) listingMap.remove();
-    listingMap = null;
+    mapOpen = true;
     canvas.innerHTML = `<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading map…</div>`;
     try {
       const map = await createMap(canvas);
+      if (!document.body.contains(canvas)) return map.remove(); // left the page while it loaded
       canvas.querySelector(".loading")?.remove();
       listingMap = map;
-      if (mapOpen) drawListingMarkers(visibleListings());
+      drawListingMarkers(visibleListings());
     } catch {
-      canvas.innerHTML = `<div class="map-msg">${emptyState("The map isn't available right now", "The list below still works, and you can search by city, neighborhood or ZIP.")}</div>`;
+      if (document.body.contains(canvas))
+        canvas.innerHTML = `<div class="map-msg">${emptyState("The map isn't available right now", "The list below still works, and you can search by city, neighborhood or ZIP.")}</div>`;
     }
   }
 
@@ -1907,7 +1906,6 @@
       else if (a === "edit-prefs") togglePrefsForm();
       else if (a === "clear-search") clearListingSearch();
       else if (a === "use-location") useMyLocation(action);
-      else if (a === "toggle-map") toggleMap(action);
       else if (a === "jump-listing") jumpToListing(action.dataset.id);
       else if (a === "clear-location") clearUnitLocation();
       return;
