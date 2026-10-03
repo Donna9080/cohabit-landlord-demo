@@ -171,10 +171,39 @@ async function handleAuth(request, env, url) {
 
 // ── App API ─────────────────────────────────────────────────────────────────
 
-const UNIT_OWNER_FIELDS = "id, name, area, monthly_rent, rooms_available, move_in_date, description, status, created_at, updated_at";
+const UNIT_OWNER_FIELDS =
+  "id, name, area, monthly_rent, rooms_available, move_in_date, description, status, created_at, updated_at, address, lat, lng, location_precision";
+// Stored with every saved location, as MapTiler's terms ask for databases built from its search results.
+const GEO_SOURCE = "© MapTiler © OpenStreetMap contributors";
+const locationValues = (unit) =>
+  unit.location
+    ? [unit.location.address, unit.location.lat, unit.location.lng, unit.location.precision, GEO_SOURCE]
+    : [null, null, null, "approximate", null];
 // "sample" marks fictional demo listings (owned by users whose id starts with "sample-"; see scripts/sample-data.mjs).
-const LISTING_FIELDS = "id, name, area, monthly_rent, rooms_available, move_in_date, description, (landlord_user_id LIKE 'sample-%') AS sample";
-const asListing = (u) => ({ ...u, sample: !!u.sample });
+const LISTING_FIELDS =
+  "id, name, area, monthly_rent, rooms_available, move_in_date, description, (landlord_user_id LIKE 'sample-%') AS sample, address, lat, lng, location_precision";
+
+// What renters may see of a unit's location. For "approximate" the exact point and the street
+// address never leave the server: the point is snapped to a ~400 m grid and moved by a secret,
+// per-unit offset, so the true spot is always inside the 500 m circle but can't be worked out.
+const APPROX_RADIUS_M = 500;
+function approximatePoint(id, lat, lng, salt) {
+  const cell = 0.004;
+  let h = 2166136261;
+  for (const ch of salt + id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const dx = ((h & 0xffff) / 0xffff - 0.5) * 0.0024;
+  const dy = ((h >>> 16) / 0xffff - 0.5) * 0.0024;
+  return { lat: +(Math.round(lat / cell) * cell + dy).toFixed(4), lng: +(Math.round(lng / cell) * cell + dx).toFixed(4) };
+}
+function publicLocation(u, salt) {
+  if (u.lat == null || u.lng == null) return null;
+  if (u.location_precision === "exact") return { precision: "exact", lat: u.lat, lng: u.lng, address: u.address };
+  return { precision: "approximate", radiusM: APPROX_RADIUS_M, ...approximatePoint(u.id, u.lat, u.lng, salt) };
+}
+const listingMapper = (env) => (u) => {
+  const { lat, lng, location_precision, address, ...rest } = u;
+  return { ...rest, sample: !!u.sample, location: publicLocation(u, env.BETTER_AUTH_SECRET || "") };
+};
 const PREF_FIELDS =
   "budget_min, budget_max, move_in_month, area, rooms_needed, sleep_schedule, cleanliness, noise, guests, pets, smoking, roommate_visible, share_email, updated_at";
 const asPrefs = (p) => p && { ...p, roommate_visible: !!p.roommate_visible, share_email: !!p.share_email };
@@ -191,6 +220,11 @@ async function handleApi(request, env, url) {
 
   const reply = (data, status = 200) => json(data, status, viewer.setCookies);
   const db = env.DB;
+
+  // Public settings for the browser. The map key is a browser key restricted to this site's address.
+  if (path === "/api/config" && method === "GET") {
+    return reply({ maptilerKey: env.MAPTILER_KEY || null });
+  }
 
   // Who am I
   if (path === "/api/me" && method === "GET") {
@@ -257,10 +291,11 @@ async function handleApi(request, env, url) {
       const now = Date.now();
       const created = await db
         .prepare(
-          `INSERT INTO units (id, landlord_user_id, name, area, monthly_rent, rooms_available, move_in_date, description, status, created_at, updated_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10) RETURNING ${UNIT_OWNER_FIELDS}`
+          `INSERT INTO units (id, landlord_user_id, name, area, monthly_rent, rooms_available, move_in_date, description, status, created_at, updated_at,
+             address, lat, lng, location_precision, geo_source)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?11, ?12, ?13, ?14, ?15) RETURNING ${UNIT_OWNER_FIELDS}`
         )
-        .bind(id, user.id, unit.name, unit.area, unit.monthly_rent, unit.rooms_available, unit.move_in_date, unit.description, unit.status, now)
+        .bind(id, user.id, unit.name, unit.area, unit.monthly_rent, unit.rooms_available, unit.move_in_date, unit.description, unit.status, now, ...locationValues(unit))
         .first();
       return reply({ unit: created }, 201);
     }
@@ -283,10 +318,11 @@ async function handleApi(request, env, url) {
       const updated = await db
         .prepare(
           `UPDATE units SET name = ?3, area = ?4, monthly_rent = ?5, rooms_available = ?6, move_in_date = ?7,
-             description = ?8, status = ?9, updated_at = ?10
+             description = ?8, status = ?9, updated_at = ?10,
+             address = ?11, lat = ?12, lng = ?13, location_precision = ?14, geo_source = ?15
            WHERE id = ?1 AND landlord_user_id = ?2 RETURNING ${UNIT_OWNER_FIELDS}`
         )
-        .bind(id, user.id, unit.name, unit.area, unit.monthly_rent, unit.rooms_available, unit.move_in_date, unit.description, unit.status, Date.now())
+        .bind(id, user.id, unit.name, unit.area, unit.monthly_rent, unit.rooms_available, unit.move_in_date, unit.description, unit.status, Date.now(), ...locationValues(unit))
         .first();
       if (!updated) throw notFound;
       return reply({ unit: updated });
@@ -392,7 +428,7 @@ async function handleApi(request, env, url) {
     const { results } = await db
       .prepare(`SELECT ${LISTING_FIELDS} FROM units WHERE status = 'active' ORDER BY move_in_date, id LIMIT 100`)
       .all();
-    return reply({ listings: results.map(asListing) });
+    return reply({ listings: results.map(listingMapper(env)) });
   }
 
   // Renter: own preferences only.
@@ -433,7 +469,7 @@ async function handleApi(request, env, url) {
     const { results } = await db
       .prepare(`SELECT ${LISTING_FIELDS} FROM units WHERE status = 'active' ORDER BY move_in_date, id LIMIT 200`)
       .all();
-    return reply({ matches: rankUnits(prefs, results.map(asListing)) });
+    return reply({ matches: rankUnits(prefs, results.map(listingMapper(env))) });
   }
 
   // Renter: possible roommates. Opt-in on both sides: you must have turned it on to see anyone,

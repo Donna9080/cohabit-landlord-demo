@@ -6,3 +6,6 @@ BETTER_AUTH_SECRET=
 # From Google Cloud Console > Google Auth Platform > Clients (see ACCOUNTS_SETUP.md)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+
+# MapTiler browser key (restricted to this site and localhost). See ACCOUNTS_SETUP.md, "Maps".
+MAPTILER_KEY=

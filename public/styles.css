@@ -326,11 +326,53 @@ a.card-link:hover { text-decoration: underline; }
 }
 .sort select:focus { outline: none; border-color: var(--blue); box-shadow: var(--focus); }
 .toolbar + #listing-count:empty { display: none; }
+.link-button { padding: 0 2px; border: 0; background: none; color: var(--blue); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
 .heading-row > .section-heading { margin-bottom: 0; }
 section > .heading-row { margin-bottom: var(--gap); }
 .summary { display: flex; flex-direction: column; gap: var(--gap); padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-card); }
 .summary > .heading-row { margin-bottom: 0; align-items: center; }
 .choices-one { grid-template-columns: minmax(0, 480px); justify-content: center; }
+
+/* Place search with suggestions */
+.place-field { position: relative; }
+.toolbar .place-field { flex: 1 1 280px; max-width: 460px; }
+.toolbar-actions { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.place-field input {
+  width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--white); color: var(--text); font: inherit;
+}
+.place-field input:focus { outline: none; border-color: var(--blue); box-shadow: var(--focus); }
+.place-list {
+  position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% - 2px); margin: 4px 0 0; padding: 4px; list-style: none;
+  background: var(--white); border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(15, 30, 61, 0.12);
+}
+.place-field:has(.hint) .place-list, .place-field:has(.field-error:not(:empty)) .place-list { top: 74px; }
+.place-list li { padding: 9px 10px; border-radius: 6px; font-size: 15px; cursor: pointer; }
+.place-list li:hover, .place-list li[aria-selected="true"] { background: var(--tint); color: var(--navy); }
+.location-msg:empty { display: none; }
+.location-msg { font-size: 15px; color: var(--navy); background: var(--blue-bg); border: 1px solid #cfe0f7; border-radius: var(--radius-card); padding: 10px 14px; }
+#listing-count:empty { display: none; }
+.field-label { font-size: 15px; font-weight: 600; }
+
+/* Maps */
+.map-panel { border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden; }
+.map-canvas { position: relative; height: 380px; background: var(--subtle); }
+.mini-map { position: relative; height: 240px; border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden; background: var(--subtle); }
+.map-canvas > .loading, .mini-map > .loading { position: absolute; inset: 0; padding: 0; }
+.map-msg { padding: 16px; }
+.maptiler-logo { position: absolute; left: 8px; bottom: 8px; z-index: 2; line-height: 0; }
+.map-pin {
+  width: 22px; height: 22px; padding: 0; border: 3px solid var(--white); border-radius: 50%;
+  background: var(--navy); box-shadow: 0 1px 4px rgba(15, 30, 61, 0.4); cursor: pointer;
+}
+.map-pin:hover, .map-pin:focus-visible { background: var(--blue); }
+.map-pin-sample { background: #8a94a6; }
+.me-dot { display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--blue); border: 3px solid var(--white); box-shadow: 0 0 0 6px rgba(29, 79, 191, 0.25); }
+.map-popup { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font: 14px/1.4 "Inter", system-ui, sans-serif; color: var(--text); }
+.map-popup strong { font-size: 15px; font-weight: 600; }
+.map-popup .btn { margin-top: 6px; }
+.maplibregl-popup-close-button { font-size: 18px; padding: 0 6px; }
+.card.highlight { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(29, 79, 191, 0.25); }
 
 /* "I'm interested" on a listing card */
 .interest { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; }
@@ -390,6 +432,11 @@ p.interest { display: block; }
 
   .choices-one { grid-template-columns: 1fr; }
   .toolbar .search { max-width: none; }
+  .toolbar .place-field { max-width: none; flex-basis: 100%; }
+  .toolbar-actions { width: 100%; }
+  .toolbar-actions .btn { flex: 1 1 auto; }
+  .map-canvas { height: 300px; }
+  .mini-map { height: 220px; }
   .dialog .actions .btn { flex: 1; }
 }
 

@@ -35,7 +35,7 @@ matching is a small rule-based scorer in `src/match.js`.
 | `session` | Session token, expiry, user id. IP and user agent are **not** stored. | Nobody (server only; cookie holds a signed copy of the token) |
 | `verification` | Short-lived OAuth state for sign-in in progress | Nobody |
 | `rateLimit`, `app_rate_limits` | Request counters | Nobody |
-| `units` | A landlord's units: name, general area, monthly rent, rooms available, move-in date, description, status | Owner: everything. Everyone: active units' listing fields only (no owner, no status). Admin: a count per landlord |
+| `units` | A landlord's units: name, general area, monthly rent, rooms available, move-in date, description, status; optionally a Massachusetts street address, pin (lat/lng), approximate/exact choice and the MapTiler attribution | Owner: everything. Everyone: active units' listing fields only (no owner, no status); the location as an approximate 500 m circle with no address, unless the landlord chose exact. Admin: a count per landlord |
 | `match_preferences` | A renter's questionnaire: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets, smoking | Only that renter. Not landlords, not admin (admin sees "saved yes/no"). Other renters see nothing unless the renter turns on roommate matching (see below) |
 
 Not collected: street addresses (rejected by validation), phone numbers, IDs,
@@ -57,6 +57,51 @@ The fictional sample dashboard (`/sample`, `/properties/<id>`) is still in
   account removes the requests that belong to it.
 - Routes: `GET/POST /api/renter/interests`, `DELETE /api/renter/interests/<unit id>`,
   `GET /api/landlord/interests`, `DELETE /api/landlord/interests/<request id>`. Admin sees none of it.
+
+## Maps and location (MapTiler, Massachusetts only)
+
+**Provider:** MapTiler Cloud, Free plan (checked 2026-10-02): no card, 5,000 map sessions, 1,000 search sessions and
+100,000 API requests a month. Over the limit the service **pauses until next month; nothing is charged**. The Free plan is
+for "testing, PoC, prototyping, personal, or non-commercial use", which covers this class project; a commercial coHabit
+would need a paid plan. Billing is not enabled. Maps are drawn with MapLibre GL JS 4.7.1 (open source), loaded from
+jsDelivr only when a map is opened.
+
+**Key:** one browser key, `MAPTILER_KEY`, restricted in MapTiler (Account → API keys → the key → Allowed HTTP origins) to:
+
+```
+cohabit-landlord-demo.dolgorsureng.workers.dev
+localhost
+```
+
+It is meant to be visible in the browser (`GET /api/config` hands it to the page); the origin list is what protects it.
+Locally it lives in `.dev.vars`; in production it is a Cloudflare secret (`npx wrangler secret put MAPTILER_KEY`).
+To replace it: create a new key with the same origins, put it in both places, then delete the old key in MapTiler.
+There are no server-side map credentials.
+
+**Renters (Listings page):**
+- One field, **City, neighborhood or ZIP**, with suggestions limited to Massachusetts (country US, a Massachusetts
+  bounding box, and only results whose address is in Massachusetts). Picking one shows listings within 3 to 15 km
+  depending on the size of the place, nearest first. Typing without picking still filters by listing name and area,
+  which is also what happens if MapTiler is unavailable.
+- **Use my location** asks for browser permission only when clicked. The position is used in the browser to filter and
+  sort, then forgotten; it is never sent to coHabit's server or saved. Declined, unavailable or outside Massachusetts
+  each show a short message, and the search field keeps working.
+- **Show map** opens a map of Greater Boston with the listings shown: approximate ones as a circle with a pin, sample
+  ones in grey and labeled Sample. A pin opens a label; **View listing** scrolls to and highlights that listing's card.
+  When the map is open, MapTiler sees which area is being viewed, as with any web map.
+
+**Landlords (Add or edit a unit):** an optional **Street address** field with Massachusetts address suggestions. Picking
+one fills the general area if it's empty and shows a small map with a draggable pin (moves of up to 1 km). **What renters
+see**: *Approximate area* (default) or *Exact location*. The server refuses pins outside Massachusetts and addresses whose
+suggestion wasn't in Massachusetts. Street addresses are still refused in the unit name, area and description.
+
+**Approximate locations:** the server snaps the pin to a roughly 400 m grid and moves it by a per-unit offset derived
+from a secret, so the true spot is always inside the 500 m circle renters see but can't be worked out from it. The exact
+pin and the street address never leave the server for approximate units.
+
+**Storing coordinates:** MapTiler's terms say databases built from its search results must carry attribution. Every
+saved location stores `geo_source = "© MapTiler © OpenStreetMap contributors"`. Sample units carry
+`"Sample: neighborhood center, set by hand"` instead (they were placed by hand, not geocoded).
 
 ## Roommate matching (opt-in)
 
@@ -168,6 +213,7 @@ npx wrangler d1 execute DB --remote --command "DELETE FROM session WHERE userId 
 | `BETTER_AUTH_SECRET` | Cloudflare secret | Signs session cookies. Long random string. |
 | `GOOGLE_CLIENT_ID` | Cloudflare secret | From Google Cloud OAuth client |
 | `GOOGLE_CLIENT_SECRET` | Cloudflare secret | From Google Cloud OAuth client |
+| `MAPTILER_KEY` | Cloudflare secret (and `.dev.vars` locally) | MapTiler browser key, restricted to this site and localhost (see "Maps and location") |
 
 Locally the same names go in `.dev.vars` (git-ignored; copy `.dev.vars.example`).
 Binding: `DB` → D1 `cohabit-db` (`0e413d91-d5f8-42ce-868c-fc382b0ca38c`).
@@ -285,7 +331,7 @@ Cloudflare dashboard (Workers & Pages → Plans). Alerts are not a spending cap.
 
 ## Not built (on purpose)
 
-Landlord tenant preferences, applicant tracking beyond the request list, private notes, saved matches,
+Map search on the renter's matches page, distance-based matching, landlord tenant preferences, applicant tracking beyond the request list, private notes, saved matches,
 in-app messaging threads, email notifications, listing photos / R2 uploads, landlord approval or verification, admin moderation/editing/deleting, admin stats,
 role-management UI, admin deleting other people's accounts, changing account type, payments.
 
@@ -299,19 +345,27 @@ appear on the site. Listings and people tagged **Sample** are fictional; ignore 
 
 1. Open the site. The home page shows two cards, **I have rooms to rent** and **I'm looking for a room**,
    and two buttons, **Browse listings** and **View a sample dashboard**.
-2. Click **Browse listings**. Type an area in **Search by area or name** and change **Sort by**: the list updates.
-   A real (untagged) listing says "Sign in as a renter to tell the landlord you're interested."
-3. Click **View a sample dashboard**, open a property, then use **Sample dashboard** to go back. Both pages
+2. Click **Browse listings**. Type "Belmont" in **City, neighborhood or ZIP** and pick **Belmont, Massachusetts**:
+   the list shows listings within a few km, nearest first, with a **Clear** link. A town outside Massachusetts
+   ("Nashua") gives no suggestions. A real (untagged) listing says "Sign in as a renter to tell the landlord you're interested."
+3. Click **Show map**: Greater Boston with circles for approximate listings and grey pins for Sample ones.
+   Click a pin, then **View listing**: the page scrolls to that card and highlights it.
+4. Click **Use my location** and allow it: listings near you, nearest first. Try again and block it: a message says
+   you can still search by city, neighborhood or ZIP.
+5. Click **View a sample dashboard**, open a property, then use **Sample dashboard** to go back. Both pages
    start with a "Sample data" notice.
-4. Open `/landlord` and `/admin` directly: both ask you to sign in.
+6. Open `/landlord` and `/admin` directly: both ask you to sign in.
 
 ### 2. Landlord, account A in browser 1 (5 minutes)
 
 1. Click **Sign in**, choose account A, then **I'm a landlord**. You land on **Your units** and the top bar
    shows **Dashboard** and **Listings**.
 2. Click **Add a unit**. Enter "12 Main Street" as the unit name: it is refused with a message under the field.
-   Use a name like "Sunny room near campus", area "Waltham, MA", a rent, rooms and a move-in date, then **Add unit**.
-3. You land on the unit's own page with a green "Unit added" message and tiles for rent, rooms and move-in date.
+   Use a name like "Sunny room near campus", a rent, rooms and a move-in date. In **Street address** type
+   "415 South St, Waltham" and pick it: the general area fills in as "Waltham, MA" and a small map shows the pin.
+   Drag the pin a little. Leave **Approximate area** selected, then **Add unit**.
+3. You land on the unit's own page with a green "Unit added" message, tiles for rent, rooms and move-in date, and a
+   **Location** section saying renters see an approximate area without the street address.
 4. Click **Edit unit**, change the rent, **Save changes**: back on the unit page with "Changes saved."
    Click **Dashboard**: the card shows the new rent, and the tiles count your units.
 5. Add a second unit with status **Inactive**. Its page says it is hidden from renters. Leave it for now.

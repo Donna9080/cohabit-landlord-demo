@@ -113,7 +113,7 @@ const dev = spawn(
   process.execPath,
   [...WRANGLER, "dev", "--port", String(PORT), "--persist-to", STATE, "--test-scheduled",
     "--var", `BETTER_AUTH_URL:${BASE}`, "--var", `BETTER_AUTH_SECRET:${SECRET}`,
-    "--var", "GOOGLE_CLIENT_ID:local-test-client.apps.googleusercontent.com", "--var", "GOOGLE_CLIENT_SECRET:local-test-only"],
+    "--var", "MAPTILER_KEY:test-browser-key", "--var", "GOOGLE_CLIENT_ID:local-test-client.apps.googleusercontent.com", "--var", "GOOGLE_CLIENT_SECRET:local-test-only"],
   { stdio: ["ignore", "pipe", "pipe"] }
 );
 let devLog = "";
@@ -264,7 +264,51 @@ try {
   r = await api("/api/listings");
   check("Sample listings are flagged, real ones are not", r.data.listings.find((u) => u.id === "00000000-0000-4000-8000-000000000099")?.sample === true && r.data.listings.find((u) => u.id === unitA.id)?.sample === false);
   const listingKeys = Object.keys(r.data.listings[0] || {}).sort().join(",");
-  check("Listings expose only listing fields (no landlord id/email/status)", listingKeys === "area,description,id,monthly_rent,move_in_date,name,rooms_available,sample", listingKeys);
+  check("Listings expose only listing fields (no landlord id/email/status)", listingKeys === "area,description,id,location,monthly_rent,move_in_date,name,rooms_available,sample", listingKeys);
+
+  // ── Location (Massachusetts only; approximate unless the landlord picks exact) ──
+  const meters = (a, b) => {
+    const r = Math.PI / 180;
+    const h = Math.sin(((b.lat - a.lat) * r) / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(((b.lng - a.lng) * r) / 2) ** 2;
+    return 2 * 6371000 * Math.asin(Math.sqrt(h));
+  };
+  const TRUE_SPOT = { lat: 42.376512, lng: -71.235634 };
+  const elm = { address: "14 Elm Street, Waltham, Massachusetts 02453", ...TRUE_SPOT, state: "Massachusetts" };
+  r = await api("/api/config");
+  check("Config endpoint gives the browser its map key", r.status === 200 && r.data.maptilerKey === "test-browser-key");
+  r = await api(`/api/landlord/units/${unitA.id}`, { method: "PUT", as: landlordA, body: unitBody({ name: "Test Unit (edited)", monthly_rent: 1150, location: elm }) });
+  check("Landlord saves an address and pin; default is approximate", r.status === 200 && r.data.unit.address === elm.address && r.data.unit.lat === TRUE_SPOT.lat && r.data.unit.location_precision === "approximate", JSON.stringify(r.data));
+  check("Stored location carries the MapTiler attribution", d1rows(`SELECT geo_source FROM units WHERE id='${unitA.id}'`)[0].geo_source.includes("MapTiler"));
+  r = await api("/api/listings");
+  let shown = r.data.listings.find((u) => u.id === unitA.id);
+  const listingText = JSON.stringify(r.data);
+  check("Renters get an approximate point and a 500 m radius, not the exact pin", shown.location.precision === "approximate" && shown.location.radiusM === 500 && (shown.location.lat !== TRUE_SPOT.lat || shown.location.lng !== TRUE_SPOT.lng), JSON.stringify(shown.location));
+  check("The true spot is inside the circle renters see", meters(shown.location, TRUE_SPOT) < 500, String(meters(shown.location, TRUE_SPOT)));
+  check("Approximate listings never include the street address or exact coordinates", !listingText.includes("Elm Street") && !listingText.includes("42.376512") && !("address" in shown.location));
+  const firstPoint = JSON.stringify(shown.location);
+  r = await api("/api/listings");
+  check("The approximate point is stable between requests", JSON.stringify(r.data.listings.find((u) => u.id === unitA.id).location) === firstPoint);
+  r = await api(`/api/landlord/units/${unitA.id}`, { method: "PUT", as: landlordA, body: unitBody({ name: "Test Unit (edited)", monthly_rent: 1150, location: { ...elm, precision: "exact" } }) });
+  r = await api("/api/listings");
+  shown = r.data.listings.find((u) => u.id === unitA.id);
+  check("Exact: renters see the pin and the address", shown.location.precision === "exact" && shown.location.lat === TRUE_SPOT.lat && shown.location.address === elm.address);
+  r = await api(`/api/landlord/units/${unitA.id}`, { method: "PUT", as: landlordA, body: unitBody({ name: "Test Unit (edited)", monthly_rent: 1150, location: elm }) });
+  check("Switching back to approximate hides the address again", !JSON.stringify((await api("/api/listings")).data).includes("Elm Street"));
+  r = await api("/api/landlord/units", { method: "POST", as: newbie, body: unitBody({ location: { address: "1 Main Street, Providence, Rhode Island", lat: 41.824, lng: -71.4128, state: "Rhode Island" } }) });
+  check("Address outside Massachusetts refused", r.status === 400 && r.data.field === "address");
+  r = await api("/api/landlord/units", { method: "POST", as: newbie, body: unitBody({ location: { ...elm, lat: 40.7128, lng: -74.006 } }) });
+  check("Pin outside Massachusetts refused even if the state says Massachusetts", r.status === 400 && r.data.field === "address");
+  r = await api("/api/landlord/units", { method: "POST", as: newbie, body: unitBody({ location: { ...elm, lat: "near Boston" } }) });
+  check("Malformed coordinates refused", r.status === 400);
+  r = await api("/api/landlord/units", { method: "POST", as: newbie, body: unitBody({ location: { ...elm, precision: "street-view" } }) });
+  check("Unknown precision value refused", r.status === 400);
+  r = await api("/api/landlord/units", { method: "POST", as: newbie, body: unitBody({ name: "14 Elm Street", location: elm }) });
+  check("Street address still refused in the unit name", r.status === 400 && r.data.field === "name");
+  r = await api(`/api/landlord/units/${unitA.id}`, { as: landlordB });
+  check("Another landlord cannot read the exact address (404)", r.status === 404);
+  r = await api("/api/landlord/units", { method: "POST", as: landlordA, body: unitBody({ name: "No location unit", status: "inactive" }) });
+  check("A unit can still be saved without a location", r.status === 201 && r.data.unit.lat === null && r.data.unit.address === null);
+  await api(`/api/landlord/units/${r.data.unit.id}`, { method: "DELETE", as: landlordA });
 
   // ── Renter preferences & matches ──────────────────────────────────────────
   r = await api("/api/renter/preferences", { as: renterA });
@@ -412,7 +456,7 @@ try {
   check("Admin can open the user list", r.status === 200 && Array.isArray(r.data.users) && r.data.users.length === Object.keys(people).length + 1);
   check("Admin list flags sample accounts", r.data.users.filter((u) => u.isSample).map((u) => u.email).join() === "landlord99@sample.example");
   const adminText = JSON.stringify(r.data);
-  const leaked = ["budget", "sleep_schedule", "smoking", "token", "session", "expiresAt", "monthly_rent", "\"id\"", "accountId", "Waltham"].filter((k) => adminText.includes(k));
+  const leaked = ["budget", "sleep_schedule", "smoking", "token", "session", "expiresAt", "monthly_rent", "\"id\"", "accountId", "Waltham", "Elm Street", "42.376"].filter((k) => adminText.includes(k));
   check("Admin list contains no questionnaire answers, unit details, ids, tokens or sessions", leaked.length === 0, leaked.join(","));
   const la = r.data.users.find((u) => u.email === landlordA.email);
   const ra = r.data.users.find((u) => u.email === renterA.email);

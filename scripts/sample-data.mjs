@@ -111,10 +111,21 @@ function lifestyle() {
 }
 
 // Build and validate with the server's own rules.
+// Rough centers of each unit's neighborhood (not real addresses). Shown to renters as approximate areas.
+const AREA_POINTS = [
+  [42.3656, -71.2588], [42.3625, -71.2405], [42.3707, -71.237], [42.3745, -71.229], [42.374, -71.236],
+  [42.3855, -71.221], [42.401, -71.252], [42.382, -71.247], [42.3959, -71.1787], [42.393, -71.185],
+  [42.387, -71.1905], [42.4015, -71.172], [42.3985, -71.165], [42.3905, -71.168], [42.3884, -71.1191],
+  [42.3654, -71.1037], [42.3736, -71.119], [42.3594, -71.1083], [42.396, -71.133], [42.374, -71.1006],
+];
+if (AREA_POINTS.length !== unitRows.length) throw new Error("one area point per sample unit");
+
 const units = unitRows.map(([landlord, name, area, monthly_rent, rooms_available, move_in_date, description], i) => ({
   id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
   landlord_user_id: landlords[landlord - 1].id,
   ...parseUnit({ name, area, monthly_rent, rooms_available, move_in_date, description, status: "active" }),
+  lat: AREA_POINTS[i][0],
+  lng: AREA_POINTS[i][1],
 }));
 const renters = renterRows.map(([name, budget_min, budget_max, move_in_month, area, rooms_needed], i) => {
   const life = lifestyle();
@@ -139,7 +150,7 @@ for (const l of landlords) lines.push(userRow(l, "landlord"));
 for (const r of renters) lines.push(userRow(r, "renter"));
 for (const u of units)
   lines.push(
-    `INSERT INTO units (id, landlord_user_id, name, area, monthly_rent, rooms_available, move_in_date, description, status, created_at, updated_at) VALUES (${[u.id, u.landlord_user_id, u.name, u.area, u.monthly_rent, u.rooms_available, u.move_in_date, u.description, u.status, nowMs, nowMs].map(q).join(", ")});`
+    `INSERT INTO units (id, landlord_user_id, name, area, monthly_rent, rooms_available, move_in_date, description, status, created_at, updated_at, lat, lng, location_precision, geo_source) VALUES (${[u.id, u.landlord_user_id, u.name, u.area, u.monthly_rent, u.rooms_available, u.move_in_date, u.description, u.status, nowMs, nowMs, u.lat, u.lng, "approximate", "Sample: neighborhood center, set by hand"].map(q).join(", ")});`
   );
 for (const r of renters) {
   const p = r.prefs;

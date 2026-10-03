@@ -3,7 +3,7 @@
 //
 //   /                        Front page (public)
 //   /privacy, /terms         Privacy policy and terms of use (public)
-//   /listings                Active units, listing fields only (public)
+//   /listings                Active units, with place search, "Use my location" and a map, listing fields only (public)
 //   /sample, /properties/<id>  Fictional sample dashboard (public, clearly labeled)
 //   /welcome                 After Google sign-in: choose landlord or renter (once)
 //   /account                 Your name, email, account type; delete my account
@@ -313,16 +313,18 @@
         <ul>
           <li><strong>From Google when you sign in:</strong> your name, your email address, and Google's ID for your account. We ask Google only for basic sign-in information (openid, email, profile). We do not keep Google access tokens or your profile photo, and we never see your Google password.</li>
           <li><strong>Your account type:</strong> whether you chose landlord or renter.</li>
-          <li><strong>If you are a landlord:</strong> the units you add: name, general area, monthly rent, rooms available, move-in date, description and status.</li>
+          <li><strong>If you are a landlord:</strong> the units you add: name, general area, monthly rent, rooms available, move-in date, description and status. If you choose to add one, the unit's street address and map pin (Massachusetts only), and whether renters see an approximate area or the exact location.</li>
           <li><strong>If you are a renter:</strong> your questionnaire answers: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets and smoking. Also any “I'm interested” requests you send, with your note.</li>
           <li><strong>To keep you signed in:</strong> one cookie that holds your session. It can't be read by scripts and expires after 7 days without use.</li>
           <li><strong>To limit abuse:</strong> short-lived request counters that include your IP address. They are deleted within about a day.</li>
         </ul>
-        <p>We do not ask for street addresses, phone numbers, government IDs, dates of birth, payment details or health information. Please don't put them in descriptions.</p>
+        <p>Apart from a unit's optional address, we do not ask for street addresses, phone numbers, government IDs, dates of birth, payment details or health information. Please don't put them in names or descriptions.</p>
+        <p><strong>“Use my location”:</strong> when a renter clicks it, the browser asks for permission. The position is used only in that browser to show nearby listings. It is never sent to coHabit or saved.</p>
 
         <h2>Who can see it</h2>
         <ul>
           <li><strong>Everyone:</strong> active units' listing details (name, area, rent, rooms, move-in date, description). Never the landlord's name or email.</li>
+          <li><strong>A unit's location:</strong> by default renters see only an approximate area, a circle about 500 m wide, and never the street address. Only if the landlord chooses “Exact location” do renters see the pin and the address.</li>
           <li><strong>Only you:</strong> your inactive units, and your questionnaire answers. Landlords cannot see your answers. Other renters cannot either, unless you turn on roommate matching.</li>
           <li><strong>Other renters, only if you turn on roommate matching:</strong> renters who also turned it on can see your first name, a compatibility score, and the things you have in common (for example “Both early birds”). They see your email address only if you tick the separate box to share it. Both are off by default and you can turn them off again at any time.</li>
           <li><strong>A landlord, only when you click “I'm interested” on their unit:</strong> that landlord sees your name, your email address and the note you wrote, so they can reply. You can withdraw the request at any time and it disappears from their list. Landlords never see your questionnaire answers.</li>
@@ -334,7 +336,7 @@
         <p>Only to run coHabit: to sign you in, show your units or preferences back to you, and match renters to active units. We don't sell or share your information, show ads, or use tracking or analytics cookies. Matching runs inside coHabit; your answers are not sent to any outside AI service.</p>
 
         <h2>Where it is kept</h2>
-        <p>coHabit runs on Cloudflare, which stores the database and processes requests on our behalf, and keeps short-term technical logs. Google handles the sign-in step.</p>
+        <p>coHabit runs on Cloudflare, which stores the database and processes requests on our behalf, and keeps short-term technical logs. Google handles the sign-in step. Maps and place suggestions come from MapTiler: your browser sends it the text you type in a place or address search and the map area you are viewing, but not who you are.</p>
 
         <h2>Your choices</h2>
         <p>You can edit or delete your units and edit your answers at any time. To delete your account and everything saved with it, sign in, click your name in the top bar, and use <a href="/account">Delete my account</a>. It takes effect immediately. You can also remove coHabit's access in your Google Account under Security → Your connections to third-party apps.</p>
@@ -354,7 +356,7 @@
         <p class="muted">Last updated October 1, 2026. coHabit is a student project and is offered free of charge.</p>
         <ul>
           <li><strong>Listings are provided by landlords.</strong> coHabit does not verify landlords, units or renters, and is not a party to any lease or agreement. Check details yourself before making any commitment or payment.</li>
-          <li><strong>Be accurate and lawful.</strong> Only list units you have the right to offer. Don't post street addresses, phone numbers, other people's personal information, or anything discriminatory, misleading or illegal.</li>
+          <li><strong>Be accurate and lawful.</strong> Only list units you have the right to offer. Only put a street address in the address field (it is hidden from renters unless you choose exact location). Don't post phone numbers, other people's personal information, or anything discriminatory, misleading or illegal.</li>
           <li><strong>Matches are suggestions.</strong> They are based on the budget, area, timing and rooms you entered, and are not a recommendation or guarantee.</li>
           <li><strong>No guarantees.</strong> The service is provided as is. It may change, be unavailable, or be shut down, and saved information may be removed.</li>
           <li><strong>Accounts.</strong> We may remove content or accounts that break these terms.</li>
@@ -491,17 +493,243 @@
     render(false);
   }
 
+  // ── Maps and place search (MapTiler; Massachusetts only) ─────────────────────
+  // Map tiles and place suggestions come straight from MapTiler with a browser key that only
+  // works on this site's address. A renter's own location never leaves the browser.
+  const MA_BBOX = [-73.51, 41.18, -69.85, 42.89];
+  const GREATER_BOSTON = { center: [-71.11, 42.37], zoom: 9.6 };
+  const MAPLIBRE = "https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/";
+  const PLACE_TYPES = "municipality,municipal_district,locality,neighbourhood,postal_code,place";
+  const inMA = ([lng, lat]) => lng >= MA_BBOX[0] && lng <= MA_BBOX[2] && lat >= MA_BBOX[1] && lat <= MA_BBOX[3];
+
+  let mapKey; // undefined until asked; null when maps aren't set up
+  async function getMapKey() {
+    if (mapKey === undefined) {
+      try {
+        mapKey = (await api("/api/config")).maptilerKey || null;
+      } catch {
+        mapKey = null;
+      }
+    }
+    return mapKey;
+  }
+
+  let maplibreLoading = null;
+  function loadMapLibre() {
+    if (window.maplibregl) return Promise.resolve(window.maplibregl);
+    if (!maplibreLoading) {
+      maplibreLoading = new Promise((resolve, reject) => {
+        const css = document.createElement("link");
+        css.rel = "stylesheet";
+        css.href = MAPLIBRE + "maplibre-gl.css";
+        document.head.append(css);
+        const js = document.createElement("script");
+        js.src = MAPLIBRE + "maplibre-gl.js";
+        js.onload = () => resolve(window.maplibregl);
+        js.onerror = () => {
+          maplibreLoading = null;
+          reject(new Error("The map couldn't load."));
+        };
+        document.head.append(js);
+      });
+    }
+    return maplibreLoading;
+  }
+
+  async function createMap(container, view = GREATER_BOSTON) {
+    const key = await getMapKey();
+    if (!key) throw new Error("Maps aren't set up yet.");
+    const maplibregl = await loadMapLibre();
+    const map = new maplibregl.Map({
+      container,
+      style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(key)}`,
+      center: view.center,
+      zoom: view.zoom,
+      maxBounds: [[MA_BBOX[0] - 0.6, MA_BBOX[1] - 0.4], [MA_BBOX[2] + 0.6, MA_BBOX[3] + 0.4]],
+      attributionControl: { compact: true },
+      cooperativeGestures: true,
+    });
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    // The free MapTiler plan asks for its logo, linked, on every map.
+    container.insertAdjacentHTML(
+      "beforeend",
+      `<a class="maptiler-logo" href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener"><img src="https://api.maptiler.com/resources/logo.svg" alt="MapTiler" width="67" height="20" /></a>`
+    );
+    await new Promise((resolve, reject) => {
+      let loaded = false;
+      map.once("load", () => {
+        loaded = true;
+        resolve();
+      });
+      map.on("error", (e) => {
+        if (!loaded) reject(e.error || new Error("The map couldn't load."));
+      });
+      setTimeout(() => !loaded && reject(new Error("The map took too long to load.")), 15000);
+    });
+    return map;
+  }
+
+  function km([lng1, lat1], [lng2, lat2]) {
+    const r = Math.PI / 180;
+    const a = Math.sin(((lat2 - lat1) * r) / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(((lng2 - lng1) * r) / 2) ** 2;
+    return 2 * 6371 * Math.asin(Math.sqrt(a));
+  }
+  const fmtKm = (d) => (d < 1 ? "under 1 km" : `${d < 10 ? d.toFixed(1) : Math.round(d)} km`);
+
+  function circlePolygon([lng, lat], radiusM, steps = 48) {
+    const dLat = radiusM / 111320;
+    const dLng = radiusM / (111320 * Math.cos((lat * Math.PI) / 180));
+    const ring = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = (i / steps) * 2 * Math.PI;
+      ring.push([lng + dLng * Math.cos(t), lat + dLat * Math.sin(t)]);
+    }
+    return { type: "Polygon", coordinates: [ring] };
+  }
+
+  const inMassachusettsFeature = (f) => /Massachusetts/.test(f.place_name || "") || (f.context || []).some((c) => c.text === "Massachusetts");
+  // The town is the part just before "Massachusetts", e.g. "415 South Street, Waltham, Massachusetts 02453".
+  function townOf(f) {
+    const parts = String(f.place_name || "").split(",").map((p) => p.trim());
+    const i = parts.findIndex((p) => /Massachusetts/.test(p));
+    if (i > 0) return parts[i - 1];
+    const ctx = (f.context || []).find((c) => /^municipality\b/.test(String(c.id || "")));
+    return ctx ? ctx.text : f.text;
+  }
+
+  async function searchPlaces(query, types, signal) {
+    const key = await getMapKey();
+    if (!key) throw new Error("unavailable");
+    const params = new URLSearchParams({
+      key,
+      country: "us",
+      bbox: MA_BBOX.join(","),
+      proximity: GREATER_BOSTON.center.join(","),
+      types,
+      autocomplete: "true",
+      limit: "6",
+      language: "en",
+    });
+    const res = await fetch(`https://api.maptiler.com/geocoding/${encodeURIComponent(query)}.json?${params}`, { signal });
+    if (!res.ok) throw new Error(`search ${res.status}`);
+    const data = await res.json();
+    return (data.features || [])
+      .filter((f) => Array.isArray(f.center) && inMA(f.center) && inMassachusettsFeature(f))
+      .map((f) => ({
+        label: String(f.place_name || f.text).replace(/,\s*United States( of America)?$/, ""),
+        center: f.center,
+        bbox: f.bbox,
+        town: townOf(f),
+      }))
+      .filter((p, i, all) => !/^\d{5}-\d{4}\b/.test(p.label) && all.findIndex((q) => q.label === p.label) === i); // no ZIP+4 or duplicates
+  }
+
+  // A text box with place suggestions. Arrow keys move, Enter picks, Escape closes.
+  function placeField({ id, label, placeholder, value = "", hint = "", errorId = "" }) {
+    const described = [hint ? `${id}-hint` : "", errorId].filter(Boolean).join(" ");
+    return `
+      <div class="field place-field">
+        <label for="${id}">${label}</label>
+        <input id="${id}" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${id}-list"
+          autocomplete="off" spellcheck="false" placeholder="${esc(placeholder)}" value="${esc(value)}"${described ? ` aria-describedby="${described}"` : ""} />
+        <ul class="place-list" id="${id}-list" role="listbox" hidden></ul>
+        ${hint ? `<p class="hint" id="${id}-hint">${hint}</p>` : ""}
+        ${errorId ? `<p class="field-error" id="${errorId}"></p>` : ""}
+      </div>`;
+  }
+
+  function attachPlaceField(input, { types, onPick, onType, onEnterWithoutPick, onUnavailable }) {
+    const list = document.getElementById(input.getAttribute("aria-controls"));
+    let items = [];
+    let active = -1;
+    let timer;
+    let controller;
+    let seq = 0;
+    const close = () => {
+      list.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+      input.removeAttribute("aria-activedescendant");
+      active = -1;
+    };
+    const show = () => {
+      list.innerHTML = items
+        .map((it, i) => `<li role="option" id="${list.id}-${i}" data-i="${i}" aria-selected="${i === active}">${esc(it.label)}</li>`)
+        .join("");
+      list.hidden = !items.length;
+      input.setAttribute("aria-expanded", String(items.length > 0));
+      if (active >= 0) input.setAttribute("aria-activedescendant", `${list.id}-${active}`);
+      else input.removeAttribute("aria-activedescendant");
+    };
+    const pick = (i) => {
+      const it = items[i];
+      if (!it) return;
+      input.value = it.label;
+      close();
+      onPick(it);
+    };
+    input.addEventListener("input", () => {
+      if (onType) onType(input.value);
+      clearTimeout(timer);
+      const q = input.value.trim();
+      if (q.length < 2) {
+        items = [];
+        close();
+        return;
+      }
+      timer = setTimeout(async () => {
+        const mine = ++seq;
+        if (controller) controller.abort();
+        controller = new AbortController();
+        try {
+          const found = await searchPlaces(q, types, controller.signal);
+          if (mine !== seq) return;
+          items = found;
+          active = -1;
+          show();
+        } catch (e) {
+          if (e.name === "AbortError" || mine !== seq) return;
+          items = [];
+          close();
+          if (onUnavailable) onUnavailable();
+        }
+      }, 250);
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" && items.length) {
+        e.preventDefault();
+        active = (active + 1) % items.length;
+        show();
+      } else if (e.key === "ArrowUp" && items.length) {
+        e.preventDefault();
+        active = (active - 1 + items.length) % items.length;
+        show();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (!list.hidden && items.length) pick(active >= 0 ? active : 0);
+        else if (onEnterWithoutPick) onEnterWithoutPick(input.value);
+      } else if (e.key === "Escape") close();
+    });
+    list.addEventListener("mousedown", (e) => {
+      const li = e.target.closest("[data-i]");
+      if (!li) return;
+      e.preventDefault();
+      pick(Number(li.dataset.i));
+    });
+    input.addEventListener("blur", () => setTimeout(close, 150));
+  }
+
   function listingCard(u, extra = "") {
     return `
       <li>
-        <article class="card">
+        <article class="card" id="listing-${esc(u.id)}" tabindex="-1">
           <div class="card-top">
             <span class="icon-tile">${icon("house", 20)}</span>
             <span class="card-tags">${u.sample ? `<span class="tag" title="Fictional listing for demonstration">Sample</span>` : ""}${extra}</span>
           </div>
           <div>
             <h2 class="card-title">${esc(u.name)}</h2>
-            <p class="muted small">${esc(u.area)}</p>
+            <p class="muted small">${esc(u.area)}${u.distanceKm != null ? ` · ${fmtKm(u.distanceKm)} away` : ""}</p>
+            ${u.location && u.location.precision === "exact" && u.location.address ? `<p class="small">${esc(u.location.address)}</p>` : ""}
           </div>
           ${u.description ? `<p class="small desc">${esc(u.description)}</p>` : ""}
           <hr />
@@ -511,7 +739,7 @@
       </li>`;
   }
 
-  // Sorting and searching happen in the browser on the list already loaded.
+  // ── Listings: place search, "Use my location", map ───────────────────────────
   const sortSelect = (id, value, options) =>
     `<label class="sort" for="${id}"><span>Sort by</span><select id="${id}">${options
       .map(([v, l]) => `<option value="${v}"${v === value ? " selected" : ""}>${l}</option>`)
@@ -521,42 +749,264 @@
 
   let lastListings = [];
   let listingSort = "date";
-  let listingQuery = "";
+  let listingQuery = ""; // typed text: plain search when no place is picked
+  let searchPoint = null; // { center: [lng, lat], label, radiusKm, mine } — "mine" is the renter's device location, memory only
+  let listingMap = null;
+  let mapMarkers = [];
+  let mapOpen = false;
+
+  const sortOptions = () =>
+    (searchPoint ? [["near", "Nearest first"]] : []).concat([
+      ["date", "Soonest move-in"],
+      ["rent", "Lowest rent"],
+    ]);
+
+  function visibleListings() {
+    const q = listingQuery.trim().toLowerCase();
+    let list = lastListings.map((u) => ({
+      ...u,
+      distanceKm: searchPoint && u.location ? km(searchPoint.center, [u.location.lng, u.location.lat]) : null,
+    }));
+    if (searchPoint) list = list.filter((u) => u.distanceKm != null && u.distanceKm <= searchPoint.radiusKm);
+    else if (q) list = list.filter((u) => `${u.area} ${u.name}`.toLowerCase().includes(q));
+    const order = listingSort === "near" && searchPoint ? (a, b) => a.distanceKm - b.distanceKm : listingSort === "rent" ? byRent : byDate;
+    return list.sort(order);
+  }
 
   function listingsGrid() {
-    const q = listingQuery.trim().toLowerCase();
-    const list = lastListings.filter((u) => !q || `${u.area} ${u.name}`.toLowerCase().includes(q)).sort(listingSort === "rent" ? byRent : byDate);
+    const list = visibleListings();
     const count = document.getElementById("listing-count");
-    if (count) count.textContent = q ? `${plural(list.length, "listing", "listings")} for “${listingQuery.trim()}”` : "";
+    if (count) {
+      const summary = searchPoint
+        ? `${plural(list.length, "listing", "listings")} within ${searchPoint.radiusKm} km of ${esc(searchPoint.label)}`
+        : listingQuery.trim()
+          ? `${plural(list.length, "listing", "listings")} for “${esc(listingQuery.trim())}”`
+          : "";
+      count.innerHTML = summary ? `${summary} <button class="link-button" type="button" data-action="clear-search">Clear</button>` : "";
+    }
+    if (mapOpen) drawListingMarkers(list);
     if (!list.length)
-      return emptyState("No listings match your search", "Try a different area, or clear the search to see everything.", `<button class="btn btn-quiet" type="button" data-action="clear-search">Clear search</button>`);
+      return emptyState(
+        searchPoint ? "No listings nearby" : "No listings match your search",
+        searchPoint ? "Try a nearby city or a ZIP code, or clear the search to see everything." : "Try a different area, or clear the search to see everything.",
+        `<button class="btn btn-quiet" type="button" data-action="clear-search">Clear search</button>`
+      );
     return `<ul class="grid" role="list">${list.map((u) => listingCard(u)).join("")}</ul>`;
+  }
+
+  function refreshListings() {
+    const grid = document.getElementById("listing-grid");
+    if (grid) grid.innerHTML = listingsGrid();
+    const sort = document.getElementById("listing-sort");
+    if (sort) {
+      sort.innerHTML = sortOptions().map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+      sort.value = listingSort;
+    }
+  }
+
+  function setLocationMsg(text) {
+    const el = document.getElementById("location-msg");
+    if (el) el.textContent = text;
+  }
+
+  // Search radius from the size of the picked place: a ZIP or neighborhood is small, a city larger.
+  function radiusFor(place) {
+    if (!Array.isArray(place.bbox) || place.bbox.length !== 4) return 5;
+    const half = km([place.bbox[0], place.bbox[1]], [place.bbox[2], place.bbox[3]]) / 2;
+    return Math.min(15, Math.max(3, Math.round(half + 2)));
+  }
+
+  function mountListings() {
+    const input = document.getElementById("place-search");
+    if (!input) return;
+    attachPlaceField(input, {
+      types: PLACE_TYPES,
+      onPick: (place) => {
+        searchPoint = { center: place.center, label: place.label.split(",")[0], radiusKm: radiusFor(place) };
+        listingQuery = "";
+        listingSort = "near";
+        setLocationMsg("");
+        refreshListings();
+      },
+      onType: (text) => {
+        searchPoint = null;
+        listingQuery = text;
+        if (listingSort === "near") listingSort = "date";
+        refreshListings();
+      },
+      onUnavailable: () => setLocationMsg("Place suggestions aren't available right now. Typing still searches listing names and areas."),
+    });
   }
 
   async function listings() {
     const [{ listings }] = await Promise.all([api("/api/listings"), loadMyInterests()]);
     lastListings = listings;
     listingQuery = "";
+    searchPoint = null;
+    mapOpen = false;
+    if (listingSort === "near") listingSort = "date";
     const hasSample = listings.some((u) => u.sample);
     return {
       title: "Listings",
+      mount: mountListings,
       html: `
       <div class="heading">
         <h1 tabindex="-1">Listings</h1>
-        <p class="muted">${plural(listings.length, "room listing", "room listings")} available now.${isRenter() ? "" : ` Looking for a room? <a href="/renter">See which ones match you</a>.`}</p>
+        <p class="muted">${plural(listings.length, "room listing", "room listings")} in Massachusetts.${isRenter() ? "" : ` Looking for a room? <a href="/renter">See which ones match you</a>.`}</p>
       </div>
       ${hasSample ? `<div class="notice notice-info" role="note"><span>Listings tagged <span class="tag">Sample</span> are fictional and can't be contacted.</span></div>` : ""}
       ${
         listings.length
           ? `<div class="toolbar">
-        <div class="field search"><label for="listing-search">Search by area or name</label><input id="listing-search" type="search" placeholder="Waltham" autocomplete="off" /></div>
-        ${sortSelect("listing-sort", listingSort, [["date", "Soonest move-in"], ["rent", "Lowest rent"]])}
+        ${placeField({ id: "place-search", label: "City, neighborhood or ZIP", placeholder: "Somerville, Back Bay or 02139" })}
+        <div class="toolbar-actions">
+          <button class="btn btn-quiet" type="button" data-action="use-location">Use my location</button>
+          <button class="btn btn-quiet" type="button" data-action="toggle-map" aria-pressed="false" aria-controls="listing-map">Show map</button>
+          ${sortSelect("listing-sort", listingSort, sortOptions())}
+        </div>
       </div>
+      <p class="location-msg" id="location-msg" role="status"></p>
       <p class="muted small" id="listing-count" role="status"></p>
+      <div class="map-panel" id="listing-map" hidden><div class="map-canvas" id="listing-map-canvas"></div></div>
       <div id="listing-grid">${listingsGrid()}</div>`
           : emptyState("No listings yet", "When a landlord adds an active unit, it shows up here.", `<a class="btn btn-quiet" href="/">Back to home</a>`)
       }`,
     };
+  }
+
+  async function toggleMap(button) {
+    const panel = document.getElementById("listing-map");
+    const canvas = document.getElementById("listing-map-canvas");
+    if (!panel || !canvas) return;
+    mapOpen = panel.hidden;
+    panel.hidden = !mapOpen;
+    button.setAttribute("aria-pressed", String(mapOpen));
+    button.textContent = mapOpen ? "Hide map" : "Show map";
+    if (!mapOpen) return;
+    if (listingMap && listingMap.getContainer() === canvas) {
+      listingMap.resize();
+      drawListingMarkers(visibleListings());
+      return;
+    }
+    if (listingMap) listingMap.remove();
+    listingMap = null;
+    canvas.innerHTML = `<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading map…</div>`;
+    try {
+      const map = await createMap(canvas);
+      canvas.querySelector(".loading")?.remove();
+      listingMap = map;
+      if (mapOpen) drawListingMarkers(visibleListings());
+    } catch {
+      canvas.innerHTML = `<div class="map-msg">${emptyState("The map isn't available right now", "The list below still works, and you can search by city, neighborhood or ZIP.")}</div>`;
+    }
+  }
+
+  function drawListingMarkers(list) {
+    const maplibregl = window.maplibregl;
+    if (!listingMap || !maplibregl || !document.body.contains(listingMap.getContainer())) return;
+    mapMarkers.forEach((m) => m.remove());
+    mapMarkers = [];
+    const located = list.filter((u) => u.location);
+    const areas = {
+      type: "FeatureCollection",
+      features: located
+        .filter((u) => u.location.precision === "approximate")
+        .map((u) => ({ type: "Feature", properties: {}, geometry: circlePolygon([u.location.lng, u.location.lat], u.location.radiusM) })),
+    };
+    const source = listingMap.getSource("areas");
+    if (source) source.setData(areas);
+    else {
+      listingMap.addSource("areas", { type: "geojson", data: areas });
+      listingMap.addLayer({ id: "areas-fill", type: "fill", source: "areas", paint: { "fill-color": "#1d4fbf", "fill-opacity": 0.12 } });
+      listingMap.addLayer({ id: "areas-line", type: "line", source: "areas", paint: { "line-color": "#1d4fbf", "line-opacity": 0.45, "line-width": 1 } });
+    }
+    for (const u of located) {
+      const pin = document.createElement("button");
+      pin.type = "button";
+      pin.className = "map-pin" + (u.sample ? " map-pin-sample" : "");
+      pin.setAttribute("aria-label", `${u.name}, ${money(u.monthly_rent)} a month${u.sample ? ", sample listing" : ""}. Show details.`);
+      const where = u.location.precision === "exact" ? esc(u.location.address || "Exact location") : "Approximate area";
+      const popup = new maplibregl.Popup({ offset: 14, maxWidth: "260px" }).setHTML(
+        `<div class="map-popup">${u.sample ? `<span class="tag">Sample</span>` : ""}<strong>${esc(u.name)}</strong><span>${money(u.monthly_rent)}/mo · ${esc(u.area)}</span><span class="muted small">${where}</span><button class="btn btn-small" type="button" data-action="jump-listing" data-id="${esc(u.id)}">View listing</button></div>`
+      );
+      const marker = new maplibregl.Marker({ element: pin }).setLngLat([u.location.lng, u.location.lat]).setPopup(popup).addTo(listingMap);
+      pin.setAttribute("aria-label", `${u.name}, ${money(u.monthly_rent)} a month${u.sample ? ", sample listing" : ""}. Show details.`); // the map library overwrites it
+      mapMarkers.push(marker);
+    }
+    if (searchPoint && searchPoint.mine) {
+      const dot = document.createElement("span");
+      dot.className = "me-dot";
+      dot.title = "You are here (not saved)";
+      mapMarkers.push(new maplibregl.Marker({ element: dot }).setLngLat(searchPoint.center).addTo(listingMap));
+    }
+    const points = located.map((u) => [u.location.lng, u.location.lat]).concat(searchPoint ? [searchPoint.center] : []);
+    if (points.length) {
+      const bounds = points.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(points[0], points[0]));
+      listingMap.fitBounds(bounds, { padding: 48, maxZoom: 13, duration: 0 });
+    } else listingMap.jumpTo(GREATER_BOSTON);
+  }
+
+  function jumpToListing(id) {
+    mapMarkers.forEach((m) => m.getPopup() && m.getPopup().isOpen() && m.togglePopup());
+    const card = document.getElementById(`listing-${id}`);
+    if (!card) return;
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.classList.add("highlight");
+    card.focus({ preventScroll: true });
+    setTimeout(() => card.classList.remove("highlight"), 2500);
+  }
+
+  // Asks the browser for permission only when the button is clicked. The position is used here
+  // to sort and filter, then forgotten: it is never sent to coHabit's server or saved.
+  function useMyLocation(button) {
+    if (!("geolocation" in navigator) || !window.isSecureContext) {
+      setLocationMsg("This browser can't share your location here. Search by city, neighborhood or ZIP instead.");
+      return;
+    }
+    const label = button.textContent;
+    button.disabled = true;
+    button.textContent = "Finding you…";
+    setLocationMsg("");
+    const done = () => {
+      button.disabled = false;
+      button.textContent = label;
+    };
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        done();
+        const here = [pos.coords.longitude, pos.coords.latitude];
+        if (!inMA(here)) {
+          setLocationMsg("You seem to be outside Massachusetts. coHabit only lists rooms in Massachusetts for now, so search for a city instead.");
+          return;
+        }
+        searchPoint = { center: here, label: "your location", radiusKm: 8, mine: true };
+        listingQuery = "";
+        listingSort = "near";
+        const input = document.getElementById("place-search");
+        if (input) input.value = "";
+        setLocationMsg("Showing listings near you. Your location stays in this browser and isn't saved.");
+        refreshListings();
+      },
+      (err) => {
+        done();
+        setLocationMsg(
+          err.code === 1
+            ? "Location access was declined. You can still search by city, neighborhood or ZIP."
+            : "Your location isn't available right now. Search by city, neighborhood or ZIP instead."
+        );
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
+    );
+  }
+
+  function clearListingSearch() {
+    searchPoint = null;
+    listingQuery = "";
+    if (listingSort === "near") listingSort = "date";
+    const input = document.getElementById("place-search");
+    if (input) input.value = "";
+    setLocationMsg("");
+    refreshListings();
   }
 
   // ── Sample (fictional) dashboard and tenant page ─────────────────────────────
@@ -824,6 +1274,14 @@
         ${tile("Move-in date", fmtDate(u.move_in_date))}
       </dl>
       ${u.description ? `<section aria-labelledby="desc-heading"><div class="section-heading"><h2 id="desc-heading">Description</h2></div><p class="desc">${esc(u.description)}</p></section>` : ""}
+      <section aria-labelledby="loc-heading">
+        <div class="section-heading"><h2 id="loc-heading">Location</h2></div>
+        ${
+          u.lat != null
+            ? `<p>${esc(u.address)}</p><p class="muted small">Renters see ${u.location_precision === "exact" ? "the exact pin and this address" : "an approximate area about 500 m wide, without the street address"}.</p>`
+            : emptyState("No location yet", "Add a street address so renters can find this unit on the map and by distance.", `<a class="btn btn-quiet" href="/landlord/units/${encodeURIComponent(u.id)}/edit">Add an address</a>`)
+        }
+      </section>
       <section aria-labelledby="requests-heading">
         <div class="section-heading"><h2 id="requests-heading">Interested renters</h2><span class="muted small">${mine.length ? plural(mine.length, "request", "requests") : ""}</span></div>
         ${
@@ -853,6 +1311,80 @@
       .map(([v, l]) => `<option value="${v}"${v === value ? " selected" : ""}>${esc(l)}</option>`)
       .join("")}</select>`;
 
+  // ── Landlord: address search and a draggable pin on the unit form ────────────
+  let unitLocation = null; // { address, lat, lng, state, anchor: [lng, lat] }
+  let unitMap = null;
+  let unitMarker = null;
+
+  const setPinNote = (text) => {
+    const el = document.getElementById("pin-note");
+    if (el) el.textContent = text;
+  };
+
+  function mountUnitLocation(u) {
+    unitLocation = u.lat != null ? { address: u.address, lat: u.lat, lng: u.lng, state: "Massachusetts", anchor: [u.lng, u.lat] } : null;
+    unitMap = null;
+    unitMarker = null;
+    const input = document.getElementById("f-address");
+    if (!input) return;
+    attachPlaceField(input, {
+      types: "address",
+      onPick: (place) => {
+        unitLocation = { address: place.label, lng: place.center[0], lat: place.center[1], state: "Massachusetts", anchor: place.center };
+        const area = document.getElementById("f-area");
+        if (area && !area.value.trim() && place.town) area.value = `${place.town}, MA`;
+        showUnitPin(true);
+      },
+      onType: () => {
+        unitLocation = null; // the text no longer matches a picked address
+      },
+      onUnavailable: () => setPinNote("Address suggestions aren't available right now. You can save the unit without a location."),
+    });
+    if (unitLocation) showUnitPin(false);
+  }
+
+  async function showUnitPin(justPicked) {
+    const box = document.getElementById("unit-map");
+    if (!box || !unitLocation) return;
+    box.hidden = false;
+    const at = [unitLocation.lng, unitLocation.lat];
+    try {
+      if (!unitMap || !document.body.contains(unitMap.getContainer())) {
+        box.innerHTML = `<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading map…</div>`;
+        unitMap = await createMap(box, { center: at, zoom: 15 });
+        box.querySelector(".loading")?.remove();
+        unitMarker = new window.maplibregl.Marker({ draggable: true, color: "#1e3a6e" }).setLngLat(at).addTo(unitMap);
+        unitMarker.on("dragend", () => {
+          if (!unitLocation) return;
+          const { lng, lat } = unitMarker.getLngLat();
+          if (!inMA([lng, lat]) || km([lng, lat], unitLocation.anchor) > 1) {
+            unitMarker.setLngLat([unitLocation.lng, unitLocation.lat]);
+            setPinNote("Drag the pin only to fine-tune it, within 1 km of the address. For a different address, search again.");
+            return;
+          }
+          unitLocation = { ...unitLocation, lng: Math.round(lng * 1e6) / 1e6, lat: Math.round(lat * 1e6) / 1e6 };
+          setPinNote("Pin moved. Save to keep it.");
+        });
+      } else {
+        unitMarker.setLngLat(at);
+        unitMap.jumpTo({ center: at, zoom: 15 });
+      }
+      setPinNote(justPicked ? "Check the pin. Drag it if it isn't on the building." : "");
+    } catch {
+      box.hidden = true;
+      setPinNote("The map isn't available right now. The address will still be saved.");
+    }
+  }
+
+  function clearUnitLocation() {
+    unitLocation = null;
+    const input = document.getElementById("f-address");
+    if (input) input.value = "";
+    const box = document.getElementById("unit-map");
+    if (box) box.hidden = true;
+    setPinNote("Location removed. Save to apply.");
+  }
+
   async function unitForm(id) {
     const blocked = gate("landlord");
     if (blocked !== undefined) return blocked;
@@ -863,6 +1395,7 @@
     const backHref = isNew ? "/landlord" : `/landlord/units/${encodeURIComponent(id)}`;
     return {
       title: isNew ? "Add a unit" : `Edit ${u.name}`,
+      mount: () => mountUnitLocation(u),
       html: `
       <a class="back" href="${backHref}">${icon("left", 16)} ${isNew ? "Dashboard" : "Back to unit"}</a>
       <div class="heading">
@@ -883,6 +1416,18 @@
             ${field("status", "Status", select("status", [["active", "Active: shown to renters"], ["inactive", "Inactive: hidden"]], u.status))}
           </div>
           ${field("description", "Short description (optional)", `<textarea id="f-description" name="description" maxlength="1000" rows="4" aria-describedby="h-description e-description">${esc(u.description)}</textarea>`, "Up to 1,000 characters. Leave out phone numbers and addresses.")}
+        </fieldset>
+        <fieldset>
+          <legend>Location (optional)</legend>
+          ${placeField({ id: "f-address", label: "Street address", placeholder: "14 Elm St, Waltham", value: u.address || "", hint: "Massachusetts only. Pick the address from the list, then drag the pin if it's off.", errorId: "e-address" })}
+          <div class="mini-map" id="unit-map"${u.lat == null ? " hidden" : ""}></div>
+          <p class="hint" id="pin-note" role="status"></p>
+          <div class="field" role="radiogroup" aria-labelledby="precision-label">
+            <span class="field-label" id="precision-label">What renters see</span>
+            <label class="check"><input type="radio" name="precision" value="approximate"${u.location_precision !== "exact" ? " checked" : ""} /><span><strong>Approximate area</strong> (recommended): a circle about 500 m wide, no street address</span></label>
+            <label class="check"><input type="radio" name="precision" value="exact"${u.location_precision === "exact" ? " checked" : ""} /><span><strong>Exact location</strong>: the pin and the street address</span></label>
+          </div>
+          <div class="actions"><button class="btn btn-small btn-quiet" type="button" data-action="clear-location">Remove location</button></div>
         </fieldset>
         <p class="form-error" id="form-error" role="alert"></p>
         <div class="actions">
@@ -919,6 +1464,14 @@
   async function submitUnit(form) {
     const id = form.dataset.unitId;
     const body = formData(form, ["monthly_rent", "rooms_available"]);
+    const precision = body.precision === "exact" ? "exact" : "approximate";
+    delete body.precision;
+    const addressText = (document.getElementById("f-address")?.value || "").trim();
+    if (addressText && !unitLocation) {
+      showErrors(form, { field: "address", message: "Pick the address from the list, or clear the field to save without a location." });
+      return;
+    }
+    body.location = addressText && unitLocation ? { address: unitLocation.address, lat: unitLocation.lat, lng: unitLocation.lng, state: unitLocation.state, precision } : null;
     const btn = form.querySelector("[type=submit]");
     const label = btn.textContent;
     btn.disabled = true;
@@ -1285,6 +1838,13 @@
       : "";
     flash = null;
     app.innerHTML = notice + view.html;
+    if (view.mount) {
+      try {
+        view.mount();
+      } catch (e) {
+        console.error(e);
+      }
+    }
     document.title = `${view.title} · coHabit`;
     app.setAttribute("aria-busy", "false");
     renderAccount();
@@ -1345,11 +1905,11 @@
       else if (a === "reload") render(true);
       else if (a === "dismiss-notice") action.closest(".notice").remove();
       else if (a === "edit-prefs") togglePrefsForm();
-      else if (a === "clear-search") {
-        listingQuery = "";
-        document.getElementById("listing-search").value = "";
-        document.getElementById("listing-grid").innerHTML = listingsGrid();
-      }
+      else if (a === "clear-search") clearListingSearch();
+      else if (a === "use-location") useMyLocation(action);
+      else if (a === "toggle-map") toggleMap(action);
+      else if (a === "jump-listing") jumpToListing(action.dataset.id);
+      else if (a === "clear-location") clearUnitLocation();
       return;
     }
     const link = e.target.closest("a");
@@ -1392,13 +1952,8 @@
       document.getElementById("matches").innerHTML = matchesHtml(lastMatches);
     } else if (e.target.id === "listing-sort") {
       listingSort = e.target.value;
-      document.getElementById("listing-grid").innerHTML = listingsGrid();
+      refreshListings();
     }
-  });
-  document.addEventListener("input", (e) => {
-    if (e.target.id !== "listing-search") return;
-    listingQuery = e.target.value;
-    document.getElementById("listing-grid").innerHTML = listingsGrid();
   });
 
   window.addEventListener("popstate", () => render(true));

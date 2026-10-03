@@ -46,6 +46,11 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       Frontend only. Deployed as `697c8f5b-6eff-4230-9e68-5152c6b923cc`; listings search and sort checked live.
 - [ ] After the polish: owner re-checks on the live site with real Google accounts (sign in, first-time landlord/renter
       choice, dashboard to unit page to edit and back, renter page, admin page)
+- [x] Location search and maps, Massachusetts only (2026-10-02, local): MapTiler Free (no billing), place search,
+      Use my location (browser only), map with approximate circles and pin labels that jump to the card, landlord
+      address search with draggable pin and approximate/exact choice. Migration `0004_unit_location.sql` (additive)
+      applied locally only. 202/202 tests.
+- [ ] Production: migration 0004, `MAPTILER_KEY` secret, sample data reload, deploy (each needs the owner's approval)
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
 - [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works
 - [ ] Live test with a second Google account as renter
@@ -80,6 +85,10 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - **Renter contacts landlord**: a one-way request, not a message thread. The renter's name and email go to that
   landlord at the moment the renter sends it (stated on the form). The landlord's email is never shown; they reply
   by email. Sample listings can't be contacted. No email notification is sent (no mail service, $0).
+- **Maps** (owner's choices, 2026-10-02): MapTiler Free (non-commercial, no card, pauses instead of charging);
+  Massachusetts only; street address plus pin stored with approximate as the default and exact as an option; pin
+  labels jump to the existing listing card; sample units get hand-placed neighborhood points. Renter location is used
+  in the browser only.
 - **Public listings**: visitors and renters see active units' listing fields only.
 - **Google tokens are not stored**; IP/user agent not stored on sessions; Google photo not stored.
 - **No implicit account linking**: one Google subject ID = one user.

@@ -72,6 +72,26 @@ function noAddress(s, field) {
 
 export const UNIT_STATUSES = ["active", "inactive"];
 
+// coHabit is Massachusetts-only for now. West, south, east, north.
+export const MA_BBOX = [-73.51, 41.18, -69.85, 42.89];
+export const inMassachusetts = (lat, lng) => lng >= MA_BBOX[0] && lng <= MA_BBOX[2] && lat >= MA_BBOX[1] && lat <= MA_BBOX[3];
+
+// Optional location picked from the address search. The street address is allowed here and only here.
+function parseLocation(body) {
+  const v = body.location;
+  if (v == null) return null;
+  if (!isObj(v)) throw new InvalidInput("address", "Choose an address from the list.");
+  const address = text(v, "address", { min: 5, max: 200 });
+  const lat = Number(v.lat);
+  const lng = Number(v.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new InvalidInput("address", "Choose an address from the list.");
+  if (v.state !== "Massachusetts" || !inMassachusetts(lat, lng)) {
+    throw new InvalidInput("address", "coHabit only lists places in Massachusetts for now.");
+  }
+  const precision = v.precision == null ? "approximate" : oneOf(v, "precision", ["approximate", "exact"]);
+  return { address, lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6, precision };
+}
+
 export function parseUnit(body) {
   if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
   return {
@@ -82,6 +102,7 @@ export function parseUnit(body) {
     move_in_date: date(body, "move_in_date"),
     description: body.description == null ? "" : noAddress(text(body, "description", { max: 1000 }), "description"),
     status: oneOf(body, "status", UNIT_STATUSES),
+    location: parseLocation(body),
   };
 }
 

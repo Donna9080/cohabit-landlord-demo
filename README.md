@@ -26,7 +26,7 @@
 
 Screenshots were taken on a local copy with made-up accounts. All names, emails and listings shown are fictional.
 
-Landlords list rooms; renters answer a short questionnaire and see rooms that fit. Sign-in is with Google. Data is stored in Cloudflare D1.
+Landlords list rooms; renters answer a short questionnaire and see rooms that fit, or search by city, neighborhood or ZIP on a map (Massachusetts only). Sign-in is with Google. Data is stored in Cloudflare D1.
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
 - **Design (Figma):** https://www.figma.com/design/QDAewcvq3aSsZgfQvw1v4X
