@@ -55,6 +55,8 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       reloaded (20 sample units with approximate locations), deployed as `90064451-fa90-4867-b73b-7f1776ff32e1`.
       Live: place suggestions, Cambridge search (9 listings, 9 pins), approximate-only listing output, visitor 401s;
       MapTiler key accepted from the site (200) and refused from another origin or none (403).
+- [x] Map always shown on Listings (no Show map button), deployed as `2e452e10-a5f3-4a87-b70a-b6970607f827`;
+      checked live in headless Edge on desktop and phone: 20 pins, search narrows to 10, Clear restores 20.
 - [ ] Owner checks live: dragging the pin (1 km limit), the real Use my location permission prompt, a real unit with an address
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
 - [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works
