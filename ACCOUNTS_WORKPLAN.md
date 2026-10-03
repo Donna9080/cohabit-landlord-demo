@@ -50,7 +50,12 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       Use my location (browser only), map with approximate circles and pin labels that jump to the card, landlord
       address search with draggable pin and approximate/exact choice. Migration `0004_unit_location.sql` (additive)
       applied locally only. 202/202 tests.
-- [ ] Production: migration 0004, `MAPTILER_KEY` secret, sample data reload, deploy (each needs the owner's approval)
+- [x] Production (2026-10-02, each approved by the owner): migration 0004 applied (restore bookmark from just before:
+      `00000032-00000000-000050f9-cded0b9a637a3ca8de724dfb34fae1b6`), `MAPTILER_KEY` secret set by the owner, sample data
+      reloaded (20 sample units with approximate locations), deployed as `90064451-fa90-4867-b73b-7f1776ff32e1`.
+      Live: place suggestions, Cambridge search (9 listings, 9 pins), approximate-only listing output, visitor 401s;
+      MapTiler key accepted from the site (200) and refused from another origin or none (403).
+- [ ] Owner checks live: dragging the pin (1 km limit), the real Use my location permission prompt, a real unit with an address
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
 - [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works
 - [ ] Live test with a second Google account as renter
