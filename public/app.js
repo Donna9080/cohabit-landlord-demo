@@ -13,6 +13,7 @@
 //   /landlord/units/<id>/edit  Edit or delete a unit
 //   /renter                  A renter's match preferences and matching units
 //   /admin                   Read-only user list (admins only; enforced by the server)
+//   /admin/import            Import external listings from an authorized source (admins only)
 (function () {
   const app = document.getElementById("app");
   const brandSub = document.getElementById("brand-sub");
@@ -355,7 +356,7 @@
         <h1 tabindex="-1">Terms of use</h1>
         <p class="muted">Last updated October 1, 2026. coHabit is a student project and is offered free of charge.</p>
         <ul>
-          <li><strong>Listings are provided by landlords.</strong> coHabit does not verify landlords, units or renters, and is not a party to any lease or agreement. Check details yourself before making any commitment or payment.</li>
+          <li><strong>Listings are provided by landlords,</strong> or imported from other websites that allow coHabit to show them (tagged External, with a link to the original). Check details on the original listing. coHabit does not verify landlords, units or renters, and is not a party to any lease or agreement. Check details yourself before making any commitment or payment.</li>
           <li><strong>Be accurate and lawful.</strong> Only list units you have the right to offer. Only put a street address in the address field (it is hidden from renters unless you choose exact location). Don't post phone numbers, other people's personal information, or anything discriminatory, misleading or illegal.</li>
           <li><strong>Matches are suggestions.</strong> They are based on the budget, area, timing and rooms you entered, and are not a recommendation or guarantee.</li>
           <li><strong>No guarantees.</strong> The service is provided as is. It may change, be unavailable, or be shut down, and saved information may be removed.</li>
@@ -396,6 +397,7 @@
 
   // What goes under a listing card, depending on who is looking.
   function interestFooter(u) {
+    if (u.external) return ""; // the card links to its source instead
     if (u.sample) return `<p class="small muted interest">Sample listing: there is no landlord to contact.</p>`;
     if (!me.user) return `<p class="small interest"><a href="/renter">Sign in as a renter</a> to tell the landlord you're interested.</p>`;
     if (!isRenter()) return "";
@@ -718,7 +720,43 @@
     input.addEventListener("blur", () => setTimeout(close, 150));
   }
 
+  // An imported listing: labeled External, links to its source, never "contact the landlord here".
+  const rentBasisLabel = (b) => (b === "unit" ? "whole unit" : b === "room" ? "per room" : "basis not stated");
+  const roomsLabel = (n) => (n == null ? "Not listed" : n === 0 ? "Studio" : String(n));
+  function sourceDateLine(u) {
+    const s = u.source;
+    const when = s.updatedDate ? `Updated ${fmtDate(s.updatedDate)}` : s.postedDate ? `Posted ${fmtDate(s.postedDate)}` : "No posting date given";
+    return `${when} on ${esc(s.name)} · retrieved ${fmtDate(s.retrievedDate)}`;
+  }
+  function externalCard(u) {
+    return `
+      <li>
+        <article class="card card-external" id="listing-${esc(u.id)}" tabindex="-1">
+          <div class="card-top">
+            <span class="icon-tile">${icon("building", 20)}</span>
+            <span class="card-tags"><span class="tag tag-external" title="Imported from ${esc(u.source.name)} with permission">External</span></span>
+          </div>
+          <div>
+            <h2 class="card-title">${esc(u.name)}</h2>
+            <p class="muted small">${esc(u.area)}${u.distanceKm != null ? ` · ${fmtKm(u.distanceKm)} away` : ""}</p>
+            ${u.address && u.address !== u.name ? `<p class="small">${esc(u.address)}</p>` : ""}
+          </div>
+          <hr />
+          <dl class="stats">
+            <div><dt>Rent</dt><dd>${u.monthly_rent != null ? `${money(u.monthly_rent)}/mo` : "Not listed"}</dd><dd class="stat-note">${u.monthly_rent != null ? rentBasisLabel(u.rent_basis) : ""}</dd></div>
+            <div><dt>Beds</dt><dd>${roomsLabel(u.bedrooms)}</dd></div>
+            <div><dt>Baths</dt><dd>${u.bathrooms == null ? "Not listed" : u.bathrooms}</dd></div>
+            <div><dt>Available</dt><dd>${u.move_in_date ? fmtDate(u.move_in_date) : "Not listed"}</dd></div>
+          </dl>
+          ${u.fees ? `<p class="small muted">Fees: ${esc(u.fees)}</p>` : ""}
+          <p class="small muted">${sourceDateLine(u)}</p>
+          <a class="card-link" href="${esc(u.source.url)}" target="_blank" rel="noopener noreferrer">View on ${esc(u.source.name)} ${icon("right", 16)}</a>
+        </article>
+      </li>`;
+  }
+
   function listingCard(u, extra = "") {
+    if (u.external) return externalCard(u);
     return `
       <li>
         <article class="card" id="listing-${esc(u.id)}" tabindex="-1">
@@ -744,8 +782,10 @@
     `<label class="sort" for="${id}"><span>Sort by</span><select id="${id}">${options
       .map(([v, l]) => `<option value="${v}"${v === value ? " selected" : ""}>${l}</option>`)
       .join("")}</select></label>`;
-  const byRent = (a, b) => a.monthly_rent - b.monthly_rent;
-  const byDate = (a, b) => a.move_in_date.localeCompare(b.move_in_date);
+  // Imported listings can lack a rent or a date; those sort last.
+  const nullsLast = (x, y, compare) => (x == null ? (y == null ? 0 : 1) : y == null ? -1 : compare(x, y));
+  const byRent = (a, b) => nullsLast(a.monthly_rent, b.monthly_rent, (x, y) => x - y);
+  const byDate = (a, b) => nullsLast(a.move_in_date, b.move_in_date, (x, y) => x.localeCompare(y));
 
   let lastListings = [];
   let listingSort = "date";
@@ -858,6 +898,7 @@
         <p class="muted">${plural(listings.length, "room listing", "room listings")} in Massachusetts.${isRenter() ? "" : ` Looking for a room? <a href="/renter">See which ones match you</a>.`}</p>
       </div>
       ${hasSample ? `<div class="notice notice-info" role="note"><span>Listings tagged <span class="tag">Sample</span> are fictional and can't be contacted.</span></div>` : ""}
+      ${listings.some((u) => u.external) ? `<div class="notice notice-info" role="note"><span>Listings tagged <span class="tag tag-external">External</span> come from other websites that allow coHabit to show them. Contact them through the original listing.</span></div>` : ""}
       ${
         listings.length
           ? `<div class="toolbar">
@@ -922,14 +963,14 @@
     for (const u of located) {
       const pin = document.createElement("button");
       pin.type = "button";
-      pin.className = "map-pin" + (u.sample ? " map-pin-sample" : "");
-      pin.setAttribute("aria-label", `${u.name}, ${money(u.monthly_rent)} a month${u.sample ? ", sample listing" : ""}. Show details.`);
+      pin.className = "map-pin" + (u.sample ? " map-pin-sample" : u.external ? " map-pin-external" : "");
+      const pinLabel = `${u.name}, ${u.monthly_rent != null ? money(u.monthly_rent) + " a month" : "rent not listed"}${u.sample ? ", sample listing" : u.external ? ", external listing" : ""}. Show details.`;
       const where = u.location.precision === "exact" ? esc(u.location.address || "Exact location") : "Approximate area";
       const popup = new maplibregl.Popup({ offset: 14, maxWidth: "260px" }).setHTML(
-        `<div class="map-popup">${u.sample ? `<span class="tag">Sample</span>` : ""}<strong>${esc(u.name)}</strong><span>${money(u.monthly_rent)}/mo · ${esc(u.area)}</span><span class="muted small">${where}</span><button class="btn btn-small" type="button" data-action="jump-listing" data-id="${esc(u.id)}">View listing</button></div>`
+        `<div class="map-popup">${u.sample ? `<span class="tag">Sample</span>` : u.external ? `<span class="tag tag-external">External · ${esc(u.source.name)}</span>` : ""}<strong>${esc(u.name)}</strong><span>${u.monthly_rent != null ? `${money(u.monthly_rent)}/mo${u.external ? " " + rentBasisLabel(u.rent_basis) : ""}` : "Rent not listed"} · ${esc(u.area)}</span><span class="muted small">${where}</span><button class="btn btn-small" type="button" data-action="jump-listing" data-id="${esc(u.id)}">View listing</button></div>`
       );
       const marker = new maplibregl.Marker({ element: pin }).setLngLat([u.location.lng, u.location.lat]).setPopup(popup).addTo(listingMap);
-      pin.setAttribute("aria-label", `${u.name}, ${money(u.monthly_rent)} a month${u.sample ? ", sample listing" : ""}. Show details.`); // the map library overwrites it
+      pin.setAttribute("aria-label", pinLabel); // the map library overwrites it
       mapMarkers.push(marker);
     }
     if (searchPoint && searchPoint.mine) {
@@ -1719,9 +1760,12 @@
     return {
       title: "Users",
       html: `
-      <div class="heading">
-        <h1 tabindex="-1">Users</h1>
-        <p class="muted">Everyone who has signed in. Read only.</p>
+      <div class="heading-row">
+        <div class="heading">
+          <h1 tabindex="-1">Users</h1>
+          <p class="muted">Everyone who has signed in. Read only.</p>
+        </div>
+        <a class="btn btn-quiet" href="/admin/import">Import listings</a>
       </div>
       <dl class="tiles">
         ${tile("People", real.length)}
@@ -1734,6 +1778,213 @@
         <tbody>${rows}</tbody>
       </table>`,
     };
+  }
+
+  // ── Admin: import external listings from an authorized source ────────────────
+  let importCsv = "";
+  let importFileName = "";
+
+  const PERMISSION_OPTIONS = [
+    ["", "Choose…"],
+    ["publisher_authorization", "The listing website authorized republication"],
+    ["licensed_provider", "A licensed data provider (license allows public display)"],
+    ["landlord_permission", "The landlords gave permission"],
+  ];
+  const STATUS_LABEL = { ready: "Ready", excluded: "Not available", duplicate: "Duplicate", invalid: "Needs fixing", over_limit: "Over limit" };
+
+  async function adminImportPage() {
+    if (!me.user) return signInView("/admin/import");
+    const data = await api("/api/admin/imports");
+    importCsv = "";
+    importFileName = "";
+    const batchRows = data.batches
+      .map(
+        (b) => `
+        <tr>
+          <td><span class="name">${esc(b.sourceName)}</span><span class="small muted block">${esc(PERMISSION_OPTIONS.find((o) => o[0] === b.permissionBasis)?.[1] || b.permissionBasis)}</span></td>
+          <td data-label="Imported">${esc(fmtJoined(b.createdAt))}${b.createdBy ? ` · ${esc(b.createdBy)}` : ""}</td>
+          <td data-label="Listings">${b.rowsImported} of ${b.rowsReceived} rows</td>
+          <td data-label="Status">${b.status === "imported" ? `<span class="pill pill-ok"><span class="dot" aria-hidden="true"></span>Live</span>` : `<span class="pill pill-off"><span class="dot" aria-hidden="true"></span>Rolled back ${esc(fmtJoined(b.rolledBackAt))}</span>`}</td>
+          <td>${b.status === "imported" ? `<button class="btn btn-small btn-quiet" type="button" data-action="import-rollback" data-id="${esc(b.id)}">Roll back</button>` : ""}</td>
+        </tr>`
+      )
+      .join("");
+    return {
+      title: "Import listings",
+      html: `
+      <a class="back" href="/admin">${icon("left", 16)} Users</a>
+      <div class="heading">
+        <h1 tabindex="-1">Import listings</h1>
+        <p class="muted">Add rental listings from a source that allows coHabit to republish them. Imported listings are labeled External, link to their source, and never belong to a landlord account. Each import can be rolled back.</p>
+      </div>
+      <dl class="tiles">
+        ${tile("Imported listings", data.externalCount, "live on Listings and the map")}
+        ${tile("Sample listings", data.sampleCount, data.sampleHidden ? "hidden from public search" : "shown in public search")}
+      </dl>
+      <div class="notice notice-info" role="note"><span>${
+        data.sampleHidden
+          ? "Sample listings are hidden from Listings, the map and renters' matches. They're kept for testing."
+          : "Sample listings are shown publicly. They're hidden automatically after a successful import."
+      }</span><button class="btn btn-small btn-quiet" type="button" data-action="toggle-samples" data-hide="${data.sampleHidden ? "false" : "true"}">${data.sampleHidden ? "Show sample listings" : "Hide sample listings"}</button></div>
+
+      <form class="form" id="import-form" novalidate>
+        <fieldset>
+          <legend>1. Permission</legend>
+          ${field("source_name", "Source name", input("source_name", 'type="text" maxlength="80" autocomplete="off" placeholder="Name of the website, provider or landlord"', ""), "Used when a row has no source_name of its own.")}
+          ${field("permission_basis", "What allows coHabit to publish these listings", select("permission_basis", PERMISSION_OPTIONS, ""))}
+          ${field("permission_note", "Permission details", `<textarea id="f-permission_note" name="permission_note" rows="3" maxlength="500" aria-describedby="h-permission_note e-permission_note" placeholder="Who granted it, when, and where the written permission is kept"></textarea>`, "Kept with the import for your records. Don't import anything you only found on a website.")}
+        </fieldset>
+        <fieldset>
+          <legend>2. Listings file</legend>
+          ${field("csv_file", "CSV file", `<input id="f-csv_file" name="csv_file" type="file" accept=".csv,text/csv" aria-describedby="h-csv_file e-csv_file" />`, `Use the <a href="/import-template.csv" download>CSV template</a>. Up to 500 rows; the best ${data.limit} are imported.`)}
+          <details class="columns-help">
+            <summary>What goes in each column</summary>
+            <ul class="small">
+              <li><strong>source_url</strong> (required): the listing's https:// page on the source.</li>
+              <li><strong>property_name</strong> or <strong>address</strong>, and <strong>city</strong> or <strong>zip</strong> (Massachusetts only).</li>
+              <li><strong>rent</strong>: one amount, no ranges. <strong>rent_basis</strong>: <em>unit</em> (whole apartment) or <em>room</em>.</li>
+              <li><strong>bedrooms</strong> (or "studio"), <strong>bathrooms</strong>, <strong>fees</strong>, <strong>available_date</strong>.</li>
+              <li><strong>listing_status</strong>: active or available; rented, expired and unavailable rows are skipped.</li>
+              <li><strong>source_posted_date</strong>, <strong>source_updated_date</strong>, <strong>retrieved_date</strong> as YYYY-MM-DD.</li>
+              <li><strong>latitude</strong>, <strong>longitude</strong> are used only if <strong>coordinates_permitted</strong> is yes.</li>
+              <li><strong>photo_url</strong> is used only with a <strong>photo_license</strong> that allows reuse.</li>
+              <li>Leave anything you don't have blank. Nothing is filled in for you.</li>
+            </ul>
+          </details>
+        </fieldset>
+        <p class="form-error" id="form-error" role="alert"></p>
+        <div class="actions"><button class="btn" type="button" data-action="import-preview">Preview import</button></div>
+      </form>
+      <section id="import-preview" aria-live="polite"></section>
+
+      <section aria-labelledby="batches-heading">
+        <div class="section-heading"><h2 id="batches-heading">Past imports</h2></div>
+        ${
+          data.batches.length
+            ? `<table class="tenants batches"><thead><tr><th scope="col">Source</th><th scope="col">Imported</th><th scope="col">Listings</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>${batchRows}</tbody></table>`
+            : emptyState("No imports yet", "Preview a CSV file above. Nothing is saved until you confirm the import.")
+        }
+      </section>`,
+    };
+  }
+
+  function importBody(form, withPermission) {
+    const body = { csv: importCsv, sourceName: form.elements.source_name.value.trim() };
+    if (withPermission) {
+      body.permission = { basis: form.elements.permission_basis.value, note: form.elements.permission_note.value.trim() };
+      body.confirm = document.getElementById("import-confirm")?.checked === true;
+    }
+    return body;
+  }
+
+  function previewHtml(p) {
+    const s = p.summary;
+    const rows = p.rows
+      .map((r) => {
+        const l = r.listing;
+        const notes = r.reasons.concat(r.warnings).map(esc).join("; ");
+        const kind = r.status === "ready" ? "ok" : r.status === "invalid" ? "bad" : "off";
+        return `<tr>
+          <td data-label="Row">${r.row}</td>
+          <td data-label="Status"><span class="pill pill-${kind}"><span class="dot" aria-hidden="true"></span>${STATUS_LABEL[r.status]}</span></td>
+          <td data-label="Listing"><span class="name">${esc(l.property_name || l.address || "(no name)")}</span><span class="small muted block">${esc([l.address !== l.property_name ? l.address : "", l.city, l.zip].filter(Boolean).join(", "))}</span></td>
+          <td data-label="Rent">${l.rent != null ? `${money(l.rent)} <span class="small muted">${rentBasisLabel(l.rent_basis)}</span>` : "—"}</td>
+          <td data-label="Beds / baths">${roomsLabel(l.bedrooms)} / ${l.bathrooms == null ? "—" : l.bathrooms}</td>
+          <td data-label="Source date">${l.source_updated_date || l.source_posted_date ? fmtDate(l.source_updated_date || l.source_posted_date) : "—"}</td>
+          <td data-label="Notes" class="note">${notes || "—"}</td>
+        </tr>`;
+      })
+      .join("");
+    return `
+      <div class="section-heading"><h2>Preview</h2><span class="muted small">${plural(s.received, "row", "rows")} checked. Nothing has been saved yet.</span></div>
+      <dl class="tiles">
+        ${tile("Ready to import", s.ready, `best ${p.limit}: priority cities, most recent first`)}
+        ${tile("Not available", s.excluded, "rented, expired or unavailable")}
+        ${tile("Duplicates", s.duplicate)}
+        ${tile("Need fixing", s.invalid)}
+        ${s.over_limit ? tile("Over limit", s.over_limit, "import them next time") : ""}
+      </dl>
+      ${p.unknownColumns.length ? `<p class="hint">Ignored columns: ${p.unknownColumns.map(esc).join(", ")}</p>` : ""}
+      <table class="tenants preview"><thead><tr><th scope="col">Row</th><th scope="col">Status</th><th scope="col">Listing</th><th scope="col">Rent</th><th scope="col">Beds / baths</th><th scope="col">Source date</th><th scope="col">Notes</th></tr></thead><tbody>${rows}</tbody></table>
+      ${
+        s.ready
+          ? `<div class="import-confirm">
+        <label class="check"><input type="checkbox" id="import-confirm" /><span>I confirm coHabit has permission to republish these ${plural(s.ready, "listing", "listings")}, as described above.</span></label>
+        <p class="field-error" id="e-confirm"></p>
+        <div class="actions"><button class="btn" type="button" data-action="import-commit">Import ${plural(s.ready, "listing", "listings")}</button></div>
+      </div>`
+          : emptyState("Nothing to import", "No rows are ready. Fix the rows marked Needs fixing, or check the file is the right one.")
+      }`;
+  }
+
+  async function previewImportFile(button) {
+    const form = document.getElementById("import-form");
+    const out = document.getElementById("import-preview");
+    showErrors(form, { message: "" });
+    if (!importCsv.trim()) return showErrors(form, { field: "csv_file", message: "Choose a CSV file first." });
+    button.disabled = true;
+    button.textContent = "Checking…";
+    try {
+      const p = await api("/api/admin/imports/preview", { method: "POST", body: importBody(form, false) });
+      out.innerHTML = previewHtml(p);
+      out.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      showErrors(form, e.field === "csv" ? { field: "csv_file", message: e.message } : e);
+    } finally {
+      button.disabled = false;
+      button.textContent = "Preview import";
+    }
+  }
+
+  async function commitImport(button) {
+    const form = document.getElementById("import-form");
+    const body = importBody(form, true);
+    document.getElementById("e-confirm").textContent = "";
+    if (!body.confirm) {
+      document.getElementById("e-confirm").textContent = "Tick the box to confirm coHabit may republish these listings.";
+      return;
+    }
+    if (!(await confirmDialog({ title: "Import these listings?", text: "They go live on Listings and the map right away, labeled External. Sample listings will be hidden from public search. You can roll the import back later.", confirmLabel: "Import" }))) return;
+    button.disabled = true;
+    button.textContent = "Importing…";
+    try {
+      const r = await api("/api/admin/imports", { method: "POST", body });
+      setFlash(`Imported ${plural(r.imported, "listing", "listings")}. Sample listings are now hidden from public search.`);
+      render(true);
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      button.disabled = false;
+      button.textContent = "Import listings";
+      const map = { permission_basis: "permission_basis", permission_note: "permission_note", csv: "csv_file" };
+      if (map[e.field]) showErrors(form, { field: map[e.field], message: e.message });
+      else if (e.field === "confirm") document.getElementById("e-confirm").textContent = e.message;
+      else toast(e.message);
+      form.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  async function rollbackImport(id) {
+    if (!(await confirmDialog({ title: "Roll back this import?", text: "Its listings are removed from Listings and the map. The record of the import is kept.", confirmLabel: "Roll back", danger: true }))) return;
+    try {
+      const r = await api(`/api/admin/imports/${encodeURIComponent(id)}/rollback`, { method: "POST", body: {} });
+      setFlash(`Removed ${plural(r.removed, "imported listing", "imported listings")}.${r.sampleHidden ? "" : " Sample listings are shown again."}`);
+      render(false);
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      toast(e.message);
+    }
+  }
+
+  async function toggleSampleListings(hide) {
+    try {
+      await api("/api/admin/settings", { method: "POST", body: { hideSampleListings: hide } });
+      setFlash(hide ? "Sample listings are hidden from public search." : "Sample listings are shown in public search.");
+      render(false);
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      toast(e.message);
+    }
   }
 
   // ── Account: who you are, and delete my account ──────────────────────────────
@@ -1813,6 +2064,7 @@
     if (m) return unitPage(safeDecode(m[1]));
     if (clean === "/renter") return renterPage();
     if (clean === "/admin") return adminPage();
+    if (clean === "/admin/import") return adminImportPage();
     m = clean.match(/^\/properties\/([^/]+)$/);
     if (m) {
       const p = sample.find((x) => x.id === safeDecode(m[1]));
@@ -1908,6 +2160,10 @@
       else if (a === "use-location") useMyLocation(action);
       else if (a === "jump-listing") jumpToListing(action.dataset.id);
       else if (a === "clear-location") clearUnitLocation();
+      else if (a === "import-preview") previewImportFile(action);
+      else if (a === "import-commit") commitImport(action);
+      else if (a === "import-rollback") rollbackImport(action.dataset.id);
+      else if (a === "toggle-samples") toggleSampleListings(action.dataset.hide === "true");
       return;
     }
     const link = e.target.closest("a");
@@ -1933,6 +2189,27 @@
       e.preventDefault();
       sendInterest(e.target);
     }
+  });
+
+  document.addEventListener("change", (e) => {
+    if (e.target.id !== "f-csv_file") return;
+    const file = e.target.files && e.target.files[0];
+    importCsv = "";
+    importFileName = file ? file.name : "";
+    const preview = document.getElementById("import-preview");
+    if (preview) preview.innerHTML = "";
+    if (!file) return;
+    if (file.size > 500 * 1024) {
+      document.getElementById("e-csv_file").textContent = "That file is over 500 KB. Split it into smaller files.";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      importCsv = String(reader.result || "");
+      document.getElementById("e-csv_file").textContent = "";
+    };
+    reader.onerror = () => (document.getElementById("e-csv_file").textContent = "Couldn't read that file.");
+    reader.readAsText(file);
   });
 
   // Email sharing only makes sense once roommate matching is on.

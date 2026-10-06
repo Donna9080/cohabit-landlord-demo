@@ -57,6 +57,12 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       MapTiler key accepted from the site (200) and refused from another origin or none (403).
 - [x] Map always shown on Listings (no Show map button), deployed as `2e452e10-a5f3-4a87-b70a-b6970607f827`;
       checked live in headless Edge on desktop and phone: 20 pins, search narrows to 10, Clear restores 20.
+- [x] External listing import tool (2026-10-06, local only, not deployed): migration `0005_external_listings.sql`
+      (additive, applied locally only), admin preview/import/rollback at `/admin/import`, External cards and map pins,
+      sample listings hidden after an import (switchable), admin audit log. 230/230 tests.
+- [ ] **Real listings imported: 0.** Blocked on authorized data: Apartments.com refuses automated access and there's
+      no republication agreement; a licensed provider's license or landlords' written permission is needed first.
+- [ ] Production for the import tool: migration 0005 and deploy (each needs the owner's approval)
 - [ ] Owner checks live: dragging the pin (1 km limit), the real Use my location permission prompt, a real unit with an address
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
 - [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works

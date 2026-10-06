@@ -386,6 +386,21 @@ p.interest { display: block; }
 .prose ul { padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
 .prose strong { font-weight: 600; }
 
+/* Imported (external) listings and the admin import page */
+.tag-external { border-style: solid; border-color: #b9cdf0; color: var(--navy); background: var(--blue-bg); }
+.card-external { border-color: #d3dff3; }
+.stats dd.stat-note { font-size: 12px; font-weight: 500; color: var(--muted); white-space: normal; }
+.map-pin-external { background: var(--white); border-color: var(--navy); box-shadow: 0 0 0 2px var(--navy), 0 1px 4px rgba(15, 30, 61, 0.4); }
+.pill-bad { background: var(--red-bg); color: var(--red); }
+.pill-bad .dot { background: var(--red); }
+.columns-help summary { cursor: pointer; font-weight: 600; color: var(--navy); }
+.columns-help ul { margin-top: 8px; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--sub); }
+.preview td.note, .batches td { max-width: 320px; overflow-wrap: anywhere; }
+.preview td.note { color: var(--sub); font-size: 14px; }
+.import-confirm { display: flex; flex-direction: column; gap: 10px; margin-top: var(--gap); padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-card); }
+#import-preview:empty { display: none; }
+#import-preview > .tiles, #import-preview > .preview { margin-bottom: var(--gap); }
+
 /* Account page */
 .facts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .fact { display: flex; flex-direction: column; gap: 2px; padding: 16px 20px; border-radius: var(--radius-card); background: var(--subtle); min-width: 0; }

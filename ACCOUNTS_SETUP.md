@@ -58,6 +58,55 @@ The fictional sample dashboard (`/sample`, `/properties/<id>`) is still in
 - Routes: `GET/POST /api/renter/interests`, `DELETE /api/renter/interests/<unit id>`,
   `GET /api/landlord/interests`, `DELETE /api/landlord/interests/<request id>`. Admin sees none of it.
 
+## Importing external listings (admin)
+
+Admins can add real rental listings from **another source that allows coHabit to republish them**:
+the listing website itself, a licensed data provider whose license allows public display, or landlords who
+gave permission. Nothing is scraped, and fictional rows must never be imported as real listings.
+
+**Status (2026-10-06): 0 real listings imported.** Apartments.com refuses automated access (its terms page and
+robots.txt return 403 to automated tools) and coHabit has no republication agreement with it or its owner CoStar.
+RentCast (a licensed provider with a free tier) only grants a "limited right to access and use", and its API terms
+weren't confirmed to allow public display. See "What's needed to finish" below.
+
+**How it works** (Admin → **Import listings**, `/admin/import`):
+1. Fill in the source name, what gives permission (publisher authorization, licensed provider, or landlord
+   permission) and the permission details (who granted it, when, where the written permission is kept).
+2. Choose a CSV file made from the [template](public/import-template.csv) (header row only; one listing per row).
+3. **Preview import** checks every row and saves nothing. Rows are marked Ready, Not available (rented, leased,
+   expired, unavailable...), Duplicate (same source URL or source + listing id, in the file or already imported),
+   Needs fixing (with the reason), or Over limit. At most **50** are imported at a time, chosen by city (Boston,
+   Cambridge, Somerville, Waltham, Newton, Belmont, then others) and then most recently updated or posted.
+4. Tick the confirmation and **Import**. The listings go live on Listings and the map, tagged **External**, with the
+   source's posted/updated date, the retrieval date and a "View on <source>" link. They have no "I'm interested"
+   button and belong to no landlord account. Renters' room matches still use coHabit listings only.
+5. After a successful import, sample listings are hidden from Listings, the map and matches (kept for testing; the
+   admin page has a Show/Hide switch). **Roll back** removes an import's listings; when none are left, the sample
+   listings come back automatically. Every import, rollback and switch is recorded in `admin_audit`.
+
+**Data rules:** blank stays blank (nothing is estimated). Rent is one amount, marked whole unit or per room (ranges
+are refused). Massachusetts ZIPs/coordinates only. Coordinates are used only when `coordinates_permitted` is yes, and
+a photo only with a `photo_license` (photos are stored but not shown yet). Listings are never called "latest"; the
+card shows the source's own dates, or "No posting date given".
+
+**Tables (migration `0005`, additive):** `import_batches` (source, permission, who, when, counts, status),
+`external_listings` (the listings, linked to their batch), `app_settings` (the sample-listing switch),
+`admin_audit`.
+
+**Before a production import:** take a restore point (`npx wrangler d1 time-travel info DB`). Imports only add rows to
+the new tables and change the sample switch; landlord units, users and requests are never touched. To undo,
+use **Roll back** on the import page.
+
+**What's needed to finish importing 50 real listings** (any one of these):
+- Written permission from Apartments.com/CoStar (or another listing site) to republish listings, plus an export
+  or feed from them in the template's columns; or
+- A licensed provider account whose license explicitly allows displaying listings publicly on coHabit (check the
+  API terms and whether it needs billing before signing up); or
+- Landlords who send their own current listings (address, rent, beds/baths, availability, source link) and agree
+  in writing that coHabit may publish them.
+
+Then: fill the template, run Preview, import, check Listings and the map, and record the batch id in the workplan.
+
 ## Maps and location (MapTiler, Massachusetts only)
 
 **Provider:** MapTiler Cloud, Free plan (every Listings page visit loads the map, so counts as one map session) (checked 2026-10-02): no card, 5,000 map sessions, 1,000 search sessions and
@@ -276,7 +325,7 @@ npm install
 copy .dev.vars.example .dev.vars        # then fill in the values (BETTER_AUTH_SECRET: any long random string)
 npm run db:migrate:local                # = wrangler d1 migrations apply DB --local
 npm run dev                             # http://localhost:8787
-npm test                                # 186 automated checks (see below)
+npm test                                # 230 automated checks (see below)
 ```
 
 `npm test` (`tests/run-local.mjs`) wipes and recreates a separate local database in

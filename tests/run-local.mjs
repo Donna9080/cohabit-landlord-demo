@@ -462,6 +462,83 @@ try {
   const ra = r.data.users.find((u) => u.email === renterA.email);
   const rb = r.data.users.find((u) => u.email === renterB.email);
   check("Admin list shows unit count for landlords and prefs yes/no for renters", la.unitCount === 2 && ra.hasPreferences === true && rb.hasPreferences === true && la.hasPreferences === null);
+
+  // ── Admin import of external listings (TEST rows only, in this throwaway database) ──
+  const HEAD = "source_name,source_listing_id,source_url,property_name,address,city,zip,rent,rent_basis,fees,bedrooms,bathrooms,available_date,listing_status,source_posted_date,source_updated_date,retrieved_date,latitude,longitude,coordinates_permitted,photo_url,photo_license";
+  const testRow = (n, city, zip, extra = {}) => {
+    const v = { source_name: "TEST SOURCE", source_listing_id: "T" + n, source_url: "https://example.test/listing/" + n, property_name: "TEST listing " + n, address: n + " Test Way", city, zip, rent: "2400", rent_basis: "unit", fees: "", bedrooms: "2", bathrooms: "1", available_date: "2026-12-01", listing_status: "active", source_posted_date: "2026-09-20", source_updated_date: "2026-10-01", retrieved_date: "2026-10-02", latitude: "", longitude: "", coordinates_permitted: "", photo_url: "", photo_license: "", ...extra };
+    return HEAD.split(",").map((k) => JSON.stringify(String(v[k]))).join(",");
+  };
+  const testCsv = [HEAD,
+    testRow(1, "Waltham", "02453", { latitude: "42.3765", longitude: "-71.2356", coordinates_permitted: "yes", fees: "$50 application fee" }),
+    testRow(2, "Cambridge", "02139", { rent_basis: "room", rent: "1450", bedrooms: "studio" }),
+    testRow(3, "Boston", "02116", { rent: "", source_updated_date: "" }),
+    testRow(4, "Somerville", "02143", { listing_status: "rented" }),
+    testRow(5, "Nashua", "03060"),
+    testRow(1, "Waltham", "02453"),
+  ].join("\n");
+  const externalCount = () => d1rows("SELECT COUNT(*) AS n FROM external_listings")[0].n;
+  r = await api("/api/admin/imports/preview", { method: "POST", body: { csv: testCsv } });
+  check("Visitor cannot preview an import (401)", r.status === 401);
+  r = await api("/api/admin/imports/preview", { method: "POST", as: landlordA, body: { csv: testCsv } });
+  check("Landlord cannot preview an import (403)", r.status === 403);
+  r = await api("/api/admin/imports", { as: renterB });
+  check("Renter cannot see imports (403)", r.status === 403);
+  r = await api("/api/admin/imports/preview", { method: "POST", as: admin, body: { csv: testCsv } });
+  const sum = r.data.summary || {};
+  check("Preview sorts rows: 3 ready, 1 rented, 1 outside MA, 1 duplicate", r.status === 200 && sum.ready === 3 && sum.excluded === 1 && sum.invalid === 1 && sum.duplicate === 1, JSON.stringify(sum));
+  check("Preview saves nothing", externalCount() === 0 && d1rows("SELECT COUNT(*) AS n FROM import_batches")[0].n === 0);
+  r = await api("/api/admin/imports", { method: "POST", as: admin, body: { csv: testCsv, confirm: true } });
+  check("Import refused without a permission basis", r.status === 400 && r.data.field === "permission_basis");
+  r = await api("/api/admin/imports", { method: "POST", as: admin, body: { csv: testCsv, permission: { basis: "landlord_permission", note: "short" }, confirm: true } });
+  check("Import refused without permission details", r.status === 400 && r.data.field === "permission_note");
+  const permission = { basis: "landlord_permission", note: "TEST: written permission from test landlords, kept in the test folder" };
+  r = await api("/api/admin/imports", { method: "POST", as: admin, body: { csv: testCsv, permission } });
+  check("Import refused without the confirmation tick", r.status === 400 && r.data.field === "confirm");
+  r = await api("/api/admin/imports", { method: "POST", as: admin, body: { csv: testCsv, permission, confirm: true }, origin: "https://evil.example" });
+  check("Cross-origin import blocked (403)", r.status === 403);
+  r = await api("/api/admin/imports", { method: "POST", as: admin, body: { csv: testCsv, permission, confirm: true } });
+  const batchId = r.data.batchId;
+  check("Admin imports the 3 ready rows", r.status === 201 && r.data.imported === 3 && externalCount() === 3, JSON.stringify(r.data));
+  check("The import is recorded with its permission and in the audit log", d1rows(`SELECT permission_basis AS b, rows_imported AS n FROM import_batches WHERE id='${batchId}'`)[0].n === 3 && d1rows("SELECT COUNT(*) AS n FROM admin_audit WHERE action='import'")[0].n === 1);
+  check("Imported listings belong to no landlord account", d1rows("SELECT COUNT(*) AS n FROM units WHERE name LIKE 'TEST listing%'")[0].n === 0);
+  r = await api("/api/listings");
+  const ext = r.data.listings.filter((u) => u.external);
+  const one = ext.find((u) => u.source.url === "https://example.test/listing/1");
+  const two = ext.find((u) => u.source.url === "https://example.test/listing/2");
+  const three = ext.find((u) => u.source.url === "https://example.test/listing/3");
+  check("Imported listings appear in public listings, labeled external with their source", ext.length === 3 && one.source.name === "TEST SOURCE" && one.source.retrievedDate === "2026-10-02");
+  check("Whole-unit and per-room rent are kept apart; missing rent stays blank", one.rent_basis === "unit" && two.rent_basis === "room" && two.bedrooms === 0 && three.monthly_rent === null && three.source.updatedDate === null);
+  check("Permitted coordinates give a map pin; none given, no pin", one.location && one.location.lat === 42.3765 && three.location === null);
+  check("Imported listings carry no landlord identity", !JSON.stringify(ext).includes("landlord"));
+  check("After the import, sample listings are hidden from public listings", !r.data.listings.some((u) => u.id === "00000000-0000-4000-8000-000000000099") && r.data.listings.some((u) => u.id === unitA.id));
+  r = await api("/api/renter/matches", { as: renterA });
+  check("Renter matches use coHabit listings only (no imported, no hidden samples)", r.status === 200 && !(r.data.matches || []).some((m) => m.unit.external || m.unit.sample));
+  r = await api("/api/admin/imports", { method: "POST", as: admin, body: { csv: testCsv, permission, confirm: true } });
+  check("Importing the same file again finds only duplicates (409)", r.status === 409 && externalCount() === 3);
+  const many = [HEAD].concat(Array.from({ length: 52 }, (_, i) => testRow(100 + i, "Worcester", "01608", { source_updated_date: "2026-09-" + String((i % 28) + 1).padStart(2, "0") })), [testRow(200, "Boston", "02118", { source_updated_date: "2026-08-01" })]).join("\n");
+  r = await api("/api/admin/imports/preview", { method: "POST", as: admin, body: { csv: many } });
+  const boston = r.data.rows.find((x) => x.listing.city === "Boston");
+  check("At most 50 rows are imported; priority cities go first", r.data.summary.ready === 50 && r.data.summary.over_limit === 3 && boston.status === "ready", JSON.stringify(r.data.summary));
+  r = await api("/api/admin/imports/preview", { method: "POST", as: admin, raw: JSON.stringify({ csv: "x".repeat(700 * 1024) }), headers: { "Content-Type": "application/json" } });
+  check("Oversized import file refused (413)", r.status === 413);
+  r = await api("/api/admin/settings", { method: "POST", as: landlordA, body: { hideSampleListings: false } });
+  check("Landlord cannot change the sample-listing switch (403)", r.status === 403);
+  r = await api(`/api/admin/imports/${batchId}/rollback`, { method: "POST", as: landlordA, body: {} });
+  check("Landlord cannot roll back an import (403)", r.status === 403 && externalCount() === 3);
+  r = await api(`/api/admin/imports/${batchId}/rollback`, { method: "POST", as: admin, body: {} });
+  check("Admin rolls the import back; samples come back when nothing imported is left", r.status === 200 && r.data.removed === 3 && r.data.sampleHidden === false && externalCount() === 0);
+  r = await api("/api/listings");
+  check("After rollback: no imported listings, sample listings public again", !r.data.listings.some((u) => u.external) && r.data.listings.some((u) => u.id === "00000000-0000-4000-8000-000000000099"));
+  r = await api(`/api/admin/imports/${batchId}/rollback`, { method: "POST", as: admin, body: {} });
+  check("Rolling back twice is refused (409)", r.status === 409);
+  r = await api("/api/admin/settings", { method: "POST", as: admin, body: { hideSampleListings: true } });
+  const hiddenNow = !(await api("/api/listings")).data.listings.some((u) => u.id === "00000000-0000-4000-8000-000000000099");
+  await api("/api/admin/settings", { method: "POST", as: admin, body: { hideSampleListings: false } });
+  check("Admin can hide and show sample listings by hand", r.status === 200 && hiddenNow && (await api("/api/listings")).data.listings.some((u) => u.id === "00000000-0000-4000-8000-000000000099"));
+  r = await api("/api/admin/imports", { as: admin });
+  check("Past imports list shows the rolled-back import", r.status === 200 && r.data.batches[0].status === "rolled_back" && r.data.externalCount === 0);
+
   r = await api("/api/me/delete", { method: "POST", as: admin, body: { confirm: "DELETE" } });
   check("The only admin cannot delete their own account (409)", r.status === 409 && d1rows(`SELECT COUNT(*) AS n FROM "user" WHERE id='t_admin'`)[0].n === 1);
   d1(`UPDATE "user" SET role='user' WHERE id='t_admin'`);

@@ -98,6 +98,8 @@ src/auth.js         Google sign-in settings (Better Auth)
 src/validate.js     checks every field sent by the browser
 src/match.js        renter-to-unit matching rules
 src/roommates.js    renter-to-renter (roommate) matching rules, opt-in
+src/imports.js      checks CSV files of external listings before an admin imports them
+public/import-template.csv  column template for listing imports
 migrations/         database tables (D1)
 tests/run-local.mjs automated local tests (npm test)
 scripts/sample-data.mjs  fictional sample landlords, units and renters (see ACCOUNTS_SETUP.md)

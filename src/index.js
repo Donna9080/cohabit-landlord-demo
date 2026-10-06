@@ -11,12 +11,16 @@
 //   /api/renter/matches          active units ranked against those answers
 //   /api/renter/roommates        other opted-in renters ranked by lifestyle fit (opt-in, limited fields)
 //   /api/admin/users             read-only user list (admin only)
+//   /api/admin/imports[...]      import external listings from an authorized source; roll back (admin only)
+//   /api/admin/settings          hide or show sample listings in public search (admin only)
 import { getAuth } from "./auth.js";
 import { rankUnits } from "./match.js";
+import { IMPORT_LIMIT, previewImport } from "./imports.js";
 import { firstNameOf, rankRoommates } from "./roommates.js";
 import { InvalidInput, isUnitId, parseAccountType, parseInterest, parsePreferences, parseUnit } from "./validate.js";
 
 const MAX_BODY = 16 * 1024;
+const MAX_IMPORT_BODY = 600 * 1024; // admin CSV imports only
 const MAX_UNITS_PER_LANDLORD = 50;
 const MAX_INTERESTS_PER_RENTER = 20;
 const LIMITS = { read: 120, write: 30 }; // requests per minute per user (or per IP when signed out)
@@ -60,10 +64,10 @@ function assertSameOrigin(request, env) {
   }
 }
 
-async function readJson(request) {
+async function readJson(request, max = MAX_BODY) {
   const type = (request.headers.get("Content-Type") || "").toLowerCase();
   if (!type.startsWith("application/json")) throw new HttpError(415, "unsupported_type", "Send JSON.");
-  if (Number(request.headers.get("Content-Length") || 0) > MAX_BODY) throw new HttpError(413, "too_large", "Request too large.");
+  if (Number(request.headers.get("Content-Length") || 0) > max) throw new HttpError(413, "too_large", "Request too large.");
   const reader = request.body?.getReader();
   if (!reader) throw new HttpError(400, "invalid_json", "Request body is empty.");
   const chunks = [];
@@ -72,7 +76,7 @@ async function readJson(request) {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > MAX_BODY) {
+    if (size > max) {
       await reader.cancel();
       throw new HttpError(413, "too_large", "Request too large.");
     }
@@ -200,6 +204,34 @@ function publicLocation(u, salt) {
   if (u.location_precision === "exact") return { precision: "exact", lat: u.lat, lng: u.lng, address: u.address };
   return { precision: "approximate", radiusM: APPROX_RADIUS_M, ...approximatePoint(u.id, u.lat, u.lng, salt) };
 }
+// Imported listings: shown with their source, never tied to a landlord, never "approximate"
+// (their address is public on the source; coordinates are only stored when the source allows it).
+const EXTERNAL_FIELDS =
+  "id, source_name, source_url, property_name, address, city, zip, rent, rent_basis, fees, bedrooms, bathrooms, available_date, source_posted_date, source_updated_date, retrieved_date, lat, lng, photo_url, photo_license";
+const asExternal = (e) => ({
+  id: e.id,
+  external: true,
+  sample: false,
+  name: e.property_name || e.address || `Listing on ${e.source_name}`,
+  area: `${e.city ? e.city + ", " : ""}MA${e.zip ? " " + e.zip : ""}`,
+  address: e.address,
+  monthly_rent: e.rent,
+  rent_basis: e.rent_basis,
+  fees: e.fees,
+  bedrooms: e.bedrooms,
+  bathrooms: e.bathrooms,
+  move_in_date: e.available_date,
+  description: "",
+  source: { name: e.source_name, url: e.source_url, postedDate: e.source_posted_date, updatedDate: e.source_updated_date, retrievedDate: e.retrieved_date },
+  photo: e.photo_url ? { url: e.photo_url, license: e.photo_license } : null,
+  location: e.lat != null ? { precision: "exact", lat: e.lat, lng: e.lng, address: e.address } : null,
+});
+async function sampleListingsHidden(db) {
+  const row = await db.prepare(`SELECT value FROM app_settings WHERE key = 'hide_sample_listings'`).first();
+  return row?.value === "1";
+}
+const noSamples = (hidden) => (hidden ? " AND landlord_user_id NOT LIKE 'sample-%'" : "");
+
 const listingMapper = (env) => (u) => {
   const { lat, lng, location_precision, address, ...rest } = u;
   return { ...rest, sample: !!u.sample, location: publicLocation(u, env.BETTER_AUTH_SECRET || "") };
@@ -425,10 +457,12 @@ async function handleApi(request, env, url) {
 
   // Anyone: active units, listing fields only. Never landlord identity.
   if (path === "/api/listings" && method === "GET") {
-    const { results } = await db
-      .prepare(`SELECT ${LISTING_FIELDS} FROM units WHERE status = 'active' ORDER BY move_in_date, id LIMIT 100`)
-      .all();
-    return reply({ listings: results.map(listingMapper(env)) });
+    const hidden = await sampleListingsHidden(db);
+    const [{ results }, { results: external }] = await Promise.all([
+      db.prepare(`SELECT ${LISTING_FIELDS} FROM units WHERE status = 'active'${noSamples(hidden)} ORDER BY move_in_date, id LIMIT 100`).all(),
+      db.prepare(`SELECT ${EXTERNAL_FIELDS} FROM external_listings ORDER BY COALESCE(source_updated_date, source_posted_date) DESC, id LIMIT 200`).all(),
+    ]);
+    return reply({ listings: results.map(listingMapper(env)).concat(external.map(asExternal)) });
   }
 
   // Renter: own preferences only.
@@ -467,7 +501,7 @@ async function handleApi(request, env, url) {
     const prefs = await db.prepare(`SELECT ${PREF_FIELDS} FROM match_preferences WHERE user_id = ?1`).bind(user.id).first();
     if (!prefs) return reply({ matches: [], needsPreferences: true });
     const { results } = await db
-      .prepare(`SELECT ${LISTING_FIELDS} FROM units WHERE status = 'active' ORDER BY move_in_date, id LIMIT 200`)
+      .prepare(`SELECT ${LISTING_FIELDS} FROM units WHERE status = 'active'${noSamples(await sampleListingsHidden(db))} ORDER BY move_in_date, id LIMIT 200`)
       .all();
     return reply({ matches: rankUnits(prefs, results.map(listingMapper(env))) });
   }
@@ -492,6 +526,130 @@ async function handleApi(request, env, url) {
       .all();
     const others = results.map((r) => ({ prefs: r, firstName: firstNameOf(r.name), email: r.share_email ? r.email : null, sample: !!r.sample }));
     return reply({ roommates: rankRoommates(mine, others), optedIn: true });
+  }
+
+  // Admin: import external listings from an authorized source, roll an import back, and hide or show
+  // sample listings. Every write is recorded in admin_audit.
+  if (path.startsWith("/api/admin/imports") || path === "/api/admin/settings") {
+    const admin = requireUser(viewer);
+    if (admin.role !== "admin") throw new HttpError(403, "forbidden", "You don't have access to this page.");
+    const today = new Date().toISOString().slice(0, 10);
+    const audit = (action, detail) =>
+      db
+        .prepare(`INSERT INTO admin_audit (id, admin_user_id, action, detail, created_at) VALUES (?1, ?2, ?3, ?4, ?5)`)
+        .bind(crypto.randomUUID(), admin.id, action, detail, Date.now());
+    const setSamplesHidden = (on) =>
+      db
+        .prepare(
+          `INSERT INTO app_settings (key, value, updated_at) VALUES ('hide_sample_listings', ?1, ?2)
+           ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+        )
+        .bind(on ? "1" : "0", Date.now());
+    const runPreview = async (body) => {
+      if (typeof body?.csv !== "string" || !body.csv.trim()) throw new InvalidInput("csv", "Choose a CSV file or paste its contents.");
+      const sourceName = typeof body.sourceName === "string" && body.sourceName.trim() ? body.sourceName.trim().slice(0, 80) : null;
+      const { results } = await db.prepare(`SELECT source_url, source_name, source_listing_id FROM external_listings`).all();
+      const existing = {
+        urls: new Set(results.map((r) => r.source_url)),
+        ids: new Set(results.filter((r) => r.source_listing_id).map((r) => `${r.source_name.toLowerCase()}|${r.source_listing_id}`)),
+      };
+      const result = previewImport(body.csv, { today, defaultSource: sourceName, existing });
+      if (result.error) throw new InvalidInput("csv", result.error);
+      return { ...result, sourceName };
+    };
+
+    if (path === "/api/admin/imports" && method === "GET") {
+      const [{ results: batches }, counts, hidden] = await Promise.all([
+        db
+          .prepare(
+            `SELECT b.id, b.source_name AS sourceName, b.permission_basis AS permissionBasis, b.permission_note AS permissionNote,
+               b.created_at AS createdAt, b.rows_received AS rowsReceived, b.rows_imported AS rowsImported, b.status,
+               b.rolled_back_at AS rolledBackAt, u.name AS createdBy
+             FROM import_batches b LEFT JOIN "user" u ON u.id = b.created_by ORDER BY b.created_at DESC LIMIT 50`
+          )
+          .all(),
+        db.prepare(`SELECT (SELECT COUNT(*) FROM external_listings) AS external, (SELECT COUNT(*) FROM units WHERE landlord_user_id LIKE 'sample-%') AS sample`).first(),
+        sampleListingsHidden(db),
+      ]);
+      return reply({ batches, externalCount: counts.external, sampleCount: counts.sample, sampleHidden: hidden, limit: IMPORT_LIMIT });
+    }
+
+    if (path === "/api/admin/imports/preview" && method === "POST") {
+      return reply(await runPreview(await readJson(request, MAX_IMPORT_BODY)));
+    }
+
+    if (path === "/api/admin/imports" && method === "POST") {
+      const body = await readJson(request, MAX_IMPORT_BODY);
+      const basis = body?.permission?.basis;
+      if (!["publisher_authorization", "licensed_provider", "landlord_permission"].includes(basis)) {
+        throw new InvalidInput("permission_basis", "Choose what gives coHabit permission to publish these listings.");
+      }
+      const note = typeof body.permission.note === "string" ? body.permission.note.trim() : "";
+      if (note.length < 10 || note.length > 500) {
+        throw new InvalidInput("permission_note", "Describe the permission in 10 to 500 characters: who granted it, when, and where it's recorded.");
+      }
+      if (body.confirm !== true) throw new InvalidInput("confirm", "Confirm that coHabit may republish these listings.");
+      const result = await runPreview(body);
+      const ready = result.rows.filter((r) => r.status === "ready");
+      if (!ready.length) throw new HttpError(409, "nothing_to_import", "No rows are ready to import. Check the preview.");
+      const batchId = crypto.randomUUID();
+      const now = Date.now();
+      const batchSource = result.sourceName || ready[0].listing.source_name;
+      await db.batch([
+        db
+          .prepare(
+            `INSERT INTO import_batches (id, source_name, permission_basis, permission_note, created_by, created_at, rows_received, rows_imported)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
+          )
+          .bind(batchId, batchSource, basis, note, admin.id, now, result.summary.received, ready.length),
+        ...ready.map(({ listing: l }) =>
+          db
+            .prepare(
+              `INSERT INTO external_listings (id, batch_id, source_name, source_listing_id, source_url, property_name, address, city, zip,
+                 rent, rent_basis, fees, bedrooms, bathrooms, available_date, source_posted_date, source_updated_date, retrieved_date,
+                 lat, lng, photo_url, photo_license, created_at)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)`
+            )
+            .bind(
+              crypto.randomUUID(), batchId, l.source_name, l.source_listing_id, l.source_url, l.property_name, l.address, l.city, l.zip,
+              l.rent, l.rent_basis, l.fees, l.bedrooms, l.bathrooms, l.available_date, l.source_posted_date, l.source_updated_date,
+              l.retrieved_date, l.lat, l.lng, l.photo_url, l.photo_license, now
+            )
+        ),
+        audit("import", JSON.stringify({ batchId, source: batchSource, basis, summary: result.summary })),
+        setSamplesHidden(true),
+      ]);
+      return reply({ batchId, imported: ready.length, summary: result.summary, sampleHidden: true }, 201);
+    }
+
+    const rollback = path.match(/^\/api\/admin\/imports\/([^/]+)\/rollback$/);
+    if (rollback && method === "POST") {
+      const id = rollback[1];
+      const batch = isUnitId(id) ? await db.prepare(`SELECT id, status FROM import_batches WHERE id = ?1`).bind(id).first() : null;
+      if (!batch) throw new HttpError(404, "not_found", "Import not found.");
+      if (batch.status === "rolled_back") throw new HttpError(409, "already_rolled_back", "This import was already rolled back.");
+      const [removed] = await db.batch([
+        db.prepare(`DELETE FROM external_listings WHERE batch_id = ?1`).bind(id),
+        db.prepare(`UPDATE import_batches SET status = 'rolled_back', rolled_back_at = ?2 WHERE id = ?1`).bind(id, Date.now()),
+        audit("import_rollback", JSON.stringify({ batchId: id })),
+      ]);
+      // With no imported listings left, bring the sample listings back so the site isn't empty.
+      const { n } = await db.prepare(`SELECT COUNT(*) AS n FROM external_listings`).first();
+      let sampleHidden = await sampleListingsHidden(db);
+      if (n === 0 && sampleHidden) {
+        await db.batch([setSamplesHidden(false), audit("show_sample_listings", "No imported listings left after a rollback")]);
+        sampleHidden = false;
+      }
+      return reply({ removed: removed.meta.changes, sampleHidden });
+    }
+
+    if (path === "/api/admin/settings" && method === "POST") {
+      const body = await readJson(request);
+      if (typeof body?.hideSampleListings !== "boolean") throw new InvalidInput("hideSampleListings", "Must be true or false.");
+      await db.batch([setSamplesHidden(body.hideSampleListings), audit(body.hideSampleListings ? "hide_sample_listings" : "show_sample_listings", null)]);
+      return reply({ sampleHidden: body.hideSampleListings });
+    }
+    throw new HttpError(404, "not_found", "Not found.");
   }
 
   // Admin: read-only user list. No questionnaire answers, unit details, sessions or tokens.
