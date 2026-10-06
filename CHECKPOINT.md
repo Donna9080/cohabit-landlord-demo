@@ -10,7 +10,7 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 |---|---|---|
 | **Real external listings imported** | **0** | Live: the `external_listings` table doesn't exist yet (migration 0005 not applied). Local: 0. |
 | Real accounts | 10 | Live database, read-only query |
-| Sample (fictional) accounts | 36 | Live |
+| Sample (fictional) accounts | 0 | Live: all 36 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
 | Real landlord units | 5 | Live |
 | Sample units | 0 | Live: all 20 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
 | "I'm interested" requests | 2 | Live |
@@ -81,7 +81,7 @@ agreement with it or its owner CoStar. RentCast's API terms weren't confirmed to
 - [ ] Try "Use my location" (allow once, block once).
 - [ ] Run the manual test at the end of ACCOUNTS_SETUP.md.
 - [ ] Confirm the Cloudflare plan is Workers Free.
-- [ ] Remove sample data before counting real users or listings (command in ACCOUNTS_SETUP.md).
+- [x] Sample data removed from production (units and accounts, 2026-10-06); live counts are now real data only.
 
 **Possible next features:** distance-based matching, a "new request" badge for landlords, a map on the renter's
 matches page, a shorter renter page, email notifications (would need a paid email service and domain; ask first).
@@ -94,6 +94,7 @@ matches page, a shorter renter page, email notifications (would need a paid emai
 | Database before migration 0004 | Time Travel bookmark `00000032-00000000-000050f9-cded0b9a637a3ca8de724dfb34fae1b6` |
 | Original static site | Version `a3c0f17b-d52a-47e3-9d71-5049e87a7a34`, git tag `pre-accounts-2026-09-29` |
 | This checkpoint | Git tag `checkpoint-2026-10-06` |
+| Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 
 A restore overwrites the database in place, including anything saved since. Export first if unsure.
