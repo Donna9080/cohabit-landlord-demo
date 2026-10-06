@@ -387,82 +387,99 @@ Map search on the renter's matches page, distance-based matching, landlord tenan
 in-app messaging threads, email notifications, listing photos / R2 uploads, landlord approval or verification, admin moderation/editing/deleting, admin stats,
 role-management UI, admin deleting other people's accounts, changing account type, payments.
 
-## Manual test for a group member (about 15 minutes)
+## Manual test for a group member (about 20 minutes)
 
 Use two Google accounts and two browsers (or one normal window and one private window):
-**A** will be the landlord, **B** the renter. Button and page names below are exactly as they
-appear on the site. Listings and people tagged **Sample** are fictional; ignore them unless a step mentions them.
+**A** will be the landlord, **B** the renter. Button and page names below are exactly as they appear on the site.
 
-### 1. Signed out (2 minutes)
+This runs on the live site, so everything you create is real data. Start every name with **TEST** and do the
+clean-up in part 6. The site has only a few real listings, so the search and map steps use the TEST unit
+you create in part 2.
+
+### 1. Signed out (3 minutes)
 
 1. Open the site. The home page shows two cards, **I have rooms to rent** and **I'm looking for a room**,
    and two buttons, **Browse listings** and **View a sample dashboard**.
-2. Click **Browse listings**. Type "Belmont" in **City, neighborhood or ZIP** and pick **Belmont, Massachusetts**:
-   the list shows listings within a few km, nearest first, with a **Clear** link. A town outside Massachusetts
-   ("Nashua") gives no suggestions. A real (untagged) listing says "Sign in as a renter to tell the landlord you're interested."
-3. Above the list, the map of Greater Boston shows circles for approximate listings and grey pins for Sample ones.
-   After the Belmont search it shows only the matching pins.
-   Click a pin, then **View listing**: the page scrolls to that card and highlights it.
-4. Click **Use my location** and allow it: listings near you, nearest first. Try again and block it: a message says
-   you can still search by city, neighborhood or ZIP.
-5. Click **View a sample dashboard**, open a property, then use **Sample dashboard** to go back. Both pages
-   start with a "Sample data" notice.
-6. Open `/landlord` and `/admin` directly: both ask you to sign in.
+2. Click **Browse listings**. You see the real listings, if any, with a map of Greater Boston above them.
+   No listing is tagged Sample. A listing card says "Sign in as a renter to tell the landlord you're interested."
+3. Type "Nashua" in **City, neighborhood or ZIP**: no suggestions (coHabit is Massachusetts only).
+   Type "Waltham" and pick **Waltham, Massachusetts**: the list shows only listings within a few km (possibly none),
+   with a **Clear** link that brings everything back.
+4. Click **View a sample dashboard**, open a property, then use **Sample dashboard** to go back. Both pages
+   start with a "Sample data" notice: this dashboard is fictional and separate from the listings.
+5. Open `/landlord` and `/admin` directly: both ask you to sign in.
 
 ### 2. Landlord, account A in browser 1 (5 minutes)
 
-1. Click **Sign in**, choose account A, then **I'm a landlord**. You land on **Your units** and the top bar
-   shows **Dashboard** and **Listings**.
+1. Click **Sign in**, choose account A, then **I'm a landlord** (if A is new). You land on **Your units** and the
+   top bar shows **Dashboard** and **Listings**.
 2. Click **Add a unit**. Enter "12 Main Street" as the unit name: it is refused with a message under the field.
-   Use a name like "Sunny room near campus", a rent, rooms and a move-in date. In **Street address** type
+   Name it **TEST room near campus**, with a rent, rooms and a move-in date. In **Street address** type
    "415 South St, Waltham" and pick it: the general area fills in as "Waltham, MA" and a small map shows the pin.
-   Drag the pin a little. Leave **Approximate area** selected, then **Add unit**.
-3. You land on the unit's own page with a green "Unit added" message, tiles for rent, rooms and move-in date, and a
+3. Drag the pin a little: "Pin moved." Then drag it far away (zoom out first if needed): it snaps back with a
+   message about the 1 km limit. Leave **Approximate area** selected, then **Add unit**.
+4. You land on the unit's own page with a green "Unit added" message, tiles for rent, rooms and move-in date, and a
    **Location** section saying renters see an approximate area without the street address.
-4. Click **Edit unit**, change the rent, **Save changes**: back on the unit page with "Changes saved."
+5. Click **Edit unit**, change the rent, **Save changes**: back on the unit page with "Changes saved."
    Click **Dashboard**: the card shows the new rent, and the tiles count your units.
-5. Add a second unit with status **Inactive**. Its page says it is hidden from renters. Leave it for now.
-6. Reload the dashboard: both units are still there, one tagged Active and one Inactive.
+6. Add a second unit named **TEST inactive unit** with status **Inactive** (no address needed). Its page says it is
+   hidden from renters.
 
-### 3. Renter, account B in browser 2 (5 minutes)
+### 3. Listings and map with the TEST unit (3 minutes, any browser)
 
-1. **Sign in** with account B, then **I'm a renter**. You land on **Find your room**.
-2. Fill in the questionnaire with a budget that covers A's rent, the same area and the same move-in month,
-   then **Save and see matches**. The page now starts with **Your preferences** as a summary and shows
+1. Open **Listings**. **TEST room near campus** is in the list; **TEST inactive unit** is not.
+2. On the map, the TEST unit shows as a pin inside a circle about 500 m wide, not on the exact building.
+   Its card shows the area (Waltham, MA) but not the street address.
+3. Click the pin, then **View listing**: the page scrolls to the TEST card and highlights it.
+4. Search **Waltham**: the TEST unit is listed with its distance, nearest first. Search **02139** (Cambridge):
+   it is no longer listed (unless you're in range of other listings, you'll see "No listings nearby"). Click **Clear**.
+5. Click **Use my location** and allow it: listings near you, nearest first, and "Your location stays in this
+   browser." Click it again and block it in the browser prompt: a message says you can still search by
+   city, neighborhood or ZIP.
+
+### 4. Renter, account B in browser 2 (5 minutes)
+
+1. **Sign in** with account B, then **I'm a renter** (if B is new). You land on **Find your room**.
+2. Fill in the questionnaire with a budget that covers the TEST unit's rent, area **Waltham** and the same move-in
+   month, then **Save and see matches**. The page now starts with **Your preferences** as a summary and shows
    "Preferences saved."
-3. Under **Matching rooms**, A's unit appears with a match percentage and reasons. Try **Sort by**.
-4. On A's unit click **I'm interested**, write a short note, **Send**. The card shows "Request sent" and the
-   unit appears under **Landlords you've contacted**. (A note containing a phone number is refused.)
-   Sample listings say there is no landlord to contact.
+3. Under **Matching rooms**, the TEST unit appears with a match percentage and reasons. Try **Sort by**.
+4. On the TEST unit click **I'm interested**, write a short note starting with "TEST", **Send**. The card shows
+   "Request sent" and the unit appears under **Landlords you've contacted**. (A note containing a phone number is refused.)
 5. Click **Edit preferences**, tick **Show me to compatible renters**, **Save changes**.
-   **Possible roommates** now lists people (sample ones are tagged) with a score and what you have in common.
+   **Possible roommates** lists people with a score and what you have in common (people tagged Sample are fictional),
+   or says there are no compatible renters yet.
 6. Open `/landlord`: "This area is for landlords". Open `/admin`: "Not available".
-7. Click **Listings**: A's active unit is there, A's inactive unit is not.
-8. **Sign out**, sign in again with B: still a renter, and the preferences and request are still there.
+7. **Sign out**, sign in again with B: still a renter, and the preferences and request are still there.
 
-### 4. Back to the landlord, browser 1 (3 minutes)
+### 5. Back to the landlord, browser 1 (3 minutes)
 
 1. Reload **Dashboard**. The **Requests** tile counts B's request and it appears under **Recent requests**.
 2. Click **View**. Under **Interested renters** you see B's name, email and note, with **Reply by email**
    and **Remove**. You do not see B's questionnaire answers.
 3. Click **Remove**, confirm in the dialog: "Request removed." In browser 2, B's
-   **Landlords you've contacted** list is empty after a reload.
-4. Go back to **Dashboard**, open the inactive unit, click **Edit unit** → **Delete unit**. A dialog asks
-   "Delete this unit?"; **Cancel** keeps it, **Delete unit** removes it and shows "Unit deleted."
+   **Landlords you've contacted** list no longer shows it after a reload.
 
-### 5. Account page and admin (1 minute)
+### 6. Clean up (2 minutes)
+
+1. As A, open each TEST unit, **Edit unit** → **Delete unit**. A dialog asks "Delete this unit?"; **Cancel** keeps
+   it, **Delete unit** removes it and shows "Unit deleted." Check **Listings** no longer shows it.
+2. If A or B were spare accounts made only for this test, open **Your account** (click your name or initials) and
+   use **Delete my account** (type DELETE). Otherwise, as B, open **Edit preferences** and untick
+   **Show me to compatible renters** if you don't want to appear to other renters.
+
+### 7. Account page and admin (1 minute)
 
 1. Click your name or initials in the top bar: **Your account** shows your name, email and account type.
-   **Delete my account** only works after typing DELETE. Only try it with a spare Google account:
-   it removes the account and everything saved with it.
-2. Owner only: **Admin** appears in the top bar. The page shows tiles for people, landlords, renters and
-   sample accounts, and a list with both test accounts: a unit count for A, "Preferences saved" for B,
-   and no questionnaire answers or notes.
+   **Delete my account** only works after typing DELETE.
+2. Owner only: **Admin** appears in the top bar. The page shows tiles for people, landlords and renters
+   (and sample accounts, while any exist), and the user list with a unit count for landlords and
+   "Preferences saved" for renters, but no questionnaire answers or notes.
 
-### 6. On a phone
+### 8. On a phone
 
-Open the site on a phone, or narrow the browser window. The top-bar links move to a second row, cards stack
-in one column, and the admin list becomes one card per person. Nothing should scroll sideways.
+Open the site on a phone, or narrow the browser window. The top-bar links move to a second row, the map sits
+above the list, cards stack in one column, and the admin list becomes one card per person. Nothing should scroll sideways.
 
 ### If something fails
 
