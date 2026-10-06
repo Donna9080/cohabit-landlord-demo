@@ -60,6 +60,9 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [x] External listing import tool (2026-10-06, local only, not deployed): migration `0005_external_listings.sql`
       (additive, applied locally only), admin preview/import/rollback at `/admin/import`, External cards and map pins,
       sample listings hidden after an import (switchable), admin audit log. 230/230 tests.
+- [x] 2026-10-06: all 20 sample units deleted from the live database at the owner's request (restore bookmark from
+      just before: `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`; rows also saved locally in
+      `backups/`, git-ignored). The 36 sample accounts were kept. To bring the units back, re-run `scripts/sample-data.sql`.
 - [ ] **Real listings imported: 0.** Blocked on authorized data: Apartments.com refuses automated access and there's
       no republication agreement; a licensed provider's license or landlords' written permission is needed first.
 - [ ] Production for the import tool: migration 0005 and deploy (each needs the owner's approval)

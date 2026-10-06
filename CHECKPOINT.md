@@ -12,7 +12,7 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 | Real accounts | 10 | Live database, read-only query |
 | Sample (fictional) accounts | 36 | Live |
 | Real landlord units | 5 | Live |
-| Sample units | 20 | Live (tagged Sample, approximate locations) |
+| Sample units | 0 | Live: all 20 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
 | "I'm interested" requests | 2 | Live |
 | Admins | 1 | Live (the owner) |
 | Automated tests | 230 passing | `npm test`, local, 2026-10-06 |
@@ -93,6 +93,7 @@ matches page, a shorter renter page, email notifications (would need a paid emai
 | Code (current live) | `npx wrangler rollback <version>`; previous versions: `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
 | Database before migration 0004 | Time Travel bookmark `00000032-00000000-000050f9-cded0b9a637a3ca8de724dfb34fae1b6` |
 | Original static site | Version `a3c0f17b-d52a-47e3-9d71-5049e87a7a34`, git tag `pre-accounts-2026-09-29` |
-| This checkpoint | Git tag `checkpoint-2026-10-06` (local) |
+| This checkpoint | Git tag `checkpoint-2026-10-06` |
+| Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 
 A restore overwrites the database in place, including anything saved since. Export first if unsure.

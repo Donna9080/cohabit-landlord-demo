@@ -188,6 +188,9 @@ npx wrangler d1 execute DB --remote --command "DELETE FROM units WHERE landlord_
 
 Remove it before counting users or listings for anything you report as real traction.
 
+**2026-10-06:** the 20 sample units were deleted from production at the owner's request; the sample accounts remain.
+Re-running `scripts/sample-data.sql` would add the sample units (and reset the sample accounts) again.
+
 ## Who can do what
 
 | | Visitor | Landlord | Renter | Admin |
