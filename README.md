@@ -30,7 +30,7 @@ Landlords list rooms; renters answer a short questionnaire and see rooms that fi
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
 - **Design (Figma):** https://www.figma.com/design/QDAewcvq3aSsZgfQvw1v4X
-- **Accounts, data, secrets, deploy, rollback:** [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) · progress: [ACCOUNTS_WORKPLAN.md](ACCOUNTS_WORKPLAN.md)
+- **Accounts, data, secrets, deploy, rollback:** [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) · progress: [ACCOUNTS_WORKPLAN.md](ACCOUNTS_WORKPLAN.md) · latest checkpoint: [CHECKPOINT.md](CHECKPOINT.md)
 
 | Page | Address | Who |
 | --- | --- | --- |
