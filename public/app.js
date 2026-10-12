@@ -11,6 +11,7 @@
 //   /landlord/units/new      Add a unit
 //   /landlord/units/<id>     One unit: details and the renters interested in it
 //   /landlord/units/<id>/edit  Edit or delete a unit
+//   /assistant               A renter's chat assistant: rooms and roommates that fit, with reasons
 //   /renter                  A renter's match preferences and matching units
 //   /admin                   Read-only user list (admins only; enforced by the server)
 //   /admin/import            Import external listings from an authorized source (admins only)
@@ -108,7 +109,7 @@
     const u = me.user;
     const items = [];
     if (u && u.accountType === "landlord") items.push(["/landlord", "Dashboard"]);
-    else if (u && u.accountType === "renter") items.push(["/renter", "My matches"]);
+    else if (u && u.accountType === "renter") items.push(["/assistant", "Assistant"], ["/renter", "My matches"]);
     else if (u) items.push(["/welcome", "Get started"]);
     items.push(["/listings", "Listings"]);
     if (u && u.isAdmin) items.push(["/admin", "Admin"]);
@@ -271,13 +272,13 @@
             <span class="choice-cta">${role === "landlord" ? "Open your dashboard" : "Go to the landlord dashboard"} ${icon("right", 16)}</span>
           </a>`;
     const renterCard = `
-          <a class="choice" href="/renter">
+          <a class="choice" href="/assistant">
             <span class="choice-top"><span class="choice-icon">${icon("user", 24)}</span></span>
             <span class="choice-text">
-              <span class="choice-title">${role === "renter" ? "Your matches" : "I'm looking for a room"}</span>
-              <span class="choice-desc">Answer a short questionnaire, see rooms that match, and contact the landlord.</span>
+              <span class="choice-title">${role === "renter" ? "Your housing assistant" : "I'm looking for a room"}</span>
+              <span class="choice-desc">Chat about your budget, timing and how you like to live. See rooms and roommates that fit, and why.</span>
             </span>
-            <span class="choice-cta">${role === "renter" ? "See your matches" : "Find a room"} ${icon("right", 16)}</span>
+            <span class="choice-cta">${role === "renter" ? "Continue the chat" : "Start a chat"} ${icon("right", 16)}</span>
           </a>`;
     // Signed-in people only see the card for their own side.
     const cards = role === "landlord" ? landlordCard : role === "renter" ? renterCard : landlordCard + renterCard;
@@ -286,15 +287,15 @@
       html: `
       <div class="home">
         <div class="hero">
-          <p class="eyebrow">Shared student housing</p>
+          <p class="eyebrow">Shared student housing near Brandeis</p>
           <h1 tabindex="-1">${u ? `Welcome back, ${esc((u.name || "").split(" ")[0] || "there")}` : "Welcome to coHabit"}</h1>
-          <p class="lead">Landlords list rooms. Renters find ones that fit.</p>
+          <p class="lead">Landlords list rooms. Students chat with an assistant to find rooms and roommates that fit.</p>
         </div>
         <div class="choices${role ? " choices-one" : ""}">${cards}
         </div>
         <div class="actions home-actions">
           <a class="btn btn-quiet" href="/listings">Browse listings</a>
-          <a class="btn btn-quiet" href="/sample">View a sample dashboard</a>
+          ${role === "renter" ? `<a class="btn btn-quiet" href="/renter">My matches</a>` : `<a class="btn btn-quiet" href="/sample">View a sample dashboard</a>`}
         </div>
       </div>`,
     };
@@ -308,7 +309,7 @@
       html: `
       <article class="prose">
         <h1 tabindex="-1">Privacy policy</h1>
-        <p class="muted">Last updated October 1, 2026. coHabit is a student project for shared student housing.</p>
+        <p class="muted">Last updated October 12, 2026. coHabit is a student project for shared student housing.</p>
 
         <h2>What we collect</h2>
         <ul>
@@ -316,6 +317,7 @@
           <li><strong>Your account type:</strong> whether you chose landlord or renter.</li>
           <li><strong>If you are a landlord:</strong> the units you add: name, general area, monthly rent, rooms available, move-in date, description and status. If you choose to add one, the unit's street address and map pin (Massachusetts only), and whether renters see an approximate area or the exact location.</li>
           <li><strong>If you are a renter:</strong> your questionnaire answers: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets and smoking. Also any “I'm interested” requests you send, with your note.</li>
+          <li><strong>If you use the assistant:</strong> your chat messages, the answers it learns from them (budget, move-in month, areas, distance from campus, rooms, lease length, lifestyle and chores), the results and confirmation cards it showed you, options you save, and a daily count of AI replies.</li>
           <li><strong>To keep you signed in:</strong> one cookie that holds your session. It can't be read by scripts and expires after 7 days without use.</li>
           <li><strong>To limit abuse:</strong> short-lived request counters that include your IP address. They are deleted within about a day.</li>
         </ul>
@@ -326,15 +328,19 @@
         <ul>
           <li><strong>Everyone:</strong> active units' listing details (name, area, rent, rooms, move-in date, description). Never the landlord's name or email.</li>
           <li><strong>A unit's location:</strong> by default renters see only an approximate area, a circle about 500 m wide, and never the street address. Only if the landlord chooses “Exact location” do renters see the pin and the address.</li>
-          <li><strong>Only you:</strong> your inactive units, and your questionnaire answers. Landlords cannot see your answers. Other renters cannot either, unless you turn on roommate matching.</li>
+          <li><strong>Only you:</strong> your inactive units, your assistant chat and saved options, and your questionnaire answers. Landlords cannot see your answers. Other renters cannot either, unless you turn on roommate matching.</li>
           <li><strong>Other renters, only if you turn on roommate matching:</strong> renters who also turned it on can see your first name, a compatibility score, and the things you have in common (for example “Both early birds”). They see your email address only if you tick the separate box to share it. Both are off by default and you can turn them off again at any time.</li>
           <li><strong>A landlord, only when you click “I'm interested” on their unit:</strong> that landlord sees your name, your email address and the note you wrote, so they can reply. You can withdraw the request at any time and it disappears from their list. Landlords never see your questionnaire answers.</li>
           <li><strong>Renters never see a landlord's name or email</strong> through coHabit. A renter only learns it if the landlord chooses to reply.</li>
-          <li><strong>The coHabit admin:</strong> a list of users with name, email, account type, join date, and either a count of units or whether preferences are saved. Not your questionnaire answers.</li>
+          <li><strong>The coHabit admin:</strong> a list of users with name, email, account type, join date, and either a count of units or whether preferences are saved, plus daily totals of AI replies for the whole site. Not your questionnaire answers or your chat.</li>
         </ul>
 
         <h2>How we use it</h2>
-        <p>Only to run coHabit: to sign you in, show your units or preferences back to you, and match renters to active units. We don't sell or share your information, show ads, or use tracking or analytics cookies. Matching runs inside coHabit; your answers are not sent to any outside AI service.</p>
+        <p>Only to run coHabit: to sign you in, show your units or preferences back to you, and match renters to active units. We don't sell or share your information, show ads, or use tracking or analytics cookies. Search and matching run inside coHabit. If you use the AI assistant, your chat is sent to an AI service to write replies, as described below.</p>
+
+        <h2 id="assistant">The AI assistant</h2>
+        <p>When the AI assistant is on, coHabit sends your chat messages, the answers the assistant has learned, and the search results it is explaining to Anthropic, the company that makes the Claude AI model, so it can write a reply. Listings are sent with their public details only. Other renters are sent only as a label (P1, P2…), a compatibility score and what you have in common: their names and email addresses are never sent, and neither are yours. Under its commercial terms, Anthropic doesn't use this data to train its models. In basic mode, nothing is sent outside coHabit.</p>
+        <p>The assistant can't change your saved profile or contact anyone. Those only happen when you click Confirm on a card. Messages containing phone numbers, email addresses, ID or card numbers, or street addresses are refused before they are saved or sent. Your chat is deleted when you clear it or delete your account, or after 90 days without use.</p>
 
         <h2>Where it is kept</h2>
         <p>coHabit runs on Cloudflare, which stores the database and processes requests on our behalf, and keeps short-term technical logs. Google handles the sign-in step. Maps and place suggestions come from MapTiler: your browser sends it the text you type in a place or address search and the map area you are viewing, but not who you are.</p>
@@ -354,10 +360,11 @@
       html: `
       <article class="prose">
         <h1 tabindex="-1">Terms of use</h1>
-        <p class="muted">Last updated October 1, 2026. coHabit is a student project and is offered free of charge.</p>
+        <p class="muted">Last updated October 12, 2026. coHabit is a student project and is offered free of charge.</p>
         <ul>
           <li><strong>Listings are provided by landlords,</strong> or imported from other websites that allow coHabit to show them (tagged External, with a link to the original). Check details on the original listing. coHabit does not verify landlords, units or renters, and is not a party to any lease or agreement. Check details yourself before making any commitment or payment.</li>
           <li><strong>Be accurate and lawful.</strong> Only list units you have the right to offer. Only put a street address in the address field (it is hidden from renters unless you choose exact location). Don't post phone numbers, other people's personal information, or anything discriminatory, misleading or illegal.</li>
+          <li><strong>The assistant gives suggestions, not decisions.</strong> It can make mistakes, so check details with the landlord. A suggested room or roommate is not an approval by a landlord or by coHabit. coHabit doesn't match people on personal characteristics such as race, religion, national origin, sex, gender identity, sexual orientation, disability, age, family status or source of income.</li>
           <li><strong>Matches are suggestions.</strong> They are based on the budget, area, timing and rooms you entered, and are not a recommendation or guarantee.</li>
           <li><strong>No guarantees.</strong> The service is provided as is. It may change, be unavailable, or be shut down, and saved information may be removed.</li>
           <li><strong>Accounts.</strong> We may remove content or accounts that break these terms.</li>
@@ -1148,8 +1155,8 @@
     if (!me.user) return signInView(next || "/welcome");
     const t = me.user.accountType;
     if (t) {
-      const dest = t === "landlord" ? "/landlord" : "/renter";
-      navigate(next.startsWith(dest) ? next : dest, true);
+      const allowed = t === "landlord" ? ["/landlord"] : ["/assistant", "/renter"];
+      navigate(allowed.some((p) => next.startsWith(p)) ? next : allowed[0], true);
       return null;
     }
     return {
@@ -1549,6 +1556,8 @@
     smoking: ["Smoking", [["no_smoking", "No smoking"], ["outside_ok", "OK outside"], ["smoker", "I smoke"]]],
   };
 
+  const CHORES = [["", "No preference"], ["rotating_schedule", "A chore schedule"], ["split_by_task", "Split by task"], ["as_needed", "As needed"]];
+
   let lastMatches = null;
   let matchSort = "best";
 
@@ -1623,6 +1632,7 @@
         </dl>
         <ul class="reasons" aria-label="How you like to live">
           ${life.map((l) => `<li>${esc(l)}</li>`).join("")}
+          ${p.chores ? `<li>Chores: ${esc((CHORES.find((c) => c[0] === p.chores) || [])[1].toLowerCase())}</li>` : ""}
           <li>${p.roommate_visible ? (p.share_email ? "Roommate matching on, email shared" : "Roommate matching on") : "Roommate matching off"}</li>
         </ul>
       </section>`;
@@ -1660,7 +1670,7 @@
         <fieldset>
           <legend>How you like to live</legend>
           <p class="hint">Used for roommate matching. Room matches use the basics above.</p>
-          <div class="field-grid">${lifestyle}</div>
+          <div class="field-grid">${lifestyle}${field("chores", "Chores (optional)", select("chores", CHORES, v.chores || ""))}</div>
         </fieldset>
         <fieldset>
           <legend>Roommate matching (optional)</legend>
@@ -1730,10 +1740,395 @@
     }
   }
 
+  // ── Assistant: one chat, results beside it (in it on phones), confirmations inside it ──
+  // Everything shown in a result card comes from the database through /api/assistant; the AI only writes the
+  // message text. Saving to the profile or contacting a landlord happens only when the renter clicks Confirm.
+  const STARTERS = ["Find me a room near Brandeis", "I'm looking for a roommate", "What should I consider before signing a lease?"];
+  const BASIC_REASONS = {
+    not_configured: "The AI assistant isn't switched on yet, so you're in basic mode. It understands short answers about budget, move-in month, towns, distance from campus, rooms and lifestyle.",
+    user_limit: "You've used today's AI replies, so you're in basic mode until tomorrow (UTC). Your chat and answers are kept.",
+    site_limit: "The AI assistant has reached today's limit for coHabit, so you're in basic mode until tomorrow (UTC).",
+    unavailable: "The AI assistant isn't available right now, so you're in basic mode. Try again in a little while.",
+  };
+  let chat = null; // { messages, memory, saved, mode, basicReason, usage, keepDays, hasProfile, roommateMatching }
+  let chatSideId = null; // which reply's results are shown beside the chat
+  let chatBusy = false;
+  const chatCards = new Map(); // "<message id>:<ref>" or "saved:<id>" -> card, for the details box
+
+  // Server text -> safe HTML: paragraphs, with "- " lines as a list.
+  function richText(text) {
+    const blocks = [];
+    let list = null;
+    for (const line of String(text).split("\n")) {
+      const t = line.trim();
+      if (!t) {
+        list = null;
+      } else if (/^[-•] /.test(t)) {
+        if (!list) blocks.push((list = []));
+        list.push(t.slice(2));
+      } else {
+        list = null;
+        blocks.push(t);
+      }
+    }
+    return blocks.map((b) => (Array.isArray(b) ? `<ul>${b.map((li) => `<li>${esc(li)}</li>`).join("")}</ul>` : `<p>${esc(b)}</p>`)).join("");
+  }
+
+  const fitLists = (c, fitsLabel = "Why it fits") =>
+    (c.fits.length ? `<ul class="fit-list" aria-label="${fitsLabel}">${c.fits.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : "") +
+    (c.misses.length ? `<ul class="miss-list" aria-label="What doesn't fit">${c.misses.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : "");
+
+  const saveButton = (c, msgId) =>
+    c.savedId
+      ? `<button class="btn btn-small btn-quiet" type="button" data-action="chat-unsave" data-id="${esc(c.savedId)}" aria-pressed="true">Saved ✓</button>`
+      : msgId && c.available
+        ? `<button class="btn btn-small btn-quiet" type="button" data-action="chat-save" data-msg="${esc(msgId)}" data-ref="${esc(c.ref)}" aria-pressed="false">Save</button>`
+        : "";
+
+  function chatCard(c, msgId, key) {
+    chatCards.set(key, c);
+    const ref = c.ref ? `<span class="ref" aria-label="Result ${esc(c.ref)}">${esc(c.ref)}</span>` : "";
+    if (!c.available) {
+      return `<li class="mini-card is-gone">${ref}<p class="small muted">${c.kind === "room" ? "This room is no longer listed." : "This person is no longer looking for roommates."}</p>${c.savedId ? saveButton(c) : ""}</li>`;
+    }
+    if (c.kind === "person") {
+      return `
+        <li class="mini-card">
+          <div class="mini-top">${ref}<span class="person"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(c.firstName))}</span><span class="name">${esc(c.firstName)}</span></span>
+            <span class="card-tags">${c.sample ? `<span class="tag" title="Fictional person for demonstration">Sample</span>` : ""}${c.score != null ? `<span class="pill pill-ok" title="Compatibility score out of 100, worked out by coHabit">${c.score}% compatible</span>` : ""}</span></div>
+          ${fitLists(c, "What you have in common")}
+          ${c.email ? `<a class="card-link" href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : `<p class="small muted">Hasn't shared contact details.</p>`}
+          <div class="mini-actions">${saveButton(c, msgId)}</div>
+        </li>`;
+    }
+    const u = c.unit;
+    return `
+      <li class="mini-card">
+        <div class="mini-top">${ref}<h3 class="mini-title">${esc(u.name)}</h3>${u.sample ? `<span class="tag" title="Fictional listing for demonstration">Sample</span>` : ""}</div>
+        <p class="small muted">${esc(u.area)}${c.km != null ? ` · about ${c.km} km from Brandeis` : ""}</p>
+        <p class="mini-stats">${money(u.monthly_rent)}/mo · ${plural(u.rooms_available, "room", "rooms")} · from ${fmtDate(u.move_in_date)}</p>
+        ${fitLists(c)}
+        <div class="mini-actions">
+          <button class="btn btn-small btn-quiet" type="button" data-action="chat-details" data-key="${esc(key)}">Details</button>
+          ${saveButton(c, msgId)}
+          ${c.interestSent ? `<span class="saved small">Request sent</span>` : ""}
+        </div>
+      </li>`;
+  }
+
+  const resultLabel = (m) => {
+    const rooms = m.cards.filter((c) => c.kind === "room").length;
+    const people = m.cards.length - rooms;
+    return [rooms ? plural(rooms, "room", "rooms") : "", people ? plural(people, "person", "people") : ""].filter(Boolean).join(" and ");
+  };
+
+  function actionCard(a) {
+    const pending = a.status === "pending";
+    const status =
+      a.status === "done"
+        ? `<p class="saved small">${a.kind === "save_profile" ? "Saved to your profile." : "Request sent to the landlord."}</p>`
+        : a.status === "dismissed"
+          ? `<p class="small muted">Not done. Nothing was changed or sent.</p>`
+          : "";
+    const buttons = (confirmLabel) => `
+      <p class="field-error" role="alert"></p>
+      <div class="actions">
+        <button class="btn btn-small" type="button" data-action="chat-confirm" data-id="${esc(a.id)}">${confirmLabel}</button>
+        <button class="btn btn-small btn-quiet" type="button" data-action="chat-dismiss" data-id="${esc(a.id)}">Not now</button>
+      </div>`;
+    if (a.kind === "save_profile") {
+      const rows = a.changes
+        .map((ch) => `<tr><th scope="row">${esc(ch.label)}</th><td>${ch.from ? `<span class="was">${esc(ch.from)}</span> → ` : ""}${esc(ch.to)}</td></tr>`)
+        .join("");
+      return `
+        <div class="action-card" data-card="${esc(a.id)}">
+          <p class="action-title">${a.roommateOptIn ? "Turn on roommate matching?" : "Save these answers to your profile?"}</p>
+          ${a.roommateOptIn ? `<p class="small">Renters who also turned it on will see your first name, a compatibility score and what you have in common. You can turn it off at any time.</p>` : ""}
+          <table class="changes"><tbody>${rows}</tbody></table>
+          ${pending ? `${a.roommateOptIn ? `<label class="check small"><input type="checkbox" name="share_email" /><span>Also let my roommate matches see my email (${esc(me.user.email)})</span></label>` : ""}${buttons(a.roommateOptIn ? "Turn on and save" : "Save to my profile")}` : status}
+        </div>`;
+    }
+    return `
+      <div class="action-card" data-card="${esc(a.id)}">
+        <p class="action-title">Tell the landlord of “${esc(a.unitName)}” you're interested?</p>
+        ${
+          pending
+            ? `<label class="small" for="note-${esc(a.id)}">Your note (you can edit it)</label>
+               <textarea id="note-${esc(a.id)}" name="note" maxlength="500" rows="3">${esc(a.note)}</textarea>
+               <p class="hint">The landlord will see your name, your email (${esc(me.user.email)}) and this note. No phone numbers. A suggestion from coHabit isn't an approval: the landlord decides.</p>
+               ${buttons("Send request")}`
+            : `${a.note ? `<p class="small desc">“${esc(a.note)}”</p>` : ""}${status}`
+        }
+      </div>`;
+  }
+
+  function chatMessage(m, isLast) {
+    if (m.role === "user") return `<li class="msg msg-user"><span class="sr-only">You said:</span><div class="bubble">${richText(m.text)}</div></li>`;
+    const cards = m.cards.length
+      ? `<ul class="inline-cards" role="list" aria-label="Results">${m.cards.map((c) => chatCard(c, m.id, `${m.id}:${c.ref}`)).join("")}</ul>
+         <button class="results-chip" type="button" data-action="chat-show" data-msg="${esc(m.id)}"${chatSideId === m.id ? ' aria-current="true"' : ""}>${resultLabel(m)}${chatSideId === m.id ? " · shown beside the chat" : " · show beside the chat"}</button>`
+      : "";
+    return `
+      <li class="msg msg-bot">
+        <span class="sr-only">coHabit assistant said:</span>
+        ${m.notice ? `<p class="msg-notice">${esc(m.notice)}</p>` : ""}
+        <div class="bubble">${richText(m.text)}</div>
+        ${cards}
+        ${m.actions.map(actionCard).join("")}
+        ${isLast && m.quickReplies.length ? `<div class="quick" aria-label="Quick answers">${m.quickReplies.map((q) => `<button class="chip" type="button" data-action="chat-say" data-text="${esc(q)}">${esc(q)}</button>`).join("")}</div>` : ""}
+        <span class="msg-meta">${m.mode === "ai" ? "AI assistant" : "Basic mode"}</span>
+      </li>`;
+  }
+
+  function chatLogHtml() {
+    if (!chat.messages.length) {
+      const first = esc((me.user.name || "").split(" ")[0]);
+      return `
+        <li class="msg msg-bot">
+          <div class="bubble">
+            <p>Hi${first ? " " + first : ""}! I'm coHabit's assistant for Brandeis students. Tell me what you're looking for, like your budget, when you'd move in and where, and I'll find rooms or roommates that fit and explain why.</p>
+            <p>I'll ask one thing at a time, and you can correct me whenever.</p>
+          </div>
+          <div class="quick" aria-label="Ways to start">${STARTERS.map((q) => `<button class="chip" type="button" data-action="chat-say" data-text="${esc(q)}">${esc(q)}</button>`).join("")}</div>
+        </li>`;
+    }
+    const last = chat.messages[chat.messages.length - 1];
+    return chat.messages.map((m) => chatMessage(m, m === last)).join("");
+  }
+
+  function sideResultsHtml() {
+    const withCards = chat.messages.filter((m) => m.role === "assistant" && m.cards.length);
+    const m = withCards.find((x) => x.id === chatSideId) || withCards[withCards.length - 1];
+    if (!m) return `<p class="small muted">Rooms and roommates I find appear here, up to 3 at a time.</p>`;
+    chatSideId = m.id;
+    return `<ul class="side-cards" role="list">${m.cards.map((c) => chatCard(c, m.id, `${m.id}:${c.ref}`)).join("")}</ul>`;
+  }
+
+  function memoryHtml() {
+    if (!chat.memory.length) return `<p class="small muted">Nothing yet. What you tell me shows up here, and you can change it any time.</p>`;
+    return `
+      <ul class="memory" role="list">${chat.memory
+        .map(
+          (f) => `
+        <li>
+          <div class="memory-text"><span class="small muted">${esc(f.label)}</span><span>${esc(f.value)}</span></div>
+          <div class="memory-actions">
+            ${f.mustHave === undefined ? "" : `<button class="toggle${f.mustHave ? " on" : ""}" type="button" data-action="chat-strict" data-field="${esc(f.field)}" data-must="${f.mustHave ? "false" : "true"}" aria-pressed="${f.mustHave}" title="${f.mustHave ? "A must-have: rooms that miss it are hidden. Click to make it flexible." : "Flexible: it changes the order but hides nothing. Click to make it a must-have."}">${f.mustHave ? "Must-have" : "Flexible"}</button>`}
+            <button class="icon-btn" type="button" data-action="chat-forget" data-field="${esc(f.field)}" aria-label="Forget ${esc(f.label.toLowerCase())}" title="Forget this">×</button>
+          </div>
+        </li>`
+        )
+        .join("")}</ul>
+      <p class="hint">Must-haves filter the results. Flexible answers only change the order. This isn't your saved profile until you confirm it.</p>`;
+  }
+
+  const savedHtml = () =>
+    chat.saved.length
+      ? `<ul class="side-cards" role="list">${chat.saved.map((s) => chatCard({ ...s, ref: "" }, null, `saved:${s.id}`)).join("")}</ul>`
+      : `<p class="small muted">Use Save on a room or person to keep it here.</p>`;
+
+  const modePill = () =>
+    chat.mode === "ai"
+      ? `<span class="pill pill-ok" title="${chat.usage.usedToday} of ${chat.usage.perUserDaily} AI replies used today"><span class="dot" aria-hidden="true"></span>AI assistant</span>`
+      : `<span class="pill pill-off"><span class="dot" aria-hidden="true"></span>Basic mode</span>`;
+  const modeNotice = () => (chat.mode === "ai" ? "" : `<div class="notice notice-info" role="note"><span>${esc(BASIC_REASONS[chat.basicReason] || BASIC_REASONS.unavailable)}</span></div>`);
+
+  async function assistantPage() {
+    if (!me.user) {
+      return {
+        title: "Assistant",
+        html: `
+        <div class="panel">
+          <p class="eyebrow">coHabit assistant</p>
+          <h1 tabindex="-1">Find a room or roommate by chatting</h1>
+          <p class="muted">Tell the assistant your budget, move-in month and where you'd like to live. It shows up to three rooms or roommates that fit, explains why, and asks before saving or contacting anyone.</p>
+          <div class="actions"><button class="btn" type="button" data-action="sign-in" data-next="/assistant">${icon("google", 18)} Sign in with Google</button></div>
+        </div>`,
+      };
+    }
+    const blocked = gate("renter");
+    if (blocked !== undefined) return blocked;
+    const [state] = await Promise.all([api("/api/assistant"), loadMyInterests()]);
+    chat = state;
+    chatSideId = null;
+    return {
+      title: "Assistant",
+      html: `
+      <div class="assistant">
+        <section class="chat-col" aria-labelledby="chat-heading">
+          <div class="chat-head">
+            <div class="heading">
+              <h1 id="chat-heading" tabindex="-1">Your housing assistant</h1>
+              <p class="muted">Rooms and roommates near Brandeis, with the reasons they fit.</p>
+            </div>
+            <div class="chat-tools"><span id="chat-pill">${modePill()}</span><button class="btn btn-small btn-quiet" type="button" data-action="chat-clear" id="chat-clear">Clear chat</button></div>
+          </div>
+          <div id="chat-mode">${modeNotice()}</div>
+          <ol class="chat-log" id="chat-log" role="log" aria-live="polite" aria-label="Conversation">${chatLogHtml()}</ol>
+          <form class="chat-form" id="chat-form" novalidate>
+            <label class="sr-only" for="chat-input">Message to the assistant</label>
+            <textarea id="chat-input" name="text" rows="1" maxlength="800" placeholder="Your budget, move-in month, where you'd like to live…" autocomplete="off"></textarea>
+            <button class="btn" type="submit" id="chat-send">Send</button>
+          </form>
+          <p class="field-error" id="chat-error" role="alert"></p>
+          <p class="footnote">Your chat and what the assistant learns are saved to your coHabit account so you can pick up where you left off. They're deleted when you clear the chat or delete your account, or after ${chat.keepDays} days without use. When the AI is on, your messages and answers are sent to Anthropic (the company behind Claude) to write replies; other renters' names and contact details never are. Please don't share phone numbers, addresses or other personal details. <a href="/privacy">Privacy policy</a></p>
+        </section>
+        <aside class="side-col" aria-label="Results and your answers">
+          <section class="side-box side-results" aria-labelledby="results-heading"><h2 class="side-title" id="results-heading">Results</h2><div id="side-results">${sideResultsHtml()}</div></section>
+          <details class="side-box" open><summary class="side-title">What I know so far</summary><div id="side-memory">${memoryHtml()}</div></details>
+          <details class="side-box" open><summary class="side-title">Saved</summary><div id="side-saved">${savedHtml()}</div></details>
+          <p class="links small">Prefer to browse? <a href="/listings">All listings</a> · <a href="/renter">My matches and questionnaire</a></p>
+        </aside>
+      </div>`,
+      mount: () => {
+        document.getElementById("chat-clear").disabled = !chat.messages.length;
+        scrollChat();
+        if (window.matchMedia("(min-width: 901px)").matches) document.getElementById("chat-input").focus({ preventScroll: true });
+      },
+    };
+  }
+
+  function scrollChat() {
+    const log = document.getElementById("chat-log");
+    if (!log) return;
+    log.scrollTop = log.scrollHeight;
+    // On phones the whole page scrolls: keep the newest reply in view.
+    if (window.matchMedia("(max-width: 900px)").matches) {
+      const last = log.lastElementChild;
+      if (last) last.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  function refreshChat() {
+    if (!document.getElementById("chat-log")) return;
+    chatCards.clear();
+    document.getElementById("chat-log").innerHTML = chatLogHtml();
+    document.getElementById("side-results").innerHTML = sideResultsHtml();
+    document.getElementById("side-memory").innerHTML = memoryHtml();
+    document.getElementById("side-saved").innerHTML = savedHtml();
+    document.getElementById("chat-pill").innerHTML = modePill();
+    document.getElementById("chat-mode").innerHTML = modeNotice();
+    document.getElementById("chat-clear").disabled = !chat.messages.length;
+    scrollChat();
+  }
+
+  async function reloadChat() {
+    const keep = chatSideId;
+    chat = await api("/api/assistant");
+    chatSideId = keep;
+    refreshChat();
+  }
+
+  function growInput(el) {
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+  }
+
+  async function sendChat(text) {
+    text = String(text || "").trim();
+    const log = document.getElementById("chat-log");
+    if (!text || chatBusy || !log) return;
+    chatBusy = true;
+    const input = document.getElementById("chat-input");
+    const send = document.getElementById("chat-send");
+    const errorEl = document.getElementById("chat-error");
+    errorEl.textContent = "";
+    log.querySelectorAll(".quick").forEach((q) => q.remove());
+    if (!chat.messages.length) log.innerHTML = "";
+    log.insertAdjacentHTML(
+      "beforeend",
+      `<li class="msg msg-user pending"><span class="sr-only">You said:</span><div class="bubble">${richText(text)}</div></li>
+       <li class="msg msg-bot typing"><div class="bubble"><span class="dots" aria-hidden="true"><span></span><span></span><span></span></span><span class="sr-only">The assistant is writing a reply.</span></div></li>`
+    );
+    input.value = "";
+    growInput(input);
+    send.disabled = true;
+    scrollChat();
+    try {
+      const data = await api("/api/assistant/messages", { method: "POST", body: { text } });
+      chat.messages = chat.messages.concat(data.messages);
+      Object.assign(chat, { memory: data.memory, saved: data.saved, mode: data.mode, basicReason: data.basicReason, usage: data.usage });
+      const reply = data.messages.find((m) => m.role === "assistant");
+      if (reply && reply.cards.length) chatSideId = reply.id;
+      refreshChat();
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      refreshChat();
+      input.value = text;
+      growInput(input);
+      errorEl.textContent = e.message;
+    } finally {
+      chatBusy = false;
+      send.disabled = false;
+      if (window.matchMedia("(min-width: 901px)").matches) input.focus({ preventScroll: true });
+    }
+  }
+
+  async function chatRequest(path, options, okText) {
+    try {
+      const data = await api(path, options);
+      if (okText) toast(okText);
+      return data;
+    } catch (e) {
+      if (e.status === 401) showView(errorView(e));
+      else toast(e.message);
+      return null;
+    }
+  }
+
+  async function decideChatAction(button, decision) {
+    const card = button.closest(".action-card");
+    const id = button.dataset.id;
+    const errorEl = card.querySelector(".field-error");
+    const body = { decision };
+    if (decision === "confirm") {
+      const note = card.querySelector("textarea[name=note]");
+      if (note) body.note = note.value;
+      const share = card.querySelector("input[name=share_email]");
+      if (share) body.shareEmail = share.checked;
+    }
+    card.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    errorEl.textContent = "";
+    try {
+      const data = await api(`/api/assistant/actions/${encodeURIComponent(id)}`, { method: "POST", body });
+      if (data.interest) myInterests.add(data.interest.unitId);
+      if (decision === "confirm") toast(data.interest ? "Request sent. The landlord can reply by email." : "Saved to your profile.");
+      await reloadChat();
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      if (e.status === 409 || e.status === 404) return reloadChat().then(() => toast(e.message));
+      errorEl.textContent = e.message;
+      card.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    }
+  }
+
+  function openChatDetails(key) {
+    const c = chatCards.get(key);
+    const dialog = document.getElementById("details");
+    if (!c || !c.unit || !dialog) return;
+    const u = c.unit;
+    const where =
+      u.location && u.location.precision === "exact" && u.location.address
+        ? `<p class="small">${esc(u.location.address)}</p>`
+        : u.location
+          ? `<p class="small muted">The landlord shares an approximate area only (about 500 m wide), not the street address.</p>`
+          : `<p class="small muted">No map location given.</p>`;
+    dialog.querySelector(".details-body").innerHTML = `
+      <div class="card-top"><h2 id="details-title" class="card-title">${esc(u.name)}</h2>${u.sample ? `<span class="tag">Sample (fictional)</span>` : ""}</div>
+      <p class="muted small">${esc(u.area)}${c.km != null ? ` · about ${c.km} km from Brandeis in a straight line` : ""}</p>
+      ${where}
+      ${unitStats(u)}
+      ${u.description ? `<p class="desc">${esc(u.description)}</p>` : `<p class="small muted">No description.</p>`}
+      ${fitLists(c)}
+      <p class="hint">Listings don't record lease length, utilities, furnishing or fees unless the description says so. Ask the landlord.</p>
+      ${interestFooter(u)}`;
+    dialog.showModal();
+  }
+
   // ── Admin ────────────────────────────────────────────────────────────────────
   async function adminPage() {
     if (!me.user) return signInView("/admin");
-    const { users } = await api("/api/admin/users");
+    const [{ users }, ai] = await Promise.all([api("/api/admin/users"), api("/api/admin/assistant").catch(() => null)]);
     const detail = (u) =>
       u.accountType === "landlord"
         ? plural(u.unitCount, "unit", "units")
@@ -1773,11 +2168,26 @@
         ${tile("Renters", real.filter((u) => u.accountType === "renter").length)}
         ${samples ? tile("Sample accounts", samples, "fictional, not counted") : ""}
       </dl>
+      ${ai ? assistantUsageHtml(ai) : ""}
       <table class="tenants users">
         <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Account type</th><th scope="col">Joined</th><th scope="col">Activity</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`,
     };
+  }
+
+  // Totals only: no chat content is ever shown to the admin.
+  function assistantUsageHtml(ai) {
+    const week = ai.last7Days.reduce((sum, d) => ({ replies: sum.replies + d.replies, usd: sum.usd + d.estimatedUsd }), { replies: 0, usd: 0 });
+    return `
+      <section aria-labelledby="ai-heading">
+        <div class="section-heading"><h2 id="ai-heading">AI assistant</h2><span class="muted small">${ai.aiConfigured ? `On · ${esc(ai.model)}` : "Off: renters get basic mode"}</span></div>
+        <dl class="tiles">
+          ${tile("AI replies today", ai.today ? ai.today.replies : 0, `limit ${ai.limits.siteDaily} a day for the site, ${ai.limits.perUserDaily} per renter`)}
+          ${tile("Estimated cost today", "$" + (ai.today ? ai.today.estimatedUsd : 0).toFixed(2), "list prices, before caching discounts")}
+          ${tile("Last 7 days", "$" + week.usd.toFixed(2), plural(week.replies, "AI reply", "AI replies"))}
+        </dl>
+      </section>`;
   }
 
   // ── Admin: import external listings from an authorized source ────────────────
@@ -2062,6 +2472,7 @@
     if (m) return unitForm(safeDecode(m[1]));
     m = clean.match(/^\/landlord\/units\/([^/]+)$/);
     if (m) return unitPage(safeDecode(m[1]));
+    if (clean === "/assistant") return assistantPage();
     if (clean === "/renter") return renterPage();
     if (clean === "/admin") return adminPage();
     if (clean === "/admin/import") return adminImportPage();
@@ -2164,6 +2575,32 @@
       else if (a === "import-commit") commitImport(action);
       else if (a === "import-rollback") rollbackImport(action.dataset.id);
       else if (a === "toggle-samples") toggleSampleListings(action.dataset.hide === "true");
+      else if (a === "chat-say") sendChat(action.dataset.text);
+      else if (a === "chat-details") openChatDetails(action.dataset.key);
+      else if (a === "details-close") document.getElementById("details").close();
+      else if (a === "chat-confirm") decideChatAction(action, "confirm");
+      else if (a === "chat-dismiss") decideChatAction(action, "dismiss");
+      else if (a === "chat-save")
+        chatRequest("/api/assistant/saved", { method: "POST", body: { messageId: action.dataset.msg, ref: action.dataset.ref } }, "Saved. It's under Saved beside the chat.").then((d) => d && reloadChat());
+      else if (a === "chat-unsave") chatRequest(`/api/assistant/saved/${encodeURIComponent(action.dataset.id)}`, { method: "DELETE" }, "Removed from saved.").then((d) => d && reloadChat());
+      else if (a === "chat-show") {
+        chatSideId = action.dataset.msg;
+        const log = document.getElementById("chat-log");
+        const top = log.scrollTop;
+        refreshChat();
+        log.scrollTop = top;
+        document.querySelector(".side-results").scrollIntoView({ block: "nearest", behavior: "smooth" });
+      } else if (a === "chat-strict" || a === "chat-forget") {
+        const body = a === "chat-forget" ? { field: action.dataset.field, forget: true } : { field: action.dataset.field, mustHave: action.dataset.must === "true" };
+        chatRequest("/api/assistant/memory", { method: "POST", body }).then((d) => {
+          if (!d) return;
+          chat.memory = d.memory;
+          document.getElementById("side-memory").innerHTML = memoryHtml();
+        });
+      } else if (a === "chat-clear")
+        confirmDialog({ title: "Clear this chat?", text: "This deletes your messages and what the assistant learned from them. Your saved options and your saved profile stay.", confirmLabel: "Clear chat", danger: true }).then(
+          (ok) => ok && chatRequest("/api/assistant/clear", { method: "POST", body: {} }, "Chat cleared.").then((d) => d && reloadChat())
+        );
       return;
     }
     const link = e.target.closest("a");
@@ -2182,6 +2619,9 @@
     } else if (e.target.id === "prefs-form") {
       e.preventDefault();
       submitPrefs(e.target);
+    } else if (e.target.id === "chat-form") {
+      e.preventDefault();
+      sendChat(e.target.elements.text.value);
     } else if (e.target.id === "delete-account-form") {
       e.preventDefault();
       submitDeleteAccount(e.target);
@@ -2229,6 +2669,16 @@
       listingSort = e.target.value;
       refreshListings();
     }
+  });
+
+  // Chat box: Enter sends, Shift+Enter adds a line; the box grows with the text.
+  document.addEventListener("keydown", (e) => {
+    if (e.target.id !== "chat-input" || e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+    e.preventDefault();
+    sendChat(e.target.value);
+  });
+  document.addEventListener("input", (e) => {
+    if (e.target.id === "chat-input") growInput(e.target);
   });
 
   window.addEventListener("popstate", () => render(true));

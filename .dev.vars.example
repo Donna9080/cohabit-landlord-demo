@@ -9,3 +9,9 @@ GOOGLE_CLIENT_SECRET=
 
 # MapTiler browser key (restricted to this site and localhost). See ACCOUNTS_SETUP.md, "Maps".
 MAPTILER_KEY=
+
+# Optional: Anthropic API key for the assistant's AI mode. Leave empty for basic mode ($0).
+# Costs money once free credit is used: set a spend limit first. See ACCOUNTS_SETUP.md, "AI assistant".
+ANTHROPIC_API_KEY=
+# Optional: claude-opus-5-5 (default), claude-sonnet-5-5 or claude-haiku-5-5
+# ASSISTANT_MODEL=claude-haiku-5-5

@@ -8,6 +8,7 @@
 //   3. no dealbreaker: one has a pet and the other wants no pets, or one smokes and the other wants no smoking
 //   4. the score is MIN_ROOMMATE_SCORE or more
 // The score is 80 points of lifestyle fit plus 10 for overlapping budgets and 10 for the same month.
+// The optional chores answer adds to what the two have in common but not to the score.
 // What is returned about the other person is only what the two have in common.
 
 export const MIN_ROOMMATE_SCORE = 60;
@@ -23,6 +24,7 @@ const SCALES = {
   guests: { order: ["rarely", "sometimes", "often"], points: 10, same: { rarely: "Both rarely have guests", sometimes: "Both have guests sometimes", often: "Both often have guests" } },
 };
 const SLEEP_SAME = { early: "Both early birds", flexible: "Both flexible sleepers", late: "Both night owls" };
+const CHORES_SAME = { rotating_schedule: "Both like a chore schedule", split_by_task: "Both like splitting chores by task", as_needed: "Both do chores as needed" };
 
 export function scoreRoommate(me, other) {
   const shared = [];
@@ -76,6 +78,9 @@ export function scoreRoommate(me, other) {
   } else {
     score += 6;
   }
+
+  // Chores: optional, so it only adds to what the two have in common (no points).
+  if (me.chores && me.chores === other.chores) shared.push(CHORES_SAME[me.chores]);
 
   score = Math.round(score);
   return { score, shared, eligible: score >= MIN_ROOMMATE_SCORE };

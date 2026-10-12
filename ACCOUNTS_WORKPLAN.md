@@ -68,6 +68,14 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - [ ] **Real listings imported: 0.** Blocked on authorized data: Apartments.com refuses automated access and there's
       no republication agreement; a licensed provider's license or landlords' written permission is needed first.
 - [ ] Production for the import tool: migration 0005 and deploy (each needs the owner's approval)
+- [x] Chat-first AI housing and roommate assistant (2026-10-12, local only, not deployed): `/assistant` for renters,
+      rule-based search and fits/misses in code, Claude (official SDK, server side) only talks and explains, basic mode
+      when the AI is off/over a limit/down, confirmation cards for saving the profile or contacting a landlord, saved
+      options, Clear chat, usage limits and admin cost totals. Migration `0006_assistant.sql` (additive) applied
+      locally only. SDK `@anthropic-ai/sdk` 0.129.0. 314/314 tests (84 new), checked in the browser on desktop and phone.
+- [ ] **Owner decision:** turn on AI mode (Anthropic Console account, spend limit, API key entered by the owner; model
+      choice and expected cost in ACCOUNTS_SETUP.md, "AI assistant"). Until then the assistant runs in basic mode at $0.
+- [ ] Production for the assistant: migrations 0005 and 0006, then deploy (each needs the owner's approval)
 - [ ] Owner checks live: dragging the pin (1 km limit), the real Use my location permission prompt, a real unit with an address
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
 - [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works
@@ -162,6 +170,27 @@ by the live test.
 
 - Sign-in by an account that was never a test user has not been observed yet (app is published; ask a classmate to try).
 - Plan check: Wrangler's token can't read the account's subscriptions. Confirm **Workers Free** in the dashboard.
+
+## Assistant decisions (2026-10-12)
+
+- **Claude through the official Anthropic SDK, called only from the Worker.** The key is a Cloudflare secret; the
+  browser never talks to the AI service. Default model `claude-opus-5-5`; the owner can choose Sonnet 5.5 or
+  Haiku 5.5 with one variable. Adaptive thinking at low effort (chat), prompt caching on the fixed instructions,
+  server-side refusal fallback on Opus/Sonnet.
+- **The model never decides what's true.** Search, ranking, fits/misses and scores are code; the model gets labels
+  (R1, P1) instead of ids; numbers in its reply are checked against what the code returned.
+- **$0 by default.** Without a key the assistant runs a rule-based basic mode with the same search and cards, so the
+  site works and costs nothing until the owner decides. Limits (per renter, per site, per minute) and the Console
+  spend limit cap any AI cost; reaching one falls back to basic mode instead of failing.
+- **No side effects without a click.** Profile saves and landlord contact are confirmation cards handled by the
+  same server checks as the forms. Email sharing stays a separate, unticked box.
+- **History replayed as plain text** each turn (earlier thinking and tool calls aren't resent), so every turn is a
+  fresh, append-only exchange and the cached prefix stays stable.
+- **Roommate privacy kept.** The AI sees people only as P1–P3 with a score and shared traits; only what two renters
+  have in common is ever shown, never the other person's answers.
+- **Test gap fixed on the way:** the cleanup-job test was calling `/__scheduled`, which the site's static pages
+  answer (only `/api/*` reaches the Worker first), so the job never ran in tests. Tests now use
+  `/cdn-cgi/local/scheduled` and check that the job ran.
 
 ## Next safe step
 

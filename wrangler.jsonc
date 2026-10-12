@@ -28,9 +28,11 @@
     "BETTER_AUTH_URL": "https://cohabit-landlord-demo.dolgorsureng.workers.dev"
   },
   // Secrets (set with `npx wrangler secret put <NAME>`, never in this file):
-  //   BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+  //   BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, MAPTILER_KEY
+  //   ANTHROPIC_API_KEY (optional: turns on the assistant's AI mode; it can cost money, see ACCOUNTS_SETUP.md)
+  // Optional assistant settings as vars: ASSISTANT_MODEL, ASSISTANT_DAILY_PER_USER, ASSISTANT_DAILY_SITE, ASSISTANT_PER_MINUTE
   "triggers": {
-    // Daily cleanup of expired sessions and old rate-limit counters (04:17 UTC).
+    // Daily cleanup (04:17 UTC): expired sessions, old rate-limit counters, assistant chats unused for 90 days.
     "crons": ["17 4 * * *"]
   },
   "observability": { "enabled": true }

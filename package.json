@@ -18,6 +18,7 @@
     "workerd@1.20260923.1": true
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.129.0",
     "better-auth": "1.7.6"
   },
   "type": "module"

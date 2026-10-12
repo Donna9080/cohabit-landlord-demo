@@ -21,10 +21,13 @@ commands to run, test, migrate and deploy it. Progress and decisions are in
 
  Google (accounts.google.com) is only contacted during sign-in, by the browser
  redirect and by the Worker exchanging the one-time code. Scopes: openid email profile.
+
+ Anthropic (Claude API) is only contacted by the Worker, for a renter's chat message,
+ and only when the ANTHROPIC_API_KEY secret is set (see "AI assistant"). Not yet deployed.
 ```
 
-There is no R2 bucket and no file upload. There is no external AI service:
-matching is a small rule-based scorer in `src/match.js`.
+There is no R2 bucket and no file upload. Matching and search are rule-based code in `src/match.js`,
+`src/roommates.js` and `src/assistant/search.js`. The optional AI model only talks and explains (see "AI assistant").
 
 ## What is stored where
 
@@ -36,7 +39,11 @@ matching is a small rule-based scorer in `src/match.js`.
 | `verification` | Short-lived OAuth state for sign-in in progress | Nobody |
 | `rateLimit`, `app_rate_limits` | Request counters | Nobody |
 | `units` | A landlord's units: name, general area, monthly rent, rooms available, move-in date, description, status; optionally a Massachusetts street address, pin (lat/lng), approximate/exact choice and the MapTiler attribution | Owner: everything. Everyone: active units' listing fields only (no owner, no status); the location as an approximate 500 m circle with no address, unless the landlord chose exact. Admin: a count per landlord |
-| `match_preferences` | A renter's questionnaire: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets, smoking | Only that renter. Not landlords, not admin (admin sees "saved yes/no"). Other renters see nothing unless the renter turns on roommate matching (see below) |
+| `match_preferences` | A renter's questionnaire: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets, smoking, chores (optional) | Only that renter. Not landlords, not admin (admin sees "saved yes/no"). Other renters see nothing unless the renter turns on roommate matching (see below) |
+
+| `assistant_threads`, `assistant_messages`, `assistant_actions` | A renter's chat with the assistant, what it learned, and its confirmation cards (migration `0006`, local only so far) | Only that renter. Not landlords, not admin |
+| `saved_options` | Rooms and people a renter saved from the chat | Only that renter |
+| `assistant_usage` | AI replies and tokens per day, per renter and for the site | Nobody per renter; admin sees site totals |
 
 Not collected: street addresses (rejected by validation), phone numbers, IDs,
 dates of birth, financial or health details, profile photos.
@@ -167,6 +174,158 @@ worked example on the sample data are in [docs/SAMPLE_MATCHING.md](docs/SAMPLE_M
 - Admin still sees none of this. Turning the switch off, or deleting the account, removes the renter from other
   people's results on the next request.
 
+## AI assistant (chat)
+
+**Status (2026-10-12): built and tested locally only. Not deployed; the live database was not changed.**
+Renters get one chat at `/assistant`, now their first stop after sign-in. The questionnaire and matches
+(`/renter`) and Listings are unchanged and linked from the chat.
+
+**What it does.**
+- It asks one question at a time and learns:
+  - Budget, move-in month, and towns or distance from Brandeis.
+  - Rooms needed and lease length.
+  - For roommates: sleep, tidiness, noise, guests, pets, smoking and chores.
+- Must-have or flexible: each answer can be a must-have (it filters results) or flexible (it only changes the order).
+  The side panel "What I know so far" lists every answer, with Must-have/Flexible and Forget buttons.
+- Results: up to 3 rooms or people appear beside the chat, or inside it on phones. Each card shows why it fits and
+  what doesn't. Rooms open in a Details box (with the usual "I'm interested") and can be saved; people can be saved.
+- Controls:
+  - Starter buttons and quick-answer chips.
+  - Clear chat, which asks for confirmation first.
+  - A note under the chat explaining what is stored and sent.
+
+**Who does what.**
+- **The database code decides the results** (`src/assistant/search.js`):
+  - Must-haves filter; flexible answers rank.
+  - Every "fits" and "doesn't fit" line is written here.
+  - When nothing fits, it counts how many listings relaxing each condition would bring back.
+  - Sample listings and people are left out unless the renter asks for them, and are always labeled.
+  - Only renters who turned roommate matching on are compared.
+  - Distance is straight-line from Brandeis, using the same approximate point renters see. There is no travel-time data.
+- **The AI model explains** (Claude, called from the Worker with the official Anthropic SDK, `src/assistant/ai.js`).
+  - It can only call four tools: `update_memory`, `search_rooms`, `search_roommates` and `propose_action`.
+  - Every value it sends is checked like form input (`src/assistant/memory.js`). It cannot store anything outside
+    the fields above (for example, gender or religion).
+  - Its instructions forbid inventing anything and forbid using protected characteristics. They also say that a
+    suggestion is not approval.
+- **Grounding check.**
+  - Every dollar amount, percentage and km/mile figure in the model's reply must also appear in this turn's search
+    results, the renter's own words or the saved answers.
+  - Sentences that fail are removed. Travel times are always removed.
+  - If too little is left, the reply is rewritten from the search results.
+- **Confirmation before anything happens.** Nothing is saved to the profile and no landlord is contacted until the
+  renter clicks Confirm on a card (`POST /api/assistant/actions/<id>`). That step reuses the questionnaire's and
+  "I'm interested" checks. The landlord note can be edited first, and email sharing is a separate tick box.
+
+**Two modes.**
+- **AI mode** needs the `ANTHROPIC_API_KEY` secret.
+- **Basic mode** takes over when there is no key, a limit is reached, or the AI service fails or declines.
+  - It is rule-based (`src/assistant/basic.js`) and uses no outside service.
+  - It uses the same search, cards and confirmations, and shows a notice saying why it's in basic mode.
+  - It is free.
+
+**Limits** (Worker variables; defaults in code):
+
+| Variable | Default | What |
+| --- | --- | --- |
+| `ASSISTANT_MODEL` | `claude-opus-5-5` | `claude-opus-5-5`, `claude-sonnet-5-5` or `claude-haiku-5-5` |
+| `ASSISTANT_DAILY_PER_USER` | 40 | AI replies per renter per day (UTC), then basic mode |
+| `ASSISTANT_DAILY_SITE` | 300 | AI replies per day for the whole site, then basic mode |
+| `ASSISTANT_PER_MINUTE` | 10 | AI messages per renter per minute (basic mode keeps the usual 30 writes a minute) |
+
+Each reply is also capped:
+- At most 5 model calls, each with up to 4,000 output tokens, a 25-second timeout and 1 retry.
+- Messages are limited to 800 characters.
+- Messages containing phone numbers, email addresses, ID or card numbers, or street addresses are refused before
+  they are saved or sent.
+
+**Storage** (migration `0006_assistant.sql`, additive):
+
+| Table or column | What it holds |
+| --- | --- |
+| `assistant_threads` | The answers it learned, plus a server-only map from R1/P1 labels to ids |
+| `assistant_messages` | The last 100 messages per renter |
+| `assistant_actions` | Confirmation cards |
+| `saved_options` | Rooms and people the renter saved |
+| `assistant_usage` | Daily replies and tokens |
+| `match_preferences.chores` | Optional chores answer, also added to the questionnaire |
+
+When it is deleted:
+- **Clear chat** deletes the messages, the learned answers and the cards. Saved options stay.
+- **Deleting the account** deletes all of it.
+- **The daily cleanup job** deletes chats unused for 90 days, closes unanswered cards after 7 days, and deletes
+  per-renter usage counts after 7 days.
+
+**What the AI service receives:**
+- The fixed instructions and tool list.
+- The renter's last 12 messages and the assistant's replies.
+- A note with today's date, the learned answers and what's on screen.
+- Search results:
+  - For rooms: name, area, rent, rooms, move-in date, the first 300 characters of the description, and the
+    approximate distance.
+  - For people: only a label (P1–P3), a score and what the two have in common.
+
+It never receives names, email addresses, user or unit ids, or street addresses (checked by `npm test`). The admin
+sees daily totals and an estimated cost, never chats (Admin page, "AI assistant").
+
+### Turning the AI on (the owner's decision: it can cost money)
+
+Until a key is added, the assistant runs in basic mode and costs nothing.
+
+1. Sign in to the Anthropic Console at https://platform.claude.com with your own account.
+   - New accounts get a small amount of free credit.
+   - After that, usage is billed to a card you add yourself.
+2. Set a spend limit before creating a key.
+   - Go to **Settings → Billing → Spend limits → Set limit** and choose, for example, $5 a month.
+   - When the limit is reached, Anthropic refuses requests and coHabit switches to basic mode. Nothing more is charged.
+3. Create the key: **API keys → Create key**, named `cohabit`. It is shown only once.
+4. Enter the key yourself. Never paste it into a chat, an issue or a file that's in git.
+   - **Local testing:** add a line `ANTHROPIC_API_KEY=<the key>` to `.dev.vars` (git-ignored) and restart `npm run dev`.
+   - **Production, only when deploying:** run `npx wrangler secret put ANTHROPIC_API_KEY` and paste the key at the
+     hidden prompt.
+5. Optional: choose a cheaper model.
+   - Add `"ASSISTANT_MODEL": "claude-haiku-5-5"` (or `claude-sonnet-5-5`) under `vars` in `wrangler.jsonc`, or as a
+     line in `.dev.vars`.
+
+### Expected cost
+
+Anthropic list prices, checked 2026-10-12, in US dollars per million tokens:
+
+| Model | Input | Output | Cached input |
+| --- | --- | --- | --- |
+| Opus 5.5 | $4 | $20 | $0.20 |
+| Sonnet 5.5 | $2 | $10 | $0.10 |
+| Haiku 5.5 | $0.10 | $0.50 | $0.01 |
+
+How much each reply uses:
+- The fixed instructions and tool list are about 2,700 tokens, plus 286 that the API adds whenever tools are used.
+  This part is marked for caching.
+- A typical reply takes 2 or 3 model calls.
+
+| Model | Per AI reply (estimate) | 600 replies (30 students × 20) | Most in one day (300-reply cap) |
+| --- | --- | --- | --- |
+| Opus 5.5 (default) | about 2–6¢ | about $15–35 | about $17 |
+| Sonnet 5.5 | about 1–3¢ | about $7–18 | about $9 |
+| Haiku 5.5 | about 0.1¢ | under $1 | under $0.50 |
+
+Where to see the real numbers:
+- The Admin page shows each day's AI replies and an estimate at list prices, before caching discounts.
+- The Console's Usage page shows the actual bill.
+
+Refusal fallback:
+- On Opus and Sonnet, requests turn on Anthropic's server-side fallback (`fallbacks: "default"`). If the model
+  declines for a safety reason, Anthropic answers with another model, billed at that model's rates.
+- If every model declines, coHabit answers in basic mode.
+
+### Deploying it (not done; each step needs the owner's approval)
+
+Deploying also ships the earlier import tool (commit `8443019`), which needs migration 0005.
+
+1. Note a restore point: `npx wrangler d1 time-travel info DB`.
+2. Apply migrations 0005 and 0006 (both additive): `npx wrangler d1 migrations apply DB --remote`.
+3. Optional: set the `ANTHROPIC_API_KEY` secret (see above). Without it, the live site runs basic mode at $0.
+4. Deploy with `npx wrangler deploy`, then sign in as a renter and open `/assistant`.
+
 ## Sample data (fictional)
 
 Loaded on 2026-10-01 so matching can be seen with realistic volume: 6 sample landlords, 20 sample units and
@@ -202,9 +361,10 @@ counts are real data only. Re-running `scripts/sample-data.sql` would add all of
 | Save/edit **own** preferences, see matches | | | ✓ | |
 | See possible roommates (only after opting in; only others who opted in) | | | ✓ | |
 | Tell a unit's landlord "I'm interested"; withdraw it | | | ✓ | |
+| Chat with the assistant; confirm its cards; save options (`/assistant`) | | | ✓ | |
 | See and remove requests from renters on **own** units | | ✓ | | |
 | Delete **own** account and everything saved with it (`/account`) | | ✓ | ✓ | ✓ (not the last admin) |
-| Read-only user list (`/admin`) | | | | ✓ |
+| Read-only user list (`/admin`), AI assistant totals and estimated cost | | | | ✓ |
 
 Rules enforced on the server (`src/index.js`), not in the page:
 
@@ -267,6 +427,8 @@ npx wrangler d1 execute DB --remote --command "DELETE FROM session WHERE userId 
 | `GOOGLE_CLIENT_ID` | Cloudflare secret | From Google Cloud OAuth client |
 | `GOOGLE_CLIENT_SECRET` | Cloudflare secret | From Google Cloud OAuth client |
 | `MAPTILER_KEY` | Cloudflare secret (and `.dev.vars` locally) | MapTiler browser key, restricted to this site and localhost (see "Maps and location") |
+| `ANTHROPIC_API_KEY` | Cloudflare secret (and `.dev.vars` locally). **Not set anywhere yet.** | Turns on AI mode for the assistant. The owner creates it in the Anthropic Console and enters it; see "AI assistant" |
+| `ASSISTANT_MODEL`, `ASSISTANT_DAILY_PER_USER`, `ASSISTANT_DAILY_SITE`, `ASSISTANT_PER_MINUTE` | Optional `vars` | Model and usage limits; defaults in "AI assistant" |
 
 Locally the same names go in `.dev.vars` (git-ignored; copy `.dev.vars.example`).
 Binding: `DB` → D1 `cohabit-db` (`0e413d91-d5f8-42ce-868c-fc382b0ca38c`).
@@ -329,13 +491,15 @@ npm install
 copy .dev.vars.example .dev.vars        # then fill in the values (BETTER_AUTH_SECRET: any long random string)
 npm run db:migrate:local                # = wrangler d1 migrations apply DB --local
 npm run dev                             # http://localhost:8787
-npm test                                # 230 automated checks (see below)
+npm test                                # 314 automated checks (see below)
 ```
 
 `npm test` (`tests/run-local.mjs`) wipes and recreates a separate local database in
 `.wrangler/test-state`, starts `wrangler dev` on port 8788 with a random test secret
 and fake Google client values, and signs fixture users in by writing session rows
-and signed cookies. It never contacts Cloudflare's remote D1 or Google. Local D1
+and signed cookies. It never contacts Cloudflare's remote D1, Google or Anthropic: a stand-in for the AI
+service (`tests/fake-anthropic.mjs`, port 8799) follows scripted steps and records every request, so the tests
+can check what would have been sent. Local D1
 is Wrangler's local simulator (SQLite inside workerd), not the real D1 service.
 
 Real Google sign-in locally needs your Google client values in `.dev.vars` and
@@ -384,11 +548,11 @@ Cloudflare dashboard (Workers & Pages → Plans). Alerts are not a spending cap.
 
 ## Not built (on purpose)
 
-Map search on the renter's matches page, distance-based matching, landlord tenant preferences, applicant tracking beyond the request list, private notes, saved matches,
+Map search on the renter's matches page, travel-time commute data, imported (external) listings in the assistant, replies that stream word by word, landlord tenant preferences, applicant tracking beyond the request list, private notes,
 in-app messaging threads, email notifications, listing photos / R2 uploads, landlord approval or verification, admin moderation/editing/deleting, admin stats,
 role-management UI, admin deleting other people's accounts, changing account type, payments.
 
-## Manual test for a group member (about 20 minutes)
+## Manual test for a group member (about 25 minutes)
 
 Use two Google accounts and two browsers (or one normal window and one private window):
 **A** will be the landlord, **B** the renter. Button and page names below are exactly as they appear on the site.
@@ -481,6 +645,23 @@ you create in part 2.
 
 Open the site on a phone, or narrow the browser window. The top-bar links move to a second row, the map sits
 above the list, cards stack in one column, and the admin list becomes one card per person. Nothing should scroll sideways.
+
+### 9. The assistant (5 minutes, renter B; only after the assistant is deployed)
+
+1. As B, click **Assistant** in the top bar. The chat starts with a greeting and three starter buttons. The pill
+   says **AI assistant**, or **Basic mode** with a note explaining why.
+2. Click **Find me a room near Brandeis** and answer its questions one at a time (budget, move-in month, rooms).
+   **What I know so far** fills in as you go. A message with a phone number is refused, with a note under the box.
+3. When results appear (up to 3 beside the chat, or inside it on a phone), each card says why it fits and what doesn't.
+   If none fit, the reply says which change would bring listings back.
+4. Correct something ("actually my budget is $1,200"): the answer changes in **What I know so far** and the results
+   update. Click **Must-have** next to the budget to make it **Flexible**.
+5. Open a card's **Details**, then **Save** it: it appears under **Saved**. Ask it to contact the landlord: a card with
+   an editable note appears and nothing is sent until you click **Send request** (click **Not now**).
+6. Ask for a roommate and answer the lifestyle questions. A **Turn on roommate matching?** card lists exactly what
+   would be saved. Click **Not now** unless B should be discoverable.
+7. Reload, or sign out and in: the chat is still there. Then **Clear chat** → confirm: the chat and answers are gone,
+   **Saved** stays.
 
 ### If something fails
 

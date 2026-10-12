@@ -13,102 +13,21 @@
 //   /api/admin/users             read-only user list (admin only)
 //   /api/admin/imports[...]      import external listings from an authorized source; roll back (admin only)
 //   /api/admin/settings          hide or show sample listings in public search (admin only)
+//   /api/assistant[...]          the renter's chat assistant (src/assistant/)
+//   /api/admin/assistant         assistant usage totals and estimated cost (admin only)
+import { assistantCleanup, assistantDeleteStatements, assistantUsageReport, handleAssistant } from "./assistant/routes.js";
 import { getAuth } from "./auth.js";
-import { rankUnits } from "./match.js";
+import { HttpError, MAX_BODY, assertSameOrigin, json, rateLimit, readJson, withSecurityHeaders } from "./http.js";
 import { IMPORT_LIMIT, previewImport } from "./imports.js";
+import { activeListings, listingMapper, LISTING_FIELDS, noSamples, sampleListingsHidden } from "./listings.js";
+import { rankUnits } from "./match.js";
+import { asPrefs, createInterest, loadPreferences, MAX_INTERESTS_PER_RENTER, savePreferences } from "./profile.js";
 import { firstNameOf, rankRoommates } from "./roommates.js";
 import { InvalidInput, isUnitId, parseAccountType, parseInterest, parsePreferences, parseUnit } from "./validate.js";
 
-const MAX_BODY = 16 * 1024;
 const MAX_IMPORT_BODY = 600 * 1024; // admin CSV imports only
 const MAX_UNITS_PER_LANDLORD = 50;
-const MAX_INTERESTS_PER_RENTER = 20;
 const LIMITS = { read: 120, write: 30 }; // requests per minute per user (or per IP when signed out)
-
-class HttpError extends Error {
-  constructor(status, code, message, extra) {
-    super(message);
-    this.status = status;
-    this.code = code;
-    this.extra = extra;
-  }
-}
-
-const SECURITY_HEADERS = {
-  "Cache-Control": "private, no-store",
-  "X-Content-Type-Options": "nosniff",
-  "Referrer-Policy": "same-origin",
-};
-
-function json(data, status = 200, setCookies = []) {
-  const headers = new Headers({ "Content-Type": "application/json; charset=utf-8", ...SECURITY_HEADERS });
-  for (const c of setCookies) headers.append("Set-Cookie", c);
-  return new Response(JSON.stringify(data), { status, headers });
-}
-
-function withSecurityHeaders(response) {
-  const r = new Response(response.body, response);
-  for (const [k, v] of Object.entries(SECURITY_HEADERS)) r.headers.set(k, v);
-  return r;
-}
-
-// ── Request helpers ─────────────────────────────────────────────────────────
-
-// Cookie-authenticated writes must come from our own pages.
-function assertSameOrigin(request, env) {
-  const expected = new URL(env.BETTER_AUTH_URL).origin;
-  const origin = request.headers.get("Origin");
-  const site = request.headers.get("Sec-Fetch-Site");
-  if (origin !== expected || (site && site !== "same-origin")) {
-    throw new HttpError(403, "forbidden_origin", "This request must come from the coHabit site.");
-  }
-}
-
-async function readJson(request, max = MAX_BODY) {
-  const type = (request.headers.get("Content-Type") || "").toLowerCase();
-  if (!type.startsWith("application/json")) throw new HttpError(415, "unsupported_type", "Send JSON.");
-  if (Number(request.headers.get("Content-Length") || 0) > max) throw new HttpError(413, "too_large", "Request too large.");
-  const reader = request.body?.getReader();
-  if (!reader) throw new HttpError(400, "invalid_json", "Request body is empty.");
-  const chunks = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > max) {
-      await reader.cancel();
-      throw new HttpError(413, "too_large", "Request too large.");
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(size);
-  let at = 0;
-  for (const c of chunks) {
-    bytes.set(c, at);
-    at += c.byteLength;
-  }
-  try {
-    return JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    throw new HttpError(400, "invalid_json", "Request body is not valid JSON.");
-  }
-}
-
-// Fixed one-minute window counter in D1, shared by every Worker instance.
-async function rateLimit(env, key, max) {
-  const windowStart = Math.floor(Date.now() / 60000);
-  const row = await env.DB.prepare(
-    `INSERT INTO app_rate_limits (key, window_start, count) VALUES (?1, ?2, 1)
-     ON CONFLICT (key) DO UPDATE SET
-       count = CASE WHEN window_start = ?2 THEN count + 1 ELSE 1 END,
-       window_start = ?2
-     RETURNING count`
-  )
-    .bind(key, windowStart)
-    .first();
-  if (row && row.count > max) throw new HttpError(429, "rate_limited", "Too many requests. Wait a minute and try again.");
-}
 
 const hasSessionCookie = (request) => /(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=/.test(request.headers.get("Cookie") || "");
 
@@ -183,27 +102,6 @@ const locationValues = (unit) =>
   unit.location
     ? [unit.location.address, unit.location.lat, unit.location.lng, unit.location.precision, GEO_SOURCE]
     : [null, null, null, "approximate", null];
-// "sample" marks fictional demo listings (owned by users whose id starts with "sample-"; see scripts/sample-data.mjs).
-const LISTING_FIELDS =
-  "id, name, area, monthly_rent, rooms_available, move_in_date, description, (landlord_user_id LIKE 'sample-%') AS sample, address, lat, lng, location_precision";
-
-// What renters may see of a unit's location. For "approximate" the exact point and the street
-// address never leave the server: the point is snapped to a ~400 m grid and moved by a secret,
-// per-unit offset, so the true spot is always inside the 500 m circle but can't be worked out.
-const APPROX_RADIUS_M = 500;
-function approximatePoint(id, lat, lng, salt) {
-  const cell = 0.004;
-  let h = 2166136261;
-  for (const ch of salt + id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
-  const dx = ((h & 0xffff) / 0xffff - 0.5) * 0.0024;
-  const dy = ((h >>> 16) / 0xffff - 0.5) * 0.0024;
-  return { lat: +(Math.round(lat / cell) * cell + dy).toFixed(4), lng: +(Math.round(lng / cell) * cell + dx).toFixed(4) };
-}
-function publicLocation(u, salt) {
-  if (u.lat == null || u.lng == null) return null;
-  if (u.location_precision === "exact") return { precision: "exact", lat: u.lat, lng: u.lng, address: u.address };
-  return { precision: "approximate", radiusM: APPROX_RADIUS_M, ...approximatePoint(u.id, u.lat, u.lng, salt) };
-}
 // Imported listings: shown with their source, never tied to a landlord, never "approximate"
 // (their address is public on the source; coordinates are only stored when the source allows it).
 const EXTERNAL_FIELDS =
@@ -226,20 +124,6 @@ const asExternal = (e) => ({
   photo: e.photo_url ? { url: e.photo_url, license: e.photo_license } : null,
   location: e.lat != null ? { precision: "exact", lat: e.lat, lng: e.lng, address: e.address } : null,
 });
-async function sampleListingsHidden(db) {
-  const row = await db.prepare(`SELECT value FROM app_settings WHERE key = 'hide_sample_listings'`).first();
-  return row?.value === "1";
-}
-const noSamples = (hidden) => (hidden ? " AND landlord_user_id NOT LIKE 'sample-%'" : "");
-
-const listingMapper = (env) => (u) => {
-  const { lat, lng, location_precision, address, ...rest } = u;
-  return { ...rest, sample: !!u.sample, location: publicLocation(u, env.BETTER_AUTH_SECRET || "") };
-};
-const PREF_FIELDS =
-  "budget_min, budget_max, move_in_month, area, rooms_needed, sleep_schedule, cleanliness, noise, guests, pets, smoking, roommate_visible, share_email, updated_at";
-const asPrefs = (p) => p && { ...p, roommate_visible: !!p.roommate_visible, share_email: !!p.share_email };
-
 async function handleApi(request, env, url) {
   const method = request.method;
   const path = url.pathname.replace(/\/+$/, "");
@@ -290,6 +174,7 @@ async function handleApi(request, env, url) {
     }
     // One batch = one transaction in D1. Children first, then the user row.
     await db.batch([
+      ...assistantDeleteStatements(db, user.id),
       db.prepare(`DELETE FROM unit_interests WHERE renter_user_id = ?1 OR unit_id IN (SELECT id FROM units WHERE landlord_user_id = ?1)`).bind(user.id),
       db.prepare(`DELETE FROM units WHERE landlord_user_id = ?1`).bind(user.id),
       db.prepare(`DELETE FROM match_preferences WHERE user_id = ?1`).bind(user.id),
@@ -420,26 +305,7 @@ async function handleApi(request, env, url) {
     }
     if (method === "POST") {
       const { unit_id, message } = parseInterest(await readJson(request));
-      const unit = await db
-        .prepare(`SELECT id, (landlord_user_id LIKE 'sample-%') AS sample FROM units WHERE id = ?1 AND status = 'active'`)
-        .bind(unit_id)
-        .first();
-      if (!unit) throw new HttpError(404, "not_found", "This unit is no longer listed.");
-      if (unit.sample) throw new HttpError(409, "sample_listing", "This is a sample listing, so there is no landlord to contact.");
-      const { n } = await db.prepare(`SELECT COUNT(*) AS n FROM unit_interests WHERE renter_user_id = ?1`).bind(user.id).first();
-      if (n >= MAX_INTERESTS_PER_RENTER) {
-        throw new HttpError(409, "too_many_interests", `You can have up to ${MAX_INTERESTS_PER_RENTER} open requests. Withdraw one first.`);
-      }
-      const now = Date.now();
-      const res = await db
-        .prepare(
-          `INSERT INTO unit_interests (id, unit_id, renter_user_id, message, created_at) VALUES (?1, ?2, ?3, ?4, ?5)
-           ON CONFLICT (unit_id, renter_user_id) DO NOTHING`
-        )
-        .bind(crypto.randomUUID(), unit_id, user.id, message, now)
-        .run();
-      if (res.meta.changes !== 1) throw new HttpError(409, "already_sent", "You already told this landlord you're interested.");
-      return reply({ interest: { unitId: unit_id, message, createdAt: now } }, 201);
+      return reply({ interest: await createInterest(db, user.id, unit_id, message) }, 201);
     }
     throw new HttpError(405, "method_not_allowed", "Not allowed.");
   }
@@ -469,41 +335,21 @@ async function handleApi(request, env, url) {
   if (path === "/api/renter/preferences") {
     const user = requireType(viewer, "renter");
     if (method === "GET") {
-      const prefs = await db.prepare(`SELECT ${PREF_FIELDS} FROM match_preferences WHERE user_id = ?1`).bind(user.id).first();
+      const prefs = await loadPreferences(db, user.id);
       return reply({ preferences: asPrefs(prefs) ?? null });
     }
     if (method === "PUT") {
       const p = parsePreferences(await readJson(request));
-      const now = Date.now();
-      const saved = await db
-        .prepare(
-          `INSERT INTO match_preferences (user_id, budget_min, budget_max, move_in_month, area, rooms_needed,
-             sleep_schedule, cleanliness, noise, guests, pets, smoking, created_at, updated_at, roommate_visible, share_email)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, ?14, ?15)
-           ON CONFLICT (user_id) DO UPDATE SET
-             budget_min = excluded.budget_min, budget_max = excluded.budget_max, move_in_month = excluded.move_in_month,
-             area = excluded.area, rooms_needed = excluded.rooms_needed, sleep_schedule = excluded.sleep_schedule,
-             cleanliness = excluded.cleanliness, noise = excluded.noise, guests = excluded.guests, pets = excluded.pets,
-             smoking = excluded.smoking, updated_at = excluded.updated_at,
-             roommate_visible = excluded.roommate_visible, share_email = excluded.share_email
-           RETURNING ${PREF_FIELDS}`
-        )
-        .bind(user.id, p.budget_min, p.budget_max, p.move_in_month, p.area, p.rooms_needed,
-          p.sleep_schedule, p.cleanliness, p.noise, p.guests, p.pets, p.smoking, now, p.roommate_visible ? 1 : 0, p.share_email ? 1 : 0)
-        .first();
-      return reply({ preferences: asPrefs(saved) });
+      return reply({ preferences: await savePreferences(db, user.id, p) });
     }
     throw new HttpError(405, "method_not_allowed", "Not allowed.");
   }
 
   if (path === "/api/renter/matches" && method === "GET") {
     const user = requireType(viewer, "renter");
-    const prefs = await db.prepare(`SELECT ${PREF_FIELDS} FROM match_preferences WHERE user_id = ?1`).bind(user.id).first();
+    const prefs = await loadPreferences(db, user.id);
     if (!prefs) return reply({ matches: [], needsPreferences: true });
-    const { results } = await db
-      .prepare(`SELECT ${LISTING_FIELDS} FROM units WHERE status = 'active'${noSamples(await sampleListingsHidden(db))} ORDER BY move_in_date, id LIMIT 200`)
-      .all();
-    return reply({ matches: rankUnits(prefs, results.map(listingMapper(env))) });
+    return reply({ matches: rankUnits(prefs, await activeListings(db, env)) });
   }
 
   // Renter: possible roommates. Opt-in on both sides: you must have turned it on to see anyone,
@@ -511,13 +357,13 @@ async function handleApi(request, env, url) {
   // in common, and an email only if that person chose to share it. Never ids or raw answers.
   if (path === "/api/renter/roommates" && method === "GET") {
     const user = requireType(viewer, "renter");
-    const mine = await db.prepare(`SELECT ${PREF_FIELDS} FROM match_preferences WHERE user_id = ?1`).bind(user.id).first();
+    const mine = await loadPreferences(db, user.id);
     if (!mine) return reply({ roommates: [], needsPreferences: true, optedIn: false });
     if (!mine.roommate_visible) return reply({ roommates: [], optedIn: false });
     const { results } = await db
       .prepare(
         `SELECT p.budget_min, p.budget_max, p.move_in_month, p.area, p.sleep_schedule, p.cleanliness, p.noise, p.guests,
-           p.pets, p.smoking, p.share_email, u.name, u.email, (u.id LIKE 'sample-%') AS sample
+           p.pets, p.smoking, p.chores, p.share_email, u.name, u.email, (u.id LIKE 'sample-%') AS sample
          FROM match_preferences p JOIN "user" u ON u.id = p.user_id
          WHERE p.roommate_visible = 1 AND p.user_id != ?1 AND u.account_type = 'renter'
          ORDER BY p.updated_at DESC LIMIT 500`
@@ -652,6 +498,19 @@ async function handleApi(request, env, url) {
     throw new HttpError(404, "not_found", "Not found.");
   }
 
+  // Renter: the chat assistant (src/assistant/). Renters only; every write is checked like the forms.
+  if (path === "/api/assistant" || path.startsWith("/api/assistant/")) {
+    const user = requireType(viewer, "renter");
+    return handleAssistant({ request, env, db, user, path, method, reply });
+  }
+
+  // Admin: AI assistant use today and over the last 7 days, with an estimated cost. Totals only, no chats.
+  if (path === "/api/admin/assistant" && method === "GET") {
+    const user = requireUser(viewer);
+    if (user.role !== "admin") throw new HttpError(403, "forbidden", "You don't have access to this page.");
+    return reply(await assistantUsageReport(env, db));
+  }
+
   // Admin: read-only user list. No questionnaire answers, unit details, sessions or tokens.
   if (path === "/api/admin/users" && method === "GET") {
     const user = requireUser(viewer);
@@ -687,7 +546,7 @@ export default {
     }
   },
 
-  // Daily cleanup of expired sessions, OAuth state and old rate-limit counters.
+  // Daily cleanup of expired sessions, OAuth state, old rate-limit counters and unused assistant chats.
   async scheduled(_event, env) {
     const nowIso = new Date().toISOString();
     const nowMs = Date.now();
@@ -696,6 +555,7 @@ export default {
       env.DB.prepare(`DELETE FROM "verification" WHERE "expiresAt" < ?1`).bind(nowIso),
       env.DB.prepare(`DELETE FROM "rateLimit" WHERE "lastRequest" < ?1`).bind(nowMs - 3600_000),
       env.DB.prepare(`DELETE FROM app_rate_limits WHERE window_start < ?1`).bind(Math.floor(nowMs / 60000) - 60),
+      ...assistantCleanup(env.DB, nowMs),
     ]);
   },
 };

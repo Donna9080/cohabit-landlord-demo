@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-06
+# coHabit project checkpoint: 2026-10-12
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -9,13 +9,14 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 | | Count | Where checked |
 |---|---|---|
 | **Real external listings imported** | **0** | Live: the `external_listings` table doesn't exist yet (migration 0005 not applied). Local: 0. |
-| Real accounts | 10 | Live database, read-only query |
+| Real accounts | 10 | Live database, read-only query on 2026-10-06 (not re-checked; nothing live has changed since) |
 | Sample (fictional) accounts | 0 | Live: all 36 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
-| Real landlord units | 5 | Live |
+| Real landlord units | 5 | Live, 2026-10-06 |
 | Sample units | 0 | Live: all 20 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
-| "I'm interested" requests | 2 | Live |
+| "I'm interested" requests | 2 | Live, 2026-10-06 |
 | Admins | 1 | Live (the owner) |
-| Automated tests | 230 passing | `npm test`, local, 2026-10-06 |
+| Automated tests | 314 passing | `npm test`, local, 2026-10-12 |
+| AI cost so far | $0 | No Anthropic key exists; the assistant has only run in basic mode or against the test stand-in |
 
 No real listings were imported because no authorized data source exists yet (see "Pending work").
 
@@ -23,14 +24,17 @@ No real listings were imported because no authorized data source exists yet (see
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
 - **Live version:** `2e452e10-a5f3-4a87-b70a-b6970607f827`, deployed 2026-10-03 (always-on map). Matches git commit
-  `85c8524` on GitHub `main`.
-- **Not deployed:** commit `8443019`, the external listing import tool, plus this checkpoint commit. Both are local
-  only, ahead of `origin/main`.
-- **Live database (`cohabit-db`):** migrations 0001 to 0004 applied. **0005 (external listings) not applied.**
+  `85c8524`.
+- **Not deployed (local commits only):**
+  - The external listing import tool (`8443019`).
+  - The chat assistant (this checkpoint).
+- **Live database (`cohabit-db`):** migrations 0001 to 0004 applied. **0005 (external listings) and 0006 (assistant)
+  are not applied.**
 - **Cloudflare secrets (names only):** `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MAPTILER_KEY`.
+  No `ANTHROPIC_API_KEY`.
 - **Google sign-in:** published (In production), External audience.
-- **MapTiler:** Free plan, no billing; browser key restricted to the site and localhost (verified: 200 from the site,
-  403 from other origins).
+- **MapTiler:** Free plan, no billing. The browser key is restricted to the site and localhost (verified: 200 from the
+  site, 403 from other origins).
 
 ## Completed changes (in order)
 
@@ -44,56 +48,107 @@ No real listings were imported because no authorized data source exists yet (see
 | Privacy | Delete my account; privacy and terms pages | Yes |
 | Roommates | Opt-in roommate matching on lifestyle answers; optional email sharing | Yes |
 | Contact | "I'm interested" requests from renters to landlords | Yes |
-| Sample data | 6 landlords, 20 units, 30 renters, all tagged Sample; matching report in `docs/SAMPLE_MATCHING.md` | Yes |
+| Sample data | 6 landlords, 20 units, 30 renters, all tagged Sample; matching report in `docs/SAMPLE_MATCHING.md` (since deleted from live) | Removed |
 | Design | Option A cards, one navigation bar, unit page, in-page dialogs, loading/empty/error/success states | Yes |
 | Maps | Massachusetts-only place search, Use my location (browser only), always-on map, landlord address + draggable pin, approximate (500 m) or exact | Yes |
-| **Import tool** | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | **No (local only)** |
+| Import tool | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | **No (local only)** |
+| **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | **No (local only)** |
+
+### The assistant (2026-10-12)
+
+- **What renters get:**
+  - One chat that asks one question at a time, remembers the answers and accepts corrections.
+  - Must-have or flexible for budget, timing, area and distance.
+  - Up to 3 rooms or roommates beside the chat (inside it on phones), each with why it fits and what doesn't.
+  - Details, Save, and Refine-by-chatting without losing the conversation.
+  - Starter buttons, Clear chat, and a storage note.
+  - Confirmation cards before saving the profile or contacting a landlord.
+- **How it stays truthful:**
+  - Code searches the database, filters and ranks, and writes every fit and mismatch.
+  - Claude (official Anthropic SDK, server side) only talks and explains, through four checked tools.
+  - Invented prices, distances and percentages are removed from replies.
+  - Sample data is excluded unless asked for, and labeled.
+  - Only discoverable roommates are shown.
+  - No protected characteristics can be stored.
+- **When the AI is off, over a limit or failing:** a rule-based basic mode gives the same search and cards, at $0.
+- **Usage limits:** 40 AI replies per renter a day, 300 for the site, 10 a minute.
+- **Admin:** sees daily totals and an estimated cost.
+- **Changes to existing pages:** an optional chores answer on the questionnaire; updated privacy and terms pages;
+  renters land on the assistant after sign-in.
+- **Not yet done:** Anthropic account, key and deploy. Each is the owner's decision; see ACCOUNTS_SETUP.md,
+  "AI assistant", for the steps and expected cost.
 
 ## Tests
 
-- `npm test`: **230/230** on 2026-10-06. Runs the real Worker against a throwaway local D1 database; never touches
-  the live database or Google.
-- Covers: sign-in setup, permissions for every role, landlord/renter/admin separation, validation and injection,
-  CSRF, rate limits, matching and roommate rules, requests, account deletion, location privacy (approximate points
-  stay within 500 m and never expose the address), Massachusetts limits, and the import tool (28 checks).
-- Browser checks were done locally for every feature, and live for each deploy (signed-out pages, APIs, maps in
-  headless Edge).
-- **Not verified anywhere yet:** the 1 km drag limit on the landlord pin, and the real "Use my location" permission
-  prompt (simulated only).
+- `npm test`: **314/314** on 2026-10-12.
+  - It runs the real Worker against a throwaway local D1 database.
+  - It never touches the live database, Google or Anthropic. The AI service is a local stand-in that records every
+    request.
+- **Earlier tests cover:**
+  - Sign-in setup, permissions for every role, and landlord/renter/admin separation.
+  - Validation and injection, CSRF and rate limits.
+  - Matching and roommate rules, requests, and account deletion.
+  - Location privacy and Massachusetts limits.
+  - The import tool (28 checks).
+- **New assistant tests (84 checks):**
+  - **Accuracy:** only real, active, in-budget rooms; invented numbers removed; replies rewritten from data when
+    needed; invalid tool values refused.
+  - **Continuity:** the chat survives signing in again; corrections replace answers; Clear chat.
+  - **Privacy:** no names, emails, ids or street addresses sent to the AI; messages with contact details refused.
+  - **Consent:** only opted-in roommates; email only if shared; confirmation cards required, once only, by their owner.
+  - **Fallbacks:** AI down, model declining, daily limit reached.
+  - **Basic-mode conversation.**
+  - **Cleanup:** account deletion and the 90-day job.
+- **Browser check (local preview, basic mode):**
+  - The full conversation, the confirmation card, Save, Details and Clear chat.
+  - Desktop 1280 px and phone 390 px, with no sideways scrolling.
+- **Fixed on the way:** the cleanup-job test never actually ran the job (its trigger URL was served the website
+  page). It now does.
+- **Not verified anywhere yet:**
+  - A real Claude reply (no key).
+  - The 1 km drag limit on the landlord pin.
+  - The real "Use my location" permission prompt.
 
 ## Pending work
 
-**Blocked: real listings (0 imported).** Apartments.com refuses automated access and there is no republication
-agreement with it or its owner CoStar. RentCast's API terms weren't confirmed to allow public display. To import, one of:
+**Owner decisions (each separately):**
+
+- [ ] Turn on AI mode. Create an Anthropic Console account, set a spend limit (for example $5 a month), create a key
+      and enter it yourself, and choose the model. Default Opus 5.5 is about 2–6¢ per reply, Sonnet 5.5 about 1–3¢,
+      Haiku 5.5 about 0.1¢.
+- [ ] Apply migrations 0005 and 0006 to the live database (additive; take a restore point first).
+- [ ] Push and deploy the import tool and the assistant.
+
+**Blocked: real listings (0 imported).** Apartments.com refuses automated access, and there is no republication
+agreement with it or its owner CoStar. RentCast's API terms weren't confirmed to allow public display. To import,
+one of these is needed:
 
 1. Written permission from a listing site, plus an export in the template's columns.
 2. A licensed provider whose license allows public display. Ask before any signup that needs billing.
 3. Landlords' own listings with written permission to publish.
 
-**Needs the owner's approval (separately):**
-
-- [ ] Apply migration 0005 to the live database (adds 4 empty tables; take a restore point first).
-- [ ] Push and deploy the import tool (commit `8443019`).
-
 **Owner checks on the live site:**
 
 - [ ] Add addresses to the 5 real units so they appear on the map; drag a pin far to see the 1 km snap-back.
 - [ ] Try "Use my location" (allow once, block once).
-- [ ] Run the manual test at the end of ACCOUNTS_SETUP.md.
+- [ ] Run the manual test at the end of ACCOUNTS_SETUP.md (part 9 covers the assistant, after it's deployed).
 - [ ] Confirm the Cloudflare plan is Workers Free.
-- [x] Sample data removed from production (units and accounts, 2026-10-06); live counts are now real data only.
 
-**Possible next features:** distance-based matching, a "new request" badge for landlords, a map on the renter's
-matches page, a shorter renter page, email notifications (would need a paid email service and domain; ask first).
+**Possible next features:**
+- Imported listings in the assistant.
+- Replies that stream word by word.
+- A "new request" badge for landlords.
+- Email notifications (would need a paid email service and domain; ask first).
 
 ## Rollback points
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`; previous versions: `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
 | Database before migration 0004 | Time Travel bookmark `00000032-00000000-000050f9-cded0b9a637a3ca8de724dfb34fae1b6` |
 | Original static site | Version `a3c0f17b-d52a-47e3-9d71-5049e87a7a34`, git tag `pre-accounts-2026-09-29` |
-| This checkpoint | Git tag `checkpoint-2026-10-06` |
+| Previous checkpoint | Git tag `checkpoint-2026-10-06` |
+| This checkpoint | Git tag `checkpoint-2026-10-12` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 

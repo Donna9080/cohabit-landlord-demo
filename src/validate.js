@@ -57,7 +57,7 @@ function month(body, field) {
 const STREET =
   /\b\d{1,6}[a-z]?\s+(?!(?:bed|beds|bedroom|bedrooms|br|bath|baths|bathroom|room|rooms|min|mins|minute|minutes|mi|mile|miles|block|blocks|person|people|story|floor)\b)(?:[a-z.'-]+\s+){1,3}(?:st|street|ave|avenue|rd|road|blvd|boulevard|ln|lane|dr|drive|ct|court|ter|terrace|hwy|highway|pkwy|parkway|cir|circle)\b/i;
 const ZIP = /\b\d{5}(?:-\d{4})?\b/;
-const hasAddress = (s) => STREET.test(s) || ZIP.test(s);
+export const hasAddress = (s) => STREET.test(s) || ZIP.test(s);
 
 function area(body, field) {
   const s = text(body, field, { min: 1, max: 80 });
@@ -114,6 +114,8 @@ export const PREFERENCE_CHOICES = {
   pets: ["no_pets", "ok_with_pets", "have_pets"],
   smoking: ["no_smoking", "outside_ok", "smoker"],
 };
+// Optional: how someone likes to share chores. Not part of the room match.
+export const CHORE_CHOICES = ["rotating_schedule", "split_by_task", "as_needed"];
 
 export function parsePreferences(body) {
   if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
@@ -126,6 +128,7 @@ export function parsePreferences(body) {
   };
   if (p.budget_max < p.budget_min) throw new InvalidInput("budget_max", "Must be at least the minimum.");
   for (const [field, allowed] of Object.entries(PREFERENCE_CHOICES)) p[field] = oneOf(body, field, allowed);
+  p.chores = body.chores == null || body.chores === "" ? null : oneOf(body, "chores", CHORE_CHOICES);
   // Roommate matching is opt-in: both are off unless sent as true. Email sharing needs the first switch on.
   p.roommate_visible = flag(body, "roommate_visible");
   p.share_email = flag(body, "share_email") && p.roommate_visible;
@@ -145,7 +148,7 @@ export function parseAccountType(body) {
 }
 
 // A renter's note to a landlord. Optional, short, and no phone numbers (coHabit does not collect them).
-const PHONE = /(?:\+?\d[\s().-]*){10,}/;
+export const PHONE = /(?:\+?\d[\s().-]*){10,}/;
 export function parseInterest(body) {
   if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
   if (!isUnitId(body.unit_id)) throw new InvalidInput("unit_id", "Unknown unit.");
@@ -155,3 +158,21 @@ export function parseInterest(body) {
 }
 
 export const isUnitId = (s) => typeof s === "string" && /^[0-9a-f-]{36}$/.test(s);
+
+// A chat message to the assistant. coHabit doesn't collect contact details, ID or card numbers, or
+// street addresses, so a message containing one is refused before it is saved or sent anywhere.
+const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
+const SSN = /\b\d{3}-\d{2}-\d{4}\b/;
+export const MAX_CHAT_TEXT = 800;
+export function parseChatText(body) {
+  if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
+  const v = body.text;
+  if (typeof v !== "string") throw new InvalidInput("text", "Type a message.");
+  const s = v.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  if (!s) throw new InvalidInput("text", "Type a message.");
+  if (s.length > MAX_CHAT_TEXT) throw new InvalidInput("text", `Keep messages under ${MAX_CHAT_TEXT} characters.`);
+  if (EMAIL.test(s)) throw new InvalidInput("text", "Please leave out email addresses. coHabit already knows how to reach you.");
+  if (PHONE.test(s) || SSN.test(s)) throw new InvalidInput("text", "Please leave out phone, ID and card numbers. coHabit never needs them.");
+  if (STREET.test(s)) throw new InvalidInput("text", "Please leave out street addresses. Name a town or neighborhood, or say “near campus”.");
+  return s;
+}

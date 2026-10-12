@@ -6,14 +6,21 @@ import { spawn, execFileSync } from "node:child_process";
 import { createHmac, randomBytes } from "node:crypto";
 import { rmSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
+import { allowedNumbers, groundReply } from "../src/assistant/ai.js";
+import { understand } from "../src/assistant/basic.js";
+import { applyUpdates, emptyMemory } from "../src/assistant/memory.js";
+import { searchRooms } from "../src/assistant/search.js";
 import { rankUnits } from "../src/match.js";
 import { rankRoommates, scoreRoommate } from "../src/roommates.js";
+import { startFakeAnthropic } from "./fake-anthropic.mjs";
 
 const PORT = 8788;
 const BASE = `http://localhost:${PORT}`;
 const STATE = ".wrangler/test-state";
 const SECRET = randomBytes(32).toString("base64url");
 const WRANGLER = ["node_modules/wrangler/bin/wrangler.js"];
+const FAKE_AI_PORT = 8799; // stand-in for the AI service (tests/fake-anthropic.mjs)
+const AI_DAILY_PER_USER = 20;
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 const people = {
@@ -24,6 +31,9 @@ const people = {
   newbie: { id: "t_new", name: "Test Newcomer", email: "new@example.test", type: null },
   admin: { id: "t_admin", name: "Test Admin (disposable)", email: "admin@example.test", type: null, role: "admin" },
   rater: { id: "t_rate", name: "Test Rate Limit", email: "rate@example.test", type: "renter" },
+  chatAi: { id: "t_chat_ai", name: "Chatty Aitester", email: "chat-ai@example.test", type: "renter" },
+  chatMate: { id: "t_chat_mate", name: "Mia Chatmate", email: "chat-mate@example.test", type: "renter" },
+  chatBasic: { id: "t_chat_basic", name: "Basil Basictester", email: "chat-basic@example.test", type: "renter" },
 };
 const future = new Date(Date.now() + 86400_000).toISOString();
 const past = new Date(Date.now() - 60_000).toISOString();
@@ -42,6 +52,14 @@ for (const p of Object.values(people)) {
   sql += `INSERT INTO "user" (id,name,email,"emailVerified","createdAt","updatedAt",role,account_type) VALUES (${q(p.id)},${q(p.name)},${q(p.email)},1,${q(now)},${q(now)},${q(p.role || "user")},${q(p.type)});\n`;
   sql += `INSERT INTO "session" (id,"expiresAt",token,"createdAt","updatedAt","userId") VALUES (${q("s_" + p.id)},${q(future)},${q(p.token)},${q(now)},${q(now)},${q(p.id)});\n`;
 }
+// A second session for the chat user, as if they signed in again on another device.
+{
+  const token = randomBytes(24).toString("base64url");
+  people.chatAi.cookie2 = cookieFor(token);
+  sql += `INSERT INTO "session" (id,"expiresAt",token,"createdAt","updatedAt","userId") VALUES ('s_chat_ai_2',${q(future)},${q(token)},${q(now)},${q(now)},'t_chat_ai');\n`;
+}
+// This renter has already used today's AI replies, so the assistant answers in basic mode.
+sql += `INSERT INTO assistant_usage (day, user_id, replies) VALUES (${q(now.slice(0, 10))}, 't_chat_basic', ${AI_DAILY_PER_USER});\n`;
 const expiredToken = randomBytes(24).toString("base64url");
 sql += `INSERT INTO "session" (id,"expiresAt",token,"createdAt","updatedAt","userId") VALUES ('s_expired',${q(past)},${q(expiredToken)},${q(now)},${q(now)},'t_landlord_a');\n`;
 
@@ -108,12 +126,15 @@ wrangler(["d1", "migrations", "apply", "DB", "--local", "--persist-to", STATE]);
 writeFileSync(`${STATE}/fixtures.sql`, sql);
 wrangler(["d1", "execute", "DB", "--local", "--persist-to", STATE, "--file", `${STATE}/fixtures.sql`]);
 
+const fakeAi = startFakeAnthropic(FAKE_AI_PORT);
 console.log("Starting local Worker …");
 const dev = spawn(
   process.execPath,
   [...WRANGLER, "dev", "--port", String(PORT), "--persist-to", STATE, "--test-scheduled",
     "--var", `BETTER_AUTH_URL:${BASE}`, "--var", `BETTER_AUTH_SECRET:${SECRET}`,
-    "--var", "MAPTILER_KEY:test-browser-key", "--var", "GOOGLE_CLIENT_ID:local-test-client.apps.googleusercontent.com", "--var", "GOOGLE_CLIENT_SECRET:local-test-only"],
+    "--var", "MAPTILER_KEY:test-browser-key", "--var", "GOOGLE_CLIENT_ID:local-test-client.apps.googleusercontent.com", "--var", "GOOGLE_CLIENT_SECRET:local-test-only",
+    "--var", "ANTHROPIC_API_KEY:test-key-for-local-tests-only", "--var", `ANTHROPIC_BASE_URL:http://127.0.0.1:${FAKE_AI_PORT}`,
+    "--var", `ASSISTANT_DAILY_PER_USER:${AI_DAILY_PER_USER}`, "--var", "ASSISTANT_PER_MINUTE:100"],
   { stdio: ["ignore", "pipe", "pipe"] }
 );
 let devLog = "";
@@ -126,7 +147,7 @@ for (let i = 0; i < 60; i++) {
   await sleep(500);
 }
 
-const { landlordA, landlordB, renterA, renterB, newbie, admin, rater } = people;
+const { landlordA, landlordB, renterA, renterB, newbie, admin, rater, chatAi, chatMate, chatBasic } = people;
 
 try {
   // ── Matching rules (pure function, no server) ─────────────────────────────
@@ -164,6 +185,43 @@ try {
       { prefs: { ...a }, firstName: "Top", email: null, sample: true },
     ]);
     check("Roommate: ranked by score; result has only firstName, score, shared, email, sample", ranked.map((m) => m.firstName).join() === "Top,Lower" && Object.keys(ranked[0]).sort().join() === "email,firstName,sample,score,shared");
+  }
+
+  // ── Assistant rules (pure functions, no server) ───────────────────────────
+  {
+    const today = "2026-10-12";
+    const u1 = understand("Hi, I'm looking for a room in Waltham or Newton from September, up to $1,400 a month, just me", today).updates;
+    check("Basic mode reads budget, month, towns and rooms from one sentence", u1.budget_max === 1400 && u1.move_in_month === "2027-09" && u1.areas?.join() === "Waltham,Newton" && u1.rooms_needed === 1, JSON.stringify(u1));
+    const u2 = understand("June 2027, within 3 km", today).updates;
+    check("Basic mode doesn't mistake years or distances for a budget", u2.budget_max === undefined && u2.move_in_month === "2027-06" && u2.max_distance_km === 3, JSON.stringify(u2));
+    const u3 = understand("between $900 and $1,200, that's firm", today).updates;
+    check("Basic mode reads a budget range and a firm limit", u3.budget_min === 900 && u3.budget_max === 1200 && u3.must_have?.includes("budget_max"), JSON.stringify(u3));
+    const u4 = understand("I'm a night owl, very tidy, and I have a cat", today).updates;
+    check("Basic mode reads lifestyle answers", u4.sleep_schedule === "late" && u4.cleanliness === "tidy" && u4.pets === "have_pets", JSON.stringify(u4));
+    check("Basic mode: wanting \"a room\" isn't a room count", understand("I want a room", today).updates.rooms_needed === undefined);
+    const m = applyUpdates(emptyMemory(), { areas: ["12 Main Street"], move_in_month: "2025-01", budget_max: 1200, role: "admin", gender: "female", religion: "any" }, today);
+    check("Memory refuses street addresses, past months and anything outside its fields (no role, gender or religion), keeps valid answers", m.memory.v.budget_max === 1200 && !m.memory.v.areas && !m.memory.v.move_in_month && Object.keys(m.memory.v).join() === "budget_max" && m.errors.length === 5, JSON.stringify(m.errors));
+
+    let n = 0;
+    const unit = (over) => ({ id: `u${++n}`, name: "n", area: "Waltham, MA", monthly_rent: 1000, rooms_available: 1, move_in_date: "2027-06-01", description: "", sample: false, location: null, ...over });
+    const mem = (v, req = {}) => ({ v, req });
+    const s1 = searchRooms(mem({ budget_max: 1000 }), [unit({ monthly_rent: 1050 })]);
+    check("Search: a must-have budget hides a dearer room, and says what relaxing it would bring back", s1.results.length === 0 && s1.ifRelaxed[0]?.condition === "budget" && s1.ifRelaxed[0].extraRooms === 1);
+    const s2 = searchRooms(mem({ budget_max: 1000 }, { budget_max: false }), [unit({ monthly_rent: 1050 })]);
+    check("Search: a flexible budget shows it, with the mismatch spelled out", s2.results.length === 1 && s2.results[0].misses[0] === "$1,050 a month, $50 over your $1,000 budget");
+    const s3 = searchRooms(mem({ areas: ["Newton"] }), [unit({})]);
+    check("Search: a flexible area ranks but doesn't hide", s3.results.length === 1 && s3.results[0].misses[0].startsWith("In Waltham, MA, not one of your areas"));
+    const s4 = searchRooms(mem({ areas: ["Newton"] }, { areas: true }), [unit({})]);
+    check("Search: a must-have area hides other towns", s4.results.length === 0 && s4.ifRelaxed[0]?.condition === "area");
+    const s5 = searchRooms(mem({ max_distance_km: 2 }), [unit({ location: { precision: "approximate", lat: 42.37, lng: -71.245 } }), unit({})]);
+    check("Search: distance is from Brandeis; no map location means a must-have distance can't be met", s5.results.length === 1 && s5.results[0].fits.some((f) => f.includes("km from Brandeis")));
+    const s6 = searchRooms(mem({}), [unit({ sample: true })]);
+    check("Search: sample listings left out unless asked for, and counted", s6.results.length === 0 && s6.samplesHidden === 1 && searchRooms(mem({ include_samples: true }), [unit({ sample: true })]).results.length === 1);
+    check("Search: at most 3 results", searchRooms(mem({}), [1, 2, 3, 4, 5].map(() => unit({}))).results.length === 3);
+    const allowed = allowedNumbers(['{"monthly_rent":1250,"km_from_brandeis":1.3}']);
+    const g = groundReply("R1 is $1,250 a month and about 1.3 km away. It's also only $999 for parking. A nice choice.", allowed);
+    check("Grounding keeps supported numbers and drops invented ones", g.text.includes("$1,250") && g.text.includes("1.3 km") && !g.text.includes("999") && g.text.includes("A nice choice"), g.text);
+    check("Grounding drops travel times (coHabit has none)", !groundReply("It's a 10 minute walk. Great spot overall for you.", allowed).text.includes("10 minute"));
   }
 
   // ── Public pages ──────────────────────────────────────────────────────────
@@ -545,6 +603,212 @@ try {
   r = await api("/api/admin/users", { as: admin });
   check("Demoting the disposable admin removes access immediately (403)", r.status === 403);
 
+  // ── Assistant (chat) ──────────────────────────────────────────────────────
+  // The AI service is the stand-in in tests/fake-anthropic.mjs: it follows [[directives]] in the message.
+  {
+    const fake = fakeAi.state;
+    const sentToAi = () => fake.requests.map((x) => x.raw).join("\n");
+    const lastToolResult = () => JSON.stringify(fake.requests.at(-1).body.messages.at(-1));
+    const say = (who, text) => api("/api/assistant/messages", { method: "POST", as: who, body: { text } });
+    const replyOf = (res) => res.data?.messages?.find((m) => m.role === "assistant") || {};
+    const count = (sqlText) => d1rows(sqlText)[0].n;
+    const ROOM_NEAR = "a1000000-0000-4000-8000-000000000001";
+    const ROOM_NEWTON = "a1000000-0000-4000-8000-000000000002";
+    const ROOM_SAMPLE = "a1000000-0000-4000-8000-000000000003";
+    const ROOM_OFF = "a1000000-0000-4000-8000-000000000004";
+    // Test data for this section: one landlord with two active units and one inactive, a sample landlord's unit,
+    // and four renters: two who chose to be found as roommates, one who didn't, and one sample person.
+    const u = (id, name, email, type) => `INSERT INTO "user" (id,name,email,"emailVerified","createdAt","updatedAt",role,account_type) VALUES (${q(id)},${q(name)},${q(email)},1,${q(now)},${q(now)},'user',${q(type)});`;
+    const unit = (id, owner, name, area, rent, rooms, date, status, loc) =>
+      `INSERT INTO units (id,landlord_user_id,name,area,monthly_rent,rooms_available,move_in_date,description,status,created_at,updated_at,address,lat,lng,location_precision) VALUES (${q(id)},${q(owner)},${q(name)},${q(area)},${rent},${rooms},${q(date)},'Sunny room. Heat included.',${q(status)},1,1,${loc ? `'415 Fake Test Street, Waltham, MA',${loc[0]},${loc[1]}` : "NULL,NULL,NULL"},'approximate');`;
+    const prefs = (id, sleep, clean, noise, visible, share) =>
+      `INSERT INTO match_preferences (user_id,budget_min,budget_max,move_in_month,area,rooms_needed,sleep_schedule,cleanliness,noise,guests,pets,smoking,created_at,updated_at,roommate_visible,share_email,chores) VALUES (${q(id)},900,1400,'2027-06','Waltham',1,${q(sleep)},${q(clean)},${q(noise)},'sometimes','ok_with_pets','no_smoking',1,1,${visible},${share},'rotating_schedule');`;
+    writeFileSync(
+      `${STATE}/assistant.sql`,
+      [
+        u("t_landlord_c", "Test Landlord C", "landlord-c@example.test", "landlord"),
+        u("sample-landlord-c", "Sample Landlord C (sample)", "landlord-c@sample.example", "landlord"),
+        unit(ROOM_NEAR, "t_landlord_c", "Chat Test Room near campus", "Waltham, MA", 1250, 1, "2027-06-01", "active", [42.37, -71.245]),
+        unit(ROOM_NEWTON, "t_landlord_c", "Chat Test Room in Newton", "Newton, MA", 1450, 2, "2027-07-01", "active", null),
+        unit(ROOM_SAMPLE, "sample-landlord-c", "Sample Chat Room", "Waltham, MA", 1100, 1, "2027-06-01", "active", null),
+        unit(ROOM_OFF, "t_landlord_c", "Chat Test Room inactive", "Waltham, MA", 900, 1, "2027-06-01", "inactive", null),
+        u("t_mate_a", "Alexandra Mateone", "alexandra@example.test", "renter"),
+        u("t_mate_b", "Bartholomew Matetwo", "bart@example.test", "renter"),
+        u("t_mate_hidden", "Hidden Matethree", "hidden@example.test", "renter"),
+        u("sample-renter-c", "Sammy Sample (sample)", "sammy@sample.example", "renter"),
+        prefs("t_mate_a", "early", "tidy", "quiet", 1, 1),
+        prefs("t_mate_b", "late", "average", "moderate", 1, 0),
+        prefs("t_mate_hidden", "early", "tidy", "quiet", 0, 0),
+        prefs("sample-renter-c", "early", "tidy", "quiet", 1, 0),
+      ].join("\n")
+    );
+    wrangler(["d1", "execute", "DB", "--local", "--persist-to", STATE, "--file", `${STATE}/assistant.sql`]);
+
+    r = await api("/api/assistant");
+    check("Assistant: visitor must sign in (401)", r.status === 401);
+    r = await api("/api/assistant", { as: landlordA });
+    check("Assistant: landlords can't use it (403)", r.status === 403);
+    r = await api("/api/assistant", { as: chatAi });
+    check("Assistant: a renter starts with an empty chat, AI mode on", r.status === 200 && r.data.mode === "ai" && r.data.messages.length === 0 && r.data.memory.length === 0 && r.data.keepDays === 90);
+
+    let before = fake.requests.length;
+    for (const [text, why] of [
+      ["Call me at (617) 555-0142", "phone number"],
+      ["my email is me@example.test", "email address"],
+      ["I live at 12 Main Street", "street address"],
+      ["x".repeat(801), "over 800 characters"],
+    ]) {
+      r = await say(chatAi, text);
+      check(`Assistant: message with ${why} refused before it is saved or sent (400)`, r.status === 400 && r.data.field === "text");
+    }
+    check("Assistant: refused messages were neither stored nor sent to the AI service", count(`SELECT COUNT(*) AS n FROM assistant_messages WHERE user_id='t_chat_ai'`) === 0 && fake.requests.length === before);
+    r = await api("/api/assistant/messages", { method: "POST", as: chatAi, body: { text: "hi" }, origin: "https://evil.example" });
+    check("Assistant: message from another site blocked (403)", r.status === 403);
+
+    before = fake.requests.length;
+    r = await say(chatAi, `Hi! A room for June 2027 in Waltham, up to $1,300. [[update_memory {"looking_for":"room","budget_max":1300,"move_in_month":"2027-06","areas":["Waltham"],"rooms_needed":1}]] [[search_rooms]] [[reply Here are the best fits. R1 looks strongest.]]`);
+    let reply = replyOf(r);
+    check("Assistant (AI): the model's reply comes back, after two tool calls", r.status === 200 && reply.mode === "ai" && reply.text === "Here are the best fits. R1 looks strongest." && fake.requests.length - before === 3, JSON.stringify(r.data).slice(0, 300));
+    const rooms = reply.cards || [];
+    check("Assistant (AI): 1 to 3 rooms shown, all real, active and within budget", rooms.length >= 1 && rooms.length <= 3 && rooms.every((c) => c.kind === "room" && c.available && !c.unit.sample && c.unit.monthly_rent <= 1300), JSON.stringify(rooms).slice(0, 300));
+    check("Assistant (AI): the near-campus room is shown with why it fits", rooms.some((c) => c.unit.id === ROOM_NEAR && c.fits.includes("$1,250 a month, within your $1,300 budget")));
+    check("Assistant (AI): inactive, sample and over-budget rooms are not shown", !rooms.some((c) => [ROOM_OFF, ROOM_SAMPLE, ROOM_NEWTON, "00000000-0000-4000-8000-000000000099"].includes(c.unit.id)));
+    check("Assistant (AI): what it learned is listed, budget as a must-have", r.data.memory.find((f) => f.field === "budget_max")?.mustHave === true && r.data.memory.some((f) => f.field === "areas" && f.value === "Waltham"));
+    const first = fake.requests[before];
+    check("AI request: model, low effort, cached instructions, 4 tools, tool use optional", first.body.model === "claude-opus-5-5" && first.body.output_config?.effort === "low" && first.body.system?.[0]?.cache_control?.type === "ephemeral" && first.body.tools.length === 4 && first.body.tool_choice?.type === "auto" && first.body.max_tokens === 4000);
+    check("AI request: refusal fallback turned on", first.body.fallbacks === "default" && String(first.headers["anthropic-beta"]).includes("server-side-fallback-2026-07-01"));
+    check("AI request: this turn's facts arrive as a system note after the student's message", first.body.messages.at(-1).role === "system" && first.body.messages.at(-1).content.includes("Today: ") && first.body.messages.at(-2).role === "user");
+    check("AI request: search results go back to the model as tool results", lastToolResult().includes("tool_result") && lastToolResult().includes("within your $1,300 budget"));
+    check("AI request: the key travels only in the header", first.headers["x-api-key"] === "test-key-for-local-tests-only" && !sentToAi().includes("test-key-for-local"));
+    const privateBits = [chatAi.email, chatAi.name, "Aitester", "t_chat_ai", "t_landlord_", "landlord_user_id", "Fake Test Street", landlordA.email, ROOM_NEAR, "example.test"];
+    check("AI request: no names, emails, user or unit ids, or street addresses are sent", privateBits.every((w) => !sentToAi().includes(w)), privateBits.filter((w) => sentToAi().includes(w)).join(","));
+
+    r = await say(chatAi, `How much is R1? [[invented_price]]`);
+    check("Assistant (AI): an invented price is removed from the reply", !replyOf(r).text.includes("7,777") && replyOf(r).text.includes("commuter rail"), replyOf(r).text);
+    r = await say(chatAi, `Compare them. [[search_rooms]] [[only_invented]]`);
+    check("Assistant (AI): a reply with nothing true left is rewritten from the search results", !replyOf(r).text.includes("8,888") && /coHabit listing/.test(replyOf(r).text) && replyOf(r).text.includes("R1 ·"), replyOf(r).text);
+
+    r = await api("/api/assistant", { as: chatAi.cookie2 });
+    check("Assistant: after signing in again the chat continues, in order", r.data.messages.length === 6 && r.data.messages[0].role === "user" && r.data.messages[1].text === "Here are the best fits. R1 looks strongest." && r.data.memory.some((f) => f.field === "budget_max"));
+    check("Assistant: earlier result cards come back with current listing details", r.data.messages[1].cards.length === rooms.length && r.data.messages[1].cards.every((c) => c.available && c.unit?.name));
+
+    r = await say(chatAi, `Actually I can do $1,500. [[update_memory {"budget_max":1500}]] [[reply Updated.]]`);
+    check("Assistant (AI): a correction replaces the earlier answer", r.data.memory.find((f) => f.field === "budget_max")?.value === "$1,500 a month");
+    r = await say(chatAi, `[[update_memory {"areas":["Waltham 02453"],"budget_max":-5,"move_in_month":"2020-01"}]] [[reply Noted.]]`);
+    check("Assistant (AI): invalid values from the model are refused; memory unchanged", r.data.memory.find((f) => f.field === "budget_max")?.value === "$1,500 a month" && r.data.memory.find((f) => f.field === "areas")?.value === "Waltham" && lastToolResult().includes("refused") && lastToolResult().includes("already passed"));
+
+    r = await api("/api/assistant/memory", { method: "POST", as: chatAi, body: { field: "budget_max", mustHave: false } });
+    check("Assistant: the renter can mark the budget flexible (no AI call)", r.status === 200 && r.data.memory.find((f) => f.field === "budget_max")?.mustHave === false);
+    r = await api("/api/assistant/memory", { method: "POST", as: chatAi, body: { field: "rooms_needed", mustHave: false } });
+    check("Assistant: rooms needed can't be made flexible (400)", r.status === 400);
+    r = await api("/api/assistant/memory", { method: "POST", as: chatAi, body: { field: "areas", forget: true } });
+    check("Assistant: the renter can make it forget an answer", r.status === 200 && !r.data.memory.some((f) => f.field === "areas"));
+
+    r = await say(chatAi, `Show me sample listings too. [[update_memory {"include_samples":true,"areas":["Waltham"],"budget_max":1150}]] [[search_rooms]] [[reply Sample listings included.]]`);
+    let sampleCard = replyOf(r).cards.find((c) => c.unit?.sample);
+    check("Assistant (AI): sample listings appear only when asked for, flagged as samples", !!sampleCard, JSON.stringify(replyOf(r).cards).slice(0, 300));
+    r = await say(chatAi, `[[propose_action {"kind":"contact_landlord","ref":"${sampleCard?.ref}","note":"Hi"}]] [[reply ok]]`);
+    check("Assistant (AI): no contact card for a sample listing", replyOf(r).actions.length === 0 && lastToolResult().includes("sample (fictional) listing"));
+
+    r = await say(chatAi, `[[update_memory {"include_samples":false,"budget_max":1300,"max_distance_km":2}]] [[search_rooms]] [[propose_action {"kind":"contact_landlord","ref":"R1","note":"Hi, TEST note from the assistant tests."}]] [[reply A card is waiting for you.]]`);
+    reply = replyOf(r);
+    const contact = reply.actions[0];
+    const target = reply.cards[0]?.unit;
+    check("Assistant (AI): contacting a landlord shows a card; nothing is sent yet", contact?.kind === "contact_landlord" && contact.status === "pending" && contact.unitName === target?.name && contact.note === "Hi, TEST note from the assistant tests." && count(`SELECT COUNT(*) AS n FROM unit_interests WHERE renter_user_id='t_chat_ai'`) === 0);
+    r = await api(`/api/assistant/actions/${contact.id}`, { method: "POST", as: chatMate, body: { decision: "confirm" } });
+    check("Assistant: another renter can't confirm someone's card (404)", r.status === 404);
+    r = await api(`/api/assistant/actions/${contact.id}`, { method: "POST", as: chatAi, body: { decision: "confirm", note: "Call me at (617) 555-0142" } });
+    check("Assistant: a phone number in the edited note is refused (400); nothing sent", r.status === 400 && count(`SELECT COUNT(*) AS n FROM unit_interests WHERE renter_user_id='t_chat_ai'`) === 0);
+    r = await api(`/api/assistant/actions/${contact.id}`, { method: "POST", as: chatAi, body: { decision: "confirm", note: "Hi, TEST note, edited by me." } });
+    check("Assistant: Confirm sends the request with the renter's own note", r.status === 200 && d1rows(`SELECT message FROM unit_interests WHERE renter_user_id='t_chat_ai' AND unit_id=${q(target.id)}`)[0]?.message === "Hi, TEST note, edited by me.");
+    r = await api(`/api/assistant/actions/${contact.id}`, { method: "POST", as: chatAi, body: { decision: "confirm" } });
+    check("Assistant: a card can only be answered once (409)", r.status === 409);
+
+    r = await api("/api/assistant/saved", { method: "POST", as: chatAi, body: { messageId: reply.id, ref: "R1" } });
+    check("Assistant: save a room from the chat", r.status === 201 && r.data.saved.some((s) => s.kind === "room" && s.unit?.id === target.id && s.interestSent === true));
+    const savedRoom = r.data.saved.find((s) => s.kind === "room");
+    r = await api("/api/assistant/saved", { method: "POST", as: chatMate, body: { messageId: reply.id, ref: "R1" } });
+    check("Assistant: can't save from someone else's chat (404)", r.status === 404);
+    r = await api(`/api/assistant/saved/${savedRoom.id}`, { method: "DELETE", as: chatAi });
+    check("Assistant: remove a saved room", r.status === 200 && (await api("/api/assistant", { as: chatAi })).data.saved.length === 0);
+
+    // Roommates: only people who chose to be found; the student must opt in first.
+    r = await say(chatMate, `[[update_memory {"looking_for":"roommates","budget_max":1300,"move_in_month":"2027-06","areas":["Waltham"],"rooms_needed":1}]] [[search_roommates]] [[reply Roommate matching is off for you.]]`);
+    check("Assistant (AI): no roommates until the student turns matching on", replyOf(r).cards.length === 0 && lastToolResult().includes("needs_profile"));
+    r = await say(chatMate, `[[propose_action {"kind":"turn_on_roommate_matching"}]] [[reply ok]]`);
+    check("Assistant (AI): matching can't be turned on before the lifestyle answers", replyOf(r).actions.length === 0 && lastToolResult().includes("Ask for these first"));
+    r = await say(chatMate, `[[update_memory {"sleep_schedule":"early","cleanliness":"tidy","noise":"quiet","guests":"sometimes","pets":"ok_with_pets","smoking":"no_smoking","chores":"rotating_schedule"}]] [[propose_action {"kind":"turn_on_roommate_matching"}]] [[reply A card is waiting for you.]]`);
+    const optIn = replyOf(r).actions[0];
+    check("Assistant (AI): the opt-in card lists what will be saved; nothing saved yet", optIn?.kind === "save_profile" && optIn.roommateOptIn && optIn.changes.some((c) => c.label === "Roommate matching" && c.to === "On") && count(`SELECT COUNT(*) AS n FROM match_preferences WHERE user_id='t_chat_mate'`) === 0);
+    r = await api(`/api/assistant/actions/${optIn.id}`, { method: "POST", as: chatMate, body: { decision: "confirm" } });
+    check("Assistant: Confirm saves the profile with matching on and email not shared", r.status === 200 && r.data.preferences.roommate_visible === true && r.data.preferences.share_email === false && r.data.preferences.chores === "rotating_schedule");
+    r = await say(chatMate, `[[search_roommates]] [[reply Here are people who fit.]]`);
+    reply = replyOf(r);
+    const mates = reply.cards || [];
+    check("Assistant (AI): only renters who chose to be found are shown, by first name", mates.length >= 2 && mates.every((c) => c.kind === "person" && c.available) && !mates.some((c) => c.firstName === "Hidden") && mates.some((c) => c.firstName === "Alexandra") && mates.some((c) => c.firstName === "Bartholomew"), JSON.stringify(mates).slice(0, 300));
+    check("Assistant (AI): sample people are left out unless asked for", !mates.some((c) => c.sample));
+    check("Assistant (AI): an email is shown only if that person chose to share it", mates.find((c) => c.firstName === "Alexandra")?.email === "alexandra@example.test" && mates.find((c) => c.firstName === "Bartholomew")?.email === null);
+    check("AI request: other renters' names, emails and ids are never sent", !["Alexandra", "Bartholomew", "Mateone", "alexandra@", "t_mate_"].some((w) => sentToAi().includes(w)));
+    r = await api("/api/assistant/saved", { method: "POST", as: chatMate, body: { messageId: reply.id, ref: mates.find((c) => c.firstName === "Alexandra").ref } });
+    check("Assistant: save a person", r.status === 201 && r.data.saved.some((s) => s.kind === "person" && s.firstName === "Alexandra"));
+    d1(`UPDATE match_preferences SET roommate_visible = 0 WHERE user_id = 't_mate_a'`);
+    r = await api("/api/assistant", { as: chatMate });
+    const gone = r.data.saved.find((s) => s.kind === "person");
+    check("Assistant: someone who turns matching off disappears from saved options and old replies", gone?.available === false && !("firstName" in gone) && !JSON.stringify(r.data).includes("Alexandra"));
+
+    // Fallbacks: the AI service down, or the model declining, still gets an answer.
+    fake.mode = "down";
+    r = await say(chatAi, "June 2027 please");
+    check("Assistant: AI service down → answered in basic mode, with a notice", r.status === 200 && replyOf(r).mode === "basic" && /isn't available/.test(replyOf(r).notice || "") && r.data.mode === "basic");
+    fake.mode = "ok";
+    r = await say(chatAi, "[[refuse]]");
+    check("Assistant: model declines → basic mode answers instead", r.status === 200 && replyOf(r).mode === "basic");
+
+    // Basic mode: this renter has used up today's AI replies (set in the fixtures).
+    before = fake.requests.length;
+    r = await api("/api/assistant", { as: chatBasic });
+    check("Assistant: over the daily AI limit → basic mode", r.data.mode === "basic" && r.data.basicReason === "user_limit");
+    r = await say(chatBasic, "hello");
+    reply = replyOf(r);
+    check("Basic mode: greets, asks one question, offers quick replies, says why it's in basic mode", reply.text.endsWith("Are you looking for a room, a roommate, or both?") && (reply.text.match(/\?/g) || []).length === 1 && reply.quickReplies.includes("A room") && /today's 20 AI replies/.test(reply.notice || ""), JSON.stringify(reply));
+    for (const [text, expect] of [
+      ["A room", /most you can pay/],
+      ["Up to $1,300", /When do you want to move in/],
+      ["June 2027", /Where would you like to live/],
+      ["Waltham", /How many rooms/],
+    ]) {
+      r = await say(chatBasic, text);
+      check(`Basic mode: "${text}" → next question`, expect.test(replyOf(r).text), replyOf(r).text);
+    }
+    r = await say(chatBasic, "Just me (1 room)");
+    reply = replyOf(r);
+    check("Basic mode: with the basics, it shows real rooms within budget", reply.cards.length >= 1 && reply.cards.every((c) => c.available && !c.unit.sample && c.unit.monthly_rent <= 1300), reply.text);
+    check("Basic mode: each result is named with its rent and any mismatch", /R1 · .+: \$[\d,]+ a month/.test(reply.text) && /Each card shows why it fits/.test(reply.text), reply.text);
+    check("Basic mode: matching sample listings are mentioned, not shown", /sample \(fictional\) listing/.test(reply.text));
+    r = await api("/api/assistant/saved", { method: "POST", as: chatBasic, body: { messageId: reply.id, ref: "R1" } });
+    const keptSaved = r.status === 201;
+    r = await say(chatBasic, "Actually my budget is $1,000 max");
+    reply = replyOf(r);
+    check("Basic mode: accepts corrections and searches again", r.data.memory.find((f) => f.field === "budget_max")?.value === "$1,000 a month" && (reply.text.includes("No coHabit listing fits") || reply.cards.every((c) => c.unit.monthly_rent <= 1000)), reply.text);
+    r = await say(chatBasic, "What should I consider?");
+    check("Basic mode: lists things to consider", /security deposit/.test(replyOf(r).text));
+    check("Basic mode: never calls the AI service", fake.requests.length === before);
+
+    r = await api("/api/assistant/clear", { method: "POST", as: chatBasic, body: {} });
+    const cleared = await api("/api/assistant", { as: chatBasic });
+    check("Assistant: Clear chat deletes the messages and what it learned; saved options stay", r.status === 200 && cleared.data.messages.length === 0 && cleared.data.memory.length === 0 && keptSaved && cleared.data.saved.length === 1);
+
+    d1(`UPDATE "user" SET role='admin' WHERE id='t_admin'`);
+    r = await api("/api/admin/assistant", { as: admin });
+    check("Admin sees AI use today with an estimated cost, and no chats", r.status === 200 && r.data.aiConfigured === true && r.data.model === "claude-opus-5-5" && r.data.today?.replies >= 10 && r.data.today.estimatedUsd > 0 && !JSON.stringify(r.data).includes("TEST note"));
+    d1(`UPDATE "user" SET role='user' WHERE id='t_admin'`);
+    r = await api("/api/admin/assistant", { as: chatAi });
+    check("Renters can't see assistant usage (403)", r.status === 403);
+
+    r = await api("/api/me/delete", { method: "POST", as: chatBasic, body: { confirm: "DELETE" } });
+    check("Deleting an account deletes its chat, memory, cards, saved options and usage", r.status === 200 && count(`SELECT (SELECT COUNT(*) FROM assistant_messages WHERE user_id='t_chat_basic') + (SELECT COUNT(*) FROM assistant_threads WHERE user_id='t_chat_basic') + (SELECT COUNT(*) FROM assistant_actions WHERE user_id='t_chat_basic') + (SELECT COUNT(*) FROM saved_options WHERE user_id='t_chat_basic') + (SELECT COUNT(*) FROM assistant_usage WHERE user_id='t_chat_basic') AS n`) === 0);
+  }
+
   // ── CSRF / origin ─────────────────────────────────────────────────────────
   r = await api("/api/renter/preferences", { method: "PUT", as: renterA, body: prefsBody(), origin: null });
   check("Write without Origin header → 403", r.status === 403);
@@ -654,13 +918,18 @@ try {
   check("Better Auth sign-in rate limit → 429 after 10/min", statuses.includes(429), statuses.join(","));
 
   // ── Cleanup job ───────────────────────────────────────────────────────────
-  await fetch(`${BASE}/__scheduled?cron=17+4+*+*+*`);
+  d1(`UPDATE assistant_threads SET updated_at = 0 WHERE user_id = 't_chat_mate'`);
+  // /__scheduled would be served the site's page (only /api/* reaches the Worker first), so use the local trigger.
+  r = await fetch(`${BASE}/cdn-cgi/local/scheduled?cron=17+4+*+*+*`);
+  check("The daily cleanup job runs", r.ok && !(r.headers.get("content-type") || "").includes("text/html"), `${r.status} ${r.headers.get("content-type")}`);
   await sleep(500);
   check("Scheduled cleanup deletes expired sessions", d1rows(`SELECT COUNT(*) AS n FROM "session" WHERE id='s_expired'`)[0].n === 0);
+  check("Scheduled cleanup deletes chats unused for 90 days, and only those", d1rows(`SELECT COUNT(*) AS n FROM assistant_messages WHERE user_id='t_chat_mate'`)[0].n === 0 && d1rows(`SELECT COUNT(*) AS n FROM assistant_messages WHERE user_id='t_chat_ai'`)[0].n > 0);
 } catch (err) {
   check("Test run crashed", false, err.stack);
 } finally {
   dev.kill();
+  fakeAi.close();
 }
 
 const failed = results.filter((x) => !x.ok);

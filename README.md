@@ -26,7 +26,7 @@
 
 Screenshots were taken on a local copy with made-up accounts. All names, emails and listings shown are fictional.
 
-Landlords list rooms; renters answer a short questionnaire and see rooms that fit, or search by city, neighborhood or ZIP on a map (Massachusetts only). Sign-in is with Google. Data is stored in Cloudflare D1.
+Landlords list rooms. Renters (Brandeis students) chat with an assistant that learns their budget, timing, location and lifestyle, shows up to three rooms or roommates that fit and explains why; or they answer a short questionnaire, or search by city, neighborhood or ZIP on a map (Massachusetts only). Sign-in is with Google. Data is stored in Cloudflare D1. The assistant's AI part (Claude) is optional: without a key it runs a free rule-based mode. See "AI assistant" in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md).
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
 - **Design (Figma):** https://www.figma.com/design/QDAewcvq3aSsZgfQvw1v4X
@@ -43,6 +43,7 @@ Landlords list rooms; renters answer a short questionnaire and see rooms that fi
 | Dashboard: your units and recent requests | `/landlord` | Landlords |
 | One unit: details and its interested renters | `/landlord/units/<id>` | Landlords |
 | Add or edit a unit | `/landlord/units/new`, `/landlord/units/<id>/edit` | Landlords |
+| Chat assistant: rooms and roommates that fit, with reasons; save, confirm, clear | `/assistant` | Renters |
 | Questionnaire, matching rooms, "I'm interested", possible roommates (opt-in) | `/renter` | Renters |
 | User list (read only) | `/admin` | Admin |
 
@@ -99,9 +100,11 @@ src/validate.js     checks every field sent by the browser
 src/match.js        renter-to-unit matching rules
 src/roommates.js    renter-to-renter (roommate) matching rules, opt-in
 src/imports.js      checks CSV files of external listings before an admin imports them
+src/assistant/      the renter's chat assistant: routes, memory checks, search, basic mode, Claude (AI) calls
 public/import-template.csv  column template for listing imports
 migrations/         database tables (D1)
 tests/run-local.mjs automated local tests (npm test)
+tests/fake-anthropic.mjs  stand-in for the AI service, used only by the tests
 scripts/sample-data.mjs  fictional sample landlords, units and renters (see ACCOUNTS_SETUP.md)
 docs/SAMPLE_MATCHING.md  how matching works, shown with the sample data
 wrangler.jsonc      Cloudflare settings
