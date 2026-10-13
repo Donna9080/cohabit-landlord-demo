@@ -43,7 +43,7 @@ Landlords list rooms. Renters (Brandeis students) chat with an assistant that le
 | Dashboard: your units and recent requests | `/landlord` | Landlords |
 | One unit: details and its interested renters | `/landlord/units/<id>` | Landlords |
 | Add or edit a unit | `/landlord/units/new`, `/landlord/units/<id>/edit` | Landlords |
-| Chat assistant: rooms and roommates that fit, with reasons; save, confirm, clear | `/assistant` | Renters |
+| Assistant: guided chat beside results (list, map, roommates), editable answers, Demo mode | `/assistant` | Renters |
 | Questionnaire, matching rooms, "I'm interested", possible roommates (opt-in) | `/renter` | Renters |
 | User list (read only) | `/admin` | Admin |
 
@@ -100,7 +100,8 @@ src/validate.js     checks every field sent by the browser
 src/match.js        renter-to-unit matching rules
 src/roommates.js    renter-to-renter (roommate) matching rules, opt-in
 src/imports.js      checks CSV files of external listings before an admin imports them
-src/assistant/      the renter's chat assistant: routes, memory checks, search, basic mode, Claude (AI) calls
+src/assistant/      the renter's chat assistant: routes, memory checks, search, basic mode, Claude (AI) calls,
+                    demo-data.js (Demo mode's 15 fictional listings and 20 fictional profiles)
 public/import-template.csv  column template for listing imports
 migrations/         database tables (D1)
 tests/run-local.mjs automated local tests (npm test)

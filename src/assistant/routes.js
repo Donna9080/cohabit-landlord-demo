@@ -7,6 +7,7 @@
 //   POST   /api/assistant/actions/<id>    confirm or dismiss a confirmation card
 //   POST   /api/assistant/saved           save a room or person from a reply
 //   DELETE /api/assistant/saved/<id>      remove a saved option
+//   POST   /api/assistant/demo            turn Demo mode on or off (fictional listings and people, see demo-data.js)
 //
 // What is sent to the AI service (Anthropic): the renter's chat messages, what the chat has
 // learned, and search results as listing details (name, area, rent, rooms, move-in date,
@@ -20,6 +21,7 @@ import { InvalidInput, isUnitId, parseChatText, parseInterest, parsePreferences 
 import { AiUnavailable, MODELS, aiConfigured, allowedNumbers, groundReply, modelFor, runAiTurn } from "./ai.js";
 import { BASIC_INTRO, CONSIDERATIONS, describeAnswer, describeRoommates, describeRooms, nextQuestion, question, understand } from "./basic.js";
 import { LABELS, STRICTNESS_FIELDS, applyUpdates, isRequired, memoryFacts, mergedPreferences, missingBasics, parseMemory, profileChanges } from "./memory.js";
+import { DEMO_LISTINGS, DEMO_PEOPLE, isDemoId } from "./demo-data.js";
 import { BRANDEIS, kmBetween, searchRoommates, searchRooms } from "./search.js";
 
 const HISTORY_FOR_MODEL = 12; // earlier messages replayed to the model as context
@@ -174,6 +176,14 @@ async function hydrate(db, env, user, messages, savedRows) {
 
   const card = (it) => {
     const base = { kind: it.kind, ref: it.ref, fits: it.fits || [], misses: it.misses || [], savedId: savedId.get(`${it.kind}:${it.targetId}`) || null };
+    if (isDemoId(it.targetId)) {
+      if (it.kind === "room") {
+        const u = DEMO_LISTINGS.find((x) => x.id === it.targetId);
+        return u ? { ...base, available: true, unit: u, km: Math.round(kmBetween(u.location, BRANDEIS) * 10) / 10, interestSent: false } : { ...base, available: false };
+      }
+      const p = DEMO_PEOPLE.find((x) => x.id === it.targetId && x.discoverable);
+      return p ? { ...base, available: true, firstName: p.firstName, about: p.about, score: it.score ?? null, email: null, sample: false, demo: true } : { ...base, available: false };
+    }
     if (it.kind === "room") {
       const u = unitById.get(it.targetId);
       return u
@@ -227,7 +237,8 @@ async function pageState(db, env, user) {
   return {
     messages,
     saved,
-    results: await liveResults(db, env, user, thread.memory, prefs),
+    results: await liveResults(db, env, user, thread.memory, prefs, thread.state),
+    demo: !!thread.state.demo,
     memory: memoryFacts(thread.memory),
     hasProfile: !!prefs,
     roommateMatching: !!prefs?.roommate_visible,
@@ -251,14 +262,26 @@ function contextNote(turn, saved, pending) {
     `Memory: ${Object.keys(v).length ? JSON.stringify({ values: v, must_have: strict.filter((f) => isRequired(turn.memory, f)), flexible: strict.filter((f) => !isRequired(turn.memory, f)) }) : "nothing yet."}`,
     `Still needed before a room search: ${missingBasics(turn.memory).map((f) => NOT_KNOWN[f]).join(", ") || "nothing"}.`,
     `Saved coHabit profile: ${saved ? `yes, roommate matching ${saved.roommate_visible ? "on" : "off"}` : "no"}.`,
+    ...(turn.state.demo ? ["Demo mode is on: every result is fictional demo data (demo: true). Call them demo listings or demo profiles; there is nobody to contact."] : []),
     `On screen now: ${[...(turn.state.rooms || []).map((r) => `${r.ref} "${r.name}"`), ...(turn.state.people || []).map((p) => p.ref)].join(", ") || "no results yet"}.`,
   ];
   if (pending.length) lines.push(`Waiting for the student to confirm: ${pending.map((a) => a.kind.replace(/_/g, " ")).join(", ")}.`);
   return lines.join("\n");
 }
 
+const roomSource = (db, env, state) => (state?.demo ? DEMO_LISTINGS : activeListings(db, env));
+
+// Demo profiles are fictional, so seeing them doesn't need the student's own opt-in; their lifestyle answers do.
+// Profiles that didn't choose to be found are left out, as for real people.
+function demoRoommateSearch(memory, saved, { limit } = {}) {
+  const merged = mergedPreferences(memory, saved);
+  if (merged.missing) return { status: "missing_answers", missing: merged.missing };
+  const others = DEMO_PEOPLE.filter((p) => p.discoverable).map((p) => ({ userId: p.id, prefs: p, firstName: p.firstName, email: null, sample: false, demo: true, about: p.about }));
+  return { status: "ok", found: searchRoommates(memory, merged.prefs, others, { limit }) };
+}
+
 async function findRooms(ctx) {
-  const listings = await activeListings(ctx.db, ctx.env);
+  const listings = await roomSource(ctx.db, ctx.env, ctx.turn.state);
   const found = searchRooms(ctx.turn.memory, listings);
   ctx.turn.found = { kind: "room", found };
   ctx.turn.items = found.results.map((r) => ({ kind: "room", ref: r.ref, targetId: r.unitId, fits: r.fits, misses: r.misses }));
@@ -289,7 +312,7 @@ async function roommateSearch(db, user, memory, saved, { limit } = {}) {
 
 async function findRoommates(ctx) {
   const { db, user, saved, turn } = ctx;
-  const r = await roommateSearch(db, user, turn.memory, saved);
+  const r = turn.state.demo ? demoRoommateSearch(turn.memory, saved) : await roommateSearch(db, user, turn.memory, saved);
   if (r.status !== "ok") return r;
   const found = r.found;
   turn.found = { kind: "person", found };
@@ -303,9 +326,10 @@ async function findRoommates(ctx) {
 // Worked out from the renter's current answers every time they change, separately from the chat, so results
 // appear (marked preliminary) once there is enough to go on and refresh as answers change. Must-haves are
 // never loosened here: an empty list says which ones are blocking and what loosening each would bring back.
-async function liveResults(db, env, user, memory, saved) {
+async function liveResults(db, env, user, memory, saved, state) {
   const goal = memory.v.looking_for || null;
-  const out = { goal, rooms: null, people: null };
+  const demo = !!state?.demo;
+  const out = { goal, demo, rooms: null, people: null };
   if (!goal) return out;
   const [{ results: savedRows }, { results: sentRows }] = await Promise.all([
     db.prepare(`SELECT id, kind, target_id FROM saved_options WHERE user_id = ?1`).bind(user.id).all(),
@@ -319,7 +343,7 @@ async function liveResults(db, env, user, memory, saved) {
     const strict = STRICTNESS_FIELDS.filter((f) => memory.v[f] != null && isRequired(memory, f));
     if (missing.length >= 3) out.rooms = { status: "need_more", missing: missing.map((f) => NOT_KNOWN[f]) };
     else {
-      const listings = await activeListings(db, env);
+      const listings = await roomSource(db, env, state);
       const byId = new Map(listings.map((u) => [u.id, u]));
       const found = searchRooms(memory, listings, { limit: PANEL_ROOMS });
       out.rooms = {
@@ -346,7 +370,7 @@ async function liveResults(db, env, user, memory, saved) {
   }
 
   if (goal !== "room") {
-    const r = await roommateSearch(db, user, memory, saved, { limit: PANEL_PEOPLE });
+    const r = demo ? demoRoommateSearch(memory, saved, { limit: PANEL_PEOPLE }) : await roommateSearch(db, user, memory, saved, { limit: PANEL_PEOPLE });
     out.people =
       r.status !== "ok"
         ? { status: r.status, missing: r.missing.map((f) => LABELS[f] || f) }
@@ -365,6 +389,8 @@ async function liveResults(db, env, user, memory, saved) {
               misses: p.misses,
               email: p.email,
               sample: p.sample,
+              demo: p.demo,
+              about: p.demo ? p.about : null,
               savedId: savedId.get(`person:${p.userId}`) || null,
             })),
           };
@@ -391,6 +417,7 @@ async function proposeAction(ctx, kind, { ref, note } = {}) {
   } else if (kind === "contact_landlord") {
     const room = (turn.state.rooms || []).find((r) => r.ref === ref);
     if (!room) throw new ToolRefused("Use the label of a room card that is on screen (R1-R3).");
+    if (isDemoId(room.unitId)) throw new ToolRefused("That's a demo listing, so there's no landlord to contact.");
     const draft = typeof note === "string" ? note.slice(0, 400) : "";
     let checked;
     try {
@@ -635,7 +662,7 @@ async function handleMessage({ request, env, db, user }) {
   return {
     messages,
     saved: savedList,
-    results: await liveResults(db, env, user, turn.memory, saved),
+    results: await liveResults(db, env, user, turn.memory, saved, turn.state),
     memory: memoryFacts(turn.memory),
     mode: nowReason ? "basic" : "ai",
     basicReason: nowReason,
@@ -676,6 +703,9 @@ async function decideAction({ request, db, user }, id) {
 
 async function saveOption({ request, env, db, user }) {
   const body = await readJson(request);
+  if (isDemoId(body?.unitId) || (body?.kind === "person" && (await loadThread(db, user.id)).state.demo)) {
+    throw new HttpError(409, "demo", "Demo cards can't be saved. They're made up.");
+  }
   let it;
   if (body?.kind === "room" || body?.kind === "person") {
     // From the results panel. Fits and misses are worked out again here, never taken from the request.
@@ -736,7 +766,7 @@ export async function handleAssistant({ request, env, db, user, path, method, re
     const r = applyUpdates(thread.memory, input, today());
     if (r.errors.length) throw new InvalidInput("value", r.errors[0].message);
     await saveThread(db, user.id, r.memory, thread.state).run();
-    return reply({ memory: memoryFacts(r.memory), results: await liveResults(db, env, user, r.memory, prefs) });
+    return reply({ memory: memoryFacts(r.memory), results: await liveResults(db, env, user, r.memory, prefs, thread.state) });
   }
 
   if (path === "/api/assistant/clear" && method === "POST") {
@@ -746,6 +776,15 @@ export async function handleAssistant({ request, env, db, user, path, method, re
       db.prepare(`DELETE FROM assistant_threads WHERE user_id = ?1`).bind(user.id),
     ]);
     return reply({ cleared: true });
+  }
+
+  if (path === "/api/assistant/demo" && method === "POST") {
+    const body = await readJson(request);
+    if (typeof body?.on !== "boolean") throw new InvalidInput("on", "Must be true or false.");
+    const [thread, prefs] = await Promise.all([loadThread(db, user.id), loadPreferences(db, user.id)]);
+    const state = { ...thread.state, demo: body.on, rooms: [], people: [] };
+    await saveThread(db, user.id, thread.memory, state).run();
+    return reply({ demo: body.on, results: await liveResults(db, env, user, thread.memory, prefs, state) });
   }
 
   const action = path.match(/^\/api\/assistant\/actions\/([^/]+)$/);

@@ -40,16 +40,26 @@ function evaluate(memory, u) {
     fits.push(v.rooms_needed > 1 ? `${u.rooms_available} rooms available (you need ${rooms})` : `${plural(u.rooms_available, "room")} available`);
   }
 
+  // What this student would pay. Rent for a whole place is split by the people moving in together (the rooms
+  // they need, up to the number of bedrooms); one person pays all of it. coHabit units are priced per room.
+  const wholePlace = u.rent_basis === "unit";
+  const sharers = wholePlace ? Math.max(1, Math.min(v.rooms_needed ?? 1, u.bedrooms ?? u.rooms_available)) : 1;
+  const cost = Math.round(u.monthly_rent / sharers);
+  const rentText = wholePlace
+    ? sharers > 1
+      ? `${money(u.monthly_rent)} a month for the whole place, ${money(cost)} each for ${sharers}`
+      : `${money(u.monthly_rent)} a month for the whole place`
+    : `${money(u.monthly_rent)} a month`;
   if (v.budget_max != null) {
-    const within = u.monthly_rent <= v.budget_max;
-    const slightly = u.monthly_rent <= v.budget_max * 1.1;
+    const within = cost <= v.budget_max;
+    const slightly = cost <= v.budget_max * 1.1;
     ok.budget = isRequired(memory, "budget_max") ? within : slightly;
     if (within) {
       score += 40;
-      fits.push(`${money(u.monthly_rent)} a month, within your ${money(v.budget_max)} budget`);
+      fits.push(`${rentText}, within your ${money(v.budget_max)} budget`);
     } else {
       if (slightly) score += 15;
-      misses.push(`${money(u.monthly_rent)} a month, ${money(u.monthly_rent - v.budget_max)} over your ${money(v.budget_max)} budget`);
+      misses.push(`${rentText}, ${money(cost - v.budget_max)} over your ${money(v.budget_max)} budget`);
     }
   } else ok.budget = true;
 
@@ -100,7 +110,17 @@ function evaluate(memory, u) {
     else misses.push(`About ${km} km from Brandeis in a straight line, more than your ${v.max_distance_km} km`);
   } else ok.distance = true;
 
-  return { fits, misses, ok, score, km, monthGap };
+  // Only listings that record a lease length or furnishing (the demo listings) are compared on these. Both rank
+  // but never hide a room.
+  if (v.lease_months != null && u.lease?.months) {
+    if (Math.abs(u.lease.months - v.lease_months) <= 1) {
+      score += 5;
+      fits.push(`${u.lease.label}, close to the ${v.lease_months} months you want`);
+    } else misses.push(`${u.lease.label}, not the ${v.lease_months} months you want`);
+  }
+  if ((v.wishes || []).some((w) => /furnish/i.test(w)) && typeof u.furnished === "boolean") (u.furnished ? fits : misses).push(u.furnished ? "Furnished" : "Not furnished");
+
+  return { fits, misses, ok, score, km, monthGap, cost };
 }
 
 const CONDITIONS = ["rooms", "budget", "month", "area", "distance"];
@@ -114,7 +134,7 @@ function relaxOptions(memory) {
     const cap = Math.floor(v.budget_max * 1.1);
     options.push(
       isRequired(memory, "budget_max")
-        ? { condition: "budget", change: `Allow up to 10% over budget (up to ${money(cap)})`, brings: (e) => e.u.monthly_rent <= cap }
+        ? { condition: "budget", change: `Allow up to 10% over budget (up to ${money(cap)})`, brings: (e) => e.cost <= cap }
         : { condition: "budget", change: `Raise your budget above ${money(cap)}`, brings: () => true }
     );
   }
@@ -138,7 +158,7 @@ export function searchRooms(memory, listings, { limit = MAX_RESULTS } = {}) {
   const evaluated = listings.map((u) => ({ u, ...evaluate(memory, u) }));
   const passes = (e) => CONDITIONS.every((c) => e.ok[c]);
   const matching = evaluated.filter((e) => passes(e) && (includeSamples || !e.u.sample));
-  matching.sort((a, b) => a.misses.length - b.misses.length || b.score - a.score || a.u.monthly_rent - b.u.monthly_rent || a.u.id.localeCompare(b.u.id));
+  matching.sort((a, b) => a.misses.length - b.misses.length || b.score - a.score || a.cost - b.cost || a.u.id.localeCompare(b.u.id));
 
   // How many more rooms would appear if one condition were relaxed (the others staying as they are).
   const ifRelaxed = [];
@@ -160,6 +180,12 @@ export function searchRooms(memory, listings, { limit = MAX_RESULTS } = {}) {
     move_in_date: e.u.move_in_date,
     km_from_brandeis: e.km,
     description: (e.u.description || "").slice(0, 300),
+    rent_basis: e.u.rent_basis === "unit" ? "whole place" : "per room",
+    you_would_pay: e.cost,
+    ...(e.u.lease || e.u.utilities || e.u.transit || e.u.kind
+      ? { details: { kind: e.u.kind, lease: e.u.lease?.label, utilities: e.u.utilities, furnished: e.u.furnished, transport: e.u.transit } }
+      : {}),
+    demo: !!e.u.demo,
     sample: !!e.u.sample,
     fits: e.fits,
     misses: e.misses,
@@ -184,6 +210,8 @@ export function searchRoommates(memory, me, others, { limit = MAX_RESULTS } = {}
     email: m.o.email,
     score: m.score,
     sample: !!m.o.sample,
+    demo: !!m.o.demo,
+    about: m.o.about || null,
     fits: m.shared,
     // Only what the two have in common is ever shown about the other person, never their answers.
     misses: m.score < 90 ? ["Not every lifestyle answer matches. Talk through sleep, guests and chores before deciding."] : [],

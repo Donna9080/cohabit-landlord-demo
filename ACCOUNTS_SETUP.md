@@ -181,6 +181,27 @@ chose to stay on basic mode for now, so there is no AI key and it costs $0.
 Renters get one chat at `/assistant`, now their first stop after sign-in. The questionnaire and matches
 (`/renter`) and Listings are unchanged and linked from the chat.
 
+**Redesign (2026-10-12, local only, not deployed yet; no database change needed).**
+- **Layout.** Results take the left two thirds and the guided chat the right third. On phones, Chat and Results tabs
+  switch between them and keep their state.
+- **Results follow the goal:**
+  - A room: listing cards with a List / Map toggle. Pins and cards stay in step: tap one and the other is selected.
+  - A roommate: profiles of students who chose to be found, with what you have in common.
+  - Both: Rooms and Roommates tabs that share the same answers.
+- **Answers as chips.** The student's answers sit above the results. Tap one to change it or make it a must-have.
+  "All your answers" and "Saved" are folded away below.
+- **Live results.** Results are worked out from the answers every time they change, separately from the chat, so the
+  question flow is unchanged. They show as "early results" once two of the four basics are known.
+- **Empty results.** They name the must-haves that block results and offer explicit changes. Nothing is loosened
+  silently.
+- **Wording.**
+  - The headline is "Find your room. Find your people." and the welcome is "Hey! What are you looking for?" (A room /
+    A roommate / Both). That welcome counts as the first question.
+  - The questions are shorter, with the same order, branching and answer values.
+  - Tapped answers aren't echoed; typed ones get a short "Noted: …".
+  - A "Guided chat" note explains the free mode's limits and how the chat is stored.
+- **Demo mode.** A switch on the assistant page (see "Demo mode" below).
+
 **What it does.**
 - It asks one question at a time and learns:
   - Budget, move-in month, and towns or distance from Brandeis.
@@ -270,6 +291,39 @@ When it is deleted:
 
 It never receives names, email addresses, user or unit ids, or street addresses (checked by `npm test`). The admin
 sees daily totals and an estimated cost, never chats (Admin page, "AI assistant").
+
+### Demo mode (fictional listings and people)
+
+A switch at the top of `/assistant` swaps the results for 15 made-up listings and 20 made-up roommate profiles around
+Waltham. They let anyone try coHabit, given how few real listings there are.
+
+- **The data lives in code** (`src/assistant/demo-data.js`), never in the database:
+  - There is nothing to seed, so nothing can be seeded twice.
+  - Real data is never touched.
+  - Demo records never appear in Listings, real matches, the admin user list or any count.
+  - Every id starts with `demo-`.
+- **Scenarios covered:**
+  - Rooms in shared houses, a shared bedroom, studios, a spring sublet and a lease takeover.
+  - Whole places for two or three friends, a group replacing a graduating roommate, and a room for an incoming grad
+    student.
+  - Furnished and unfurnished places, a range of utilities, lease lengths and ways to get to campus, and
+    budgets from $700 to $3,450.
+  - Searches that match strongly, partly, or not at all.
+- **Rent.**
+  - Each listing says whether its rent is per room or for the whole place.
+  - Whole-place rent is split between the people moving in together (the rooms they need, up to the number of
+    bedrooms). One person pays all of a studio's rent.
+  - Lease length and "furnished" are compared only for listings that record them. Real listings are matched exactly
+    as before.
+- **Roommate profiles.**
+  - Each has a first name, a town and a short line, never a location or contact details.
+  - Three chose not to be found and are never shown.
+  - Scores and shared traits come from the normal matching code. Seeing demo profiles doesn't need the student's own
+    opt-in, because nobody real is involved; their lifestyle answers are still needed.
+- **Labels and limits.**
+  - Every demo card says "Demo", demo pins are dashed, and a banner stays on while Demo mode is on.
+  - Demo cards can't be saved (409), and demo listings have no landlord to contact.
+  - The pictures are simple drawings made in the page; no images are loaded.
 
 ### Turning the AI on (the owner's decision: it can cost money)
 
@@ -497,7 +551,7 @@ npm install
 copy .dev.vars.example .dev.vars        # then fill in the values (BETTER_AUTH_SECRET: any long random string)
 npm run db:migrate:local                # = wrangler d1 migrations apply DB --local
 npm run dev                             # http://localhost:8787
-npm test                                # 314 automated checks (see below)
+npm test                                # 356 automated checks (see below)
 ```
 
 `npm test` (`tests/run-local.mjs`) wipes and recreates a separate local database in
@@ -654,20 +708,24 @@ above the list, cards stack in one column, and the admin list becomes one card p
 
 ### 9. The assistant (5 minutes, renter B)
 
-1. As B, click **Assistant** in the top bar. The chat starts with a greeting and three starter buttons. The pill
-   says **AI assistant**, or **Basic mode** with a note explaining why.
-2. Click **Find me a room near Brandeis** and answer its questions one at a time (budget, move-in month, rooms).
-   **What I know so far** fills in as you go. A message with a phone number is refused, with a note under the box.
-3. When results appear (up to 3 beside the chat, or inside it on a phone), each card says why it fits and what doesn't.
-   If none fit, the reply says which change would bring listings back.
-4. Correct something ("actually my budget is $1,200"): the answer changes in **What I know so far** and the results
-   update. Click **Must-have** next to the budget to make it **Flexible**.
-5. Open a card's **Details**, then **Save** it: it appears under **Saved**. Ask it to contact the landlord: a card with
-   an editable note appears and nothing is sent until you click **Send request** (click **Not now**).
-6. Ask for a roommate and answer the lifestyle questions. A **Turn on roommate matching?** card lists exactly what
-   would be saved. Click **Not now** unless B should be discoverable.
-7. Reload, or sign out and in: the chat is still there. Then **Clear chat** → confirm: the chat and answers are gone,
-   **Saved** stays.
+These steps describe the redesigned assistant (local now; on the live site once it's deployed).
+
+1. As B, click **Assistant**. The page says **Find your room. Find your people.** The chat on the right asks **Hey! What
+   are you looking for?** with **A room**, **A roommate** and **Both**. The results area on the left says your matches
+   will show up there.
+2. Tap **A room**, then answer each question by tapping (no typing needed). Your answers appear as chips above the
+   results. After two answers, **Early results** appear and refresh with each answer. A message with a phone number is
+   refused, with a note under the box.
+3. Each room card says what fits and what doesn't. Switch **List** / **Map**: tap a pin and its card is highlighted;
+   tap **On map** on a card and its pin is highlighted.
+4. Tap the budget chip, lower it and keep **Must-have** ticked until nothing fits. The results say which must-haves
+   block them and offer a change to make; nothing is loosened until you tap one.
+5. Open a card's **Details**, then **Save** it. It appears under **Saved**, below the results.
+6. Turn on **Demo mode**. A banner appears and every card and pin says Demo. Change the goal chip to **Both** and
+   answer the roommate questions. **Rooms** and **Roommates** tabs appear, the roommates have no contact details, and
+   demo cards have no Save button. Turn Demo mode off: only real results again.
+7. On a phone, switch **Chat** / **Results**: the chat and the map keep their place.
+8. Reload: everything is still there. Then **Clear chat** and confirm: the chat and answers are gone, **Saved** stays.
 
 ### If something fails
 

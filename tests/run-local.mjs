@@ -9,7 +9,9 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { allowedNumbers, groundReply } from "../src/assistant/ai.js";
 import { understand } from "../src/assistant/basic.js";
 import { applyUpdates, emptyMemory } from "../src/assistant/memory.js";
-import { searchRooms } from "../src/assistant/search.js";
+import { DEMO_LISTINGS, DEMO_PEOPLE } from "../src/assistant/demo-data.js";
+import { BRANDEIS, kmBetween, searchRooms } from "../src/assistant/search.js";
+import { PHONE, hasAddress } from "../src/validate.js";
 import { rankUnits } from "../src/match.js";
 import { rankRoommates, scoreRoommate } from "../src/roommates.js";
 import { startFakeAnthropic } from "./fake-anthropic.mjs";
@@ -228,6 +230,26 @@ try {
     const g = groundReply("R1 is $1,250 a month and about 1.3 km away. It's also only $999 for parking. A nice choice.", allowed);
     check("Grounding keeps supported numbers and drops invented ones", g.text.includes("$1,250") && g.text.includes("1.3 km") && !g.text.includes("999") && g.text.includes("A nice choice"), g.text);
     check("Grounding drops travel times (coHabit has none)", !groundReply("It's a 10 minute walk. Great spot overall for you.", allowed).text.includes("10 minute"));
+
+    // Demo data (src/assistant/demo-data.js)
+    const demoText = JSON.stringify([DEMO_LISTINGS, DEMO_PEOPLE]);
+    check("Demo data: 15 listings and 20 roommate profiles, every id starting demo-", DEMO_LISTINGS.length === 15 && DEMO_PEOPLE.length === 20 && [...DEMO_LISTINGS, ...DEMO_PEOPLE].every((x) => x.id.startsWith("demo-") && x.demo === true));
+    check("Demo data: no contact details, street addresses or ZIP codes anywhere", !/@|https?:/.test(demoText) && ![...DEMO_LISTINGS.flatMap((u) => [u.name, u.area, u.description, u.transit, u.utilities]), ...DEMO_PEOPLE.flatMap((p) => [p.about, p.area])].some((t) => hasAddress(t) || PHONE.test(t)));
+    check("Demo data: profiles have a first name and a town only, never a location", DEMO_PEOPLE.every((p) => /^[A-Z][a-z]+$/.test(p.firstName) && !("location" in p) && !("lat" in p) && !("email" in p)));
+    check("Demo data: listings are approximate areas around Waltham (all within 15 km of Brandeis)", DEMO_LISTINGS.every((u) => u.location.precision === "approximate" && kmBetween(u.location, BRANDEIS) < 15));
+    const kinds = new Set(DEMO_LISTINGS.map((u) => u.kind));
+    check("Demo data: shared rooms, studios, sublets, lease takeovers, whole places and replacing a roommate; furnished and not; per-room and whole-place rent", ["Shared room", "Studio", "Sublet", "Lease takeover", "Whole apartment", "Replacing a roommate", "Private room"].every((k) => kinds.has(k)) && DEMO_LISTINGS.some((u) => u.furnished) && DEMO_LISTINGS.some((u) => !u.furnished) && DEMO_LISTINGS.some((u) => u.rent_basis === "unit") && DEMO_LISTINGS.some((u) => u.rent_basis === "room"));
+    check("Demo data: some profiles chose not to be found", DEMO_PEOPLE.filter((p) => !p.discoverable).length === 3);
+    const pair = searchRooms(mem({ budget_max: 1400, rooms_needed: 2 }), DEMO_LISTINGS, { limit: 20 }).results.find((r) => r.unitId === "demo-06");
+    check("Rent for a whole place is split between the people moving in together", pair?.fits.includes("$2,700 a month for the whole place, $1,350 each for 2, within your $1,400 budget") && pair.you_would_pay === 1350, JSON.stringify(pair?.fits));
+    const solo = searchRooms(mem({ budget_max: 1500 }, { budget_max: false }), DEMO_LISTINGS, { limit: 20 }).results.find((r) => r.unitId === "demo-03");
+    check("One person pays the whole rent of a studio, and the mismatch says so", solo?.misses.includes("$1,650 a month for the whole place, $150 over your $1,500 budget"), JSON.stringify(solo?.misses));
+    const sublet = searchRooms(mem({ budget_max: 1100, move_in_month: "2027-01", rooms_needed: 1, lease_months: 5 }), DEMO_LISTINGS, { limit: 20 });
+    check("A spring-sublet search finds the spring sublet first, with its lease", sublet.results[0]?.unitId === "demo-04" && sublet.results[0].fits.some((f) => f.startsWith("Spring sublet")));
+    const strong = searchRooms(mem({ budget_max: 1300, move_in_month: "2027-06", areas: ["Waltham"], rooms_needed: 1 }), DEMO_LISTINGS, { limit: 20 });
+    check("Demo data covers strong and partial matches for a typical Waltham search", strong.results[0].misses.length === 0 && strong.results.some((r) => r.misses.length > 0));
+    check("Demo data covers no-match cases (a $600 budget finds nothing)", searchRooms(mem({ budget_max: 600, move_in_month: "2027-06", areas: ["Waltham"], rooms_needed: 1 }), DEMO_LISTINGS).results.length === 0);
+    check("Real listings without these details are matched exactly as before", searchRooms(mem({ budget_max: 1000, lease_months: 5, wishes: ["furnished"] }), [unit({ monthly_rent: 900 })]).results[0].fits.join() === "1 room available,$900 a month, within your $1,000 budget");
   }
 
   // ── Public pages ──────────────────────────────────────────────────────────
@@ -754,6 +776,11 @@ try {
     check("Assistant: can't save from someone else's chat (404)", r.status === 404);
     r = await api(`/api/assistant/saved/${savedRoom.id}`, { method: "DELETE", as: chatAi });
     check("Assistant: remove a saved room", r.status === 200 && (await api("/api/assistant", { as: chatAi })).data.saved.length === 0);
+    await api("/api/assistant/demo", { method: "POST", as: chatAi, body: { on: true } });
+    r = await say(chatAi, `[[search_rooms]] [[propose_action {"kind":"contact_landlord","ref":"R1","note":"Hi"}]] [[reply ok]]`);
+    check("Demo mode (AI): no contact card for a demo listing", replyOf(r).actions.length === 0 && lastToolResult().includes("demo listing"));
+    check("Demo mode (AI): the model is told results are demo, with each one's rent basis and share", fake.requests.at(-3).body.messages.at(-1).content.includes("Demo mode is on") && JSON.stringify(fake.requests.at(-2).body.messages.at(-1)).includes('\\"demo\\":true') && JSON.stringify(fake.requests.at(-2).body.messages.at(-1)).includes("you_would_pay"));
+    await api("/api/assistant/demo", { method: "POST", as: chatAi, body: { on: false } });
 
     // Roommates: only people who chose to be found; the student must opt in first.
     r = await say(chatMate, `[[update_memory {"looking_for":"roommates","budget_max":1300,"move_in_month":"2027-06","areas":["Waltham"],"rooms_needed":1}]] [[search_roommates]] [[reply Roommate matching is off for you.]]`);
@@ -785,6 +812,8 @@ try {
     check("Assistant: someone who turns matching off disappears from saved options and old replies", gone?.available === false && !("firstName" in gone) && !JSON.stringify(r.data).includes("Alexandra"));
 
     // Fallbacks: the AI service down, or the model declining, still gets an answer.
+    // This renter has made many writes in the last minute; start a fresh rate-limit window so the next checks test the fallback.
+    d1(`DELETE FROM app_rate_limits WHERE key = 'w:u:t_chat_ai'`);
     fake.mode = "down";
     r = await say(chatAi, "June 2027 please");
     check("Assistant: AI service down → answered in basic mode, with a notice", r.status === 200 && replyOf(r).mode === "basic" && /isn't available/.test(replyOf(r).notice || "") && r.data.mode === "basic");
@@ -831,6 +860,36 @@ try {
     check("Guided chat: never says \"Got it\"", basicTexts.every((t) => !/got it/i.test(t)), basicTexts.join(" | "));
     r = await say(chatFresh, "A room");
     check("Guided chat: the first tap answers the opening question (looking for a room), then the next question", r.data.memory.find((f) => f.field === "looking_for")?.raw === "room" && replyOf(r).text === "What's your max rent per month?" && r.data.results.goal === "room", replyOf(r).text);
+
+    // Demo mode
+    r = await api("/api/assistant/demo", { method: "POST", as: chatFresh, body: { on: "yes" } });
+    check("Demo mode: the switch takes true or false only (400)", r.status === 400);
+    r = await api("/api/assistant/demo", { method: "POST", as: chatFresh, body: { on: true } });
+    check("Demo mode: turning it on is remembered", r.status === 200 && r.data.demo === true && (await api("/api/assistant", { as: chatFresh })).data.demo === true);
+    for (const [field, value] of [["budget_max", 1300], ["move_in_month", "2027-06"], ["areas", ["Waltham"]], ["rooms_needed", 1]]) {
+      r = await api("/api/assistant/memory", { method: "POST", as: chatFresh, body: { field, value } });
+    }
+    let demoRooms = r.data.results.rooms;
+    check("Demo mode: room results are demo listings only, each labeled demo", r.data.results.demo === true && demoRooms.status === "ok" && demoRooms.items.length >= 3 && demoRooms.items.every((c) => c.unit.id.startsWith("demo-") && c.unit.demo === true));
+    check("Demo mode: strong and partial matches, with scores never shown for rooms", demoRooms.items[0].misses.length === 0 && demoRooms.items.some((c) => c.misses.length) && demoRooms.items.every((c) => !("score" in c)));
+    r = await api("/api/assistant/saved", { method: "POST", as: chatFresh, body: { kind: "room", unitId: demoRooms.items[0].unit.id } });
+    check("Demo mode: demo listings can't be saved (409)", r.status === 409 && r.data.error === "demo");
+    r = await api("/api/listings");
+    check("Demo listings never appear in public listings", !JSON.stringify(r.data).includes("demo-"));
+    r = await say(chatFresh, "show rooms");
+    check("Demo mode: the guided chat searches the demo listings too", /rooms? fits? your must-haves/.test(replyOf(r).text) && replyOf(r).cards.every((c) => c.unit?.demo === true), replyOf(r).text);
+    r = await api("/api/assistant/memory", { method: "POST", as: chatFresh, body: { field: "looking_for", value: "both" } });
+    check("Demo mode: roommates need the student's lifestyle answers first", r.data.results.people.status === "missing_answers");
+    for (const [field, value] of [["sleep_schedule", "early"], ["cleanliness", "tidy"], ["noise", "quiet"], ["guests", "sometimes"], ["pets", "ok_with_pets"], ["smoking", "no_smoking"]]) {
+      r = await api("/api/assistant/memory", { method: "POST", as: chatFresh, body: { field, value } });
+    }
+    const demoPeople = r.data.results.people;
+    const names = (demoPeople.items || []).map((p) => p.firstName);
+    check("Demo mode: demo roommate profiles with scores worked out by coHabit and what they share", demoPeople.status === "ok" && demoPeople.items.length >= 5 && demoPeople.items.every((p) => p.demo === true && p.email === null && p.fits.length && p.score >= 60), JSON.stringify(names));
+    check("Demo mode: profiles that didn't choose to be found are never shown, nor dealbreakers (a smoker for a no-smoking student)", !["Pia", "Quinn", "Theo", "Gus"].some((n) => names.includes(n)) && names.includes("Ari"));
+    check("Demo mode: real renters never appear among demo profiles", !["Alexandra", "Bartholomew", "Test", "Riley"].some((n) => names.includes(n)));
+    r = await api("/api/assistant/demo", { method: "POST", as: chatFresh, body: { on: false } });
+    check("Demo mode off: results are real again, with no demo listings or profiles", r.data.demo === false && !JSON.stringify(r.data.results).includes("demo-") && r.data.results.people.status !== "ok");
     check("Basic mode: never calls the AI service", fake.requests.length === before);
 
     r = await api("/api/assistant/clear", { method: "POST", as: chatBasic, body: {} });

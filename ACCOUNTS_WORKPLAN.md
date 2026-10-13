@@ -81,6 +81,12 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       signed-out assistant/admin APIs 401, cross-site chat message 403, signed-out `/assistant` page and new home text.
 - [x] Rooms with no map location shown (marked distance unknown) instead of hidden by a distance must-have:
       only 1 of 4 active live units had a location. 315/315 tests; deployed as `bdc3fd32-43b6-4d4b-957a-5ae097605f44`.
+- [x] Assistant redesign (2026-10-12, local only, not deployed; no database change needed), in three tested stages:
+      layout (results 65% / guided chat 35%, List/Map with linked pins, Rooms/Roommates tabs, editable answer chips,
+      phone Chat/Results tabs), wording (same questions and answers, shorter copy, "Find your room. Find your people."),
+      and Demo mode (15 fictional listings and 20 fictional profiles in code, labeled, never saved, never in real data).
+      356/356 tests (41 new).
+- [ ] Owner decision: deploy the redesign (no migration needed)
 - [ ] Owner adds addresses to the 3 active live units without one
 - [ ] Owner tries the live assistant as a renter (manual test part 9)
 - [ ] Owner checks live: dragging the pin (1 km limit), the real Use my location permission prompt, a real unit with an address

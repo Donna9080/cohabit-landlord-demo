@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-12
+# coHabit project checkpoint: 2026-10-12 (assistant redesign)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -16,7 +16,7 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 | "I'm interested" requests | 2 | Live, 2026-10-12 |
 | Saved questionnaires | 4 | Live, 2026-10-12 |
 | Admins | 1 | Live (the owner) |
-| Automated tests | 314 passing | `npm test`, local, 2026-10-12 |
+| Automated tests | 356 passing | `npm test`, local, 2026-10-12 |
 | AI cost so far | $0 | No Anthropic key exists; the assistant has only run in basic mode or against the test stand-in |
 
 No real listings were imported because no authorized data source exists yet (see "Pending work").
@@ -27,6 +27,9 @@ No real listings were imported because no authorized data source exists yet (see
 - **Live version:** `bdc3fd32-43b6-4d4b-957a-5ae097605f44`, deployed 2026-10-12 with the owner's approval: rooms with no map
   location are no longer hidden by a distance must-have (commit `27df59b`). The version before it, `d7e38548-66c4-4eab-890c-ac0c692a1bcd`,
   brought the chat assistant (basic mode) and the external listing import tool (commit `a5f8e92`).
+- **Not deployed (local only):** the assistant redesign and Demo mode (commits after `9ce40a7`; tag
+  `checkpoint-2026-10-12-redesign`). They need no database change, so deploying is a single `npx wrangler deploy`
+  once approved.
 - **Live database (`cohabit-db`):** migrations 0001 to 0006 applied. 0005 and 0006 were applied on 2026-10-12 with
   the owner's approval, after a restore point (bookmark `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90`). Both only added tables and one empty column;
   existing data was checked afterwards (11 users, 5 units, 2 requests, 4 questionnaires).
@@ -58,6 +61,30 @@ No real listings were imported because no authorized data source exists yet (see
 | Maps | Massachusetts-only place search, Use my location (browser only), always-on map, landlord address + draggable pin, approximate (500 m) or exact | Yes |
 | Import tool | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | Yes (2026-10-12) |
 | **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
+
+### Assistant redesign (2026-10-12, local only)
+
+Built and tested in three stages, each committed separately:
+
+1. **Layout.**
+   - Results take the left 65% and the guided chat the right 35%.
+   - Rooms have a List / Map toggle with pins and cards kept in step.
+   - Roommates show as profiles with what you have in common. "Both" shows Rooms and Roommates tabs.
+   - Answers appear as editable chips (value and must-have). All answers and Saved are folded away.
+   - On phones, Chat and Results tabs keep their state.
+   - Results are worked out from the answers on every change, with early results once two basics are known.
+   - Empty results name the blocking must-haves and offer explicit changes.
+2. **Wording.**
+   - "Find your room. Find your people." and "Hey! What are you looking for?" (A room / A roommate / Both).
+   - Shorter questions, with the same order, branching and answer values.
+   - No repeated "Got it", and short result messages.
+   - A "Guided chat" note explains the free mode and how the chat is stored.
+3. **Demo mode.**
+   - 15 fictional listings and 20 fictional profiles around Waltham, kept in code, not the database.
+   - Per-room and whole-place rent, with whole-place rent split between the people moving in together.
+   - Strong, partial and no-match cases.
+   - Labeled on every card and pin; never saved, contacted, or mixed into real results or counts.
+   - Hidden profiles stay hidden.
 
 ### The assistant (2026-10-12)
 
@@ -124,6 +151,7 @@ No real listings were imported because no authorized data source exists yet (see
       about 0.1¢.
 - [x] Apply migrations 0005 and 0006 to the live database (2026-10-12, restore point taken first).
 - [x] Push and deploy the import tool and the assistant (2026-10-12, version `d7e38548…`).
+- [ ] Deploy the assistant redesign and Demo mode (no migration needed; needs the owner's approval).
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
 
 **Blocked: real listings (0 imported).** Apartments.com refuses automated access, and there is no republication
@@ -156,7 +184,8 @@ one of these is needed:
 | Database before migration 0004 | Time Travel bookmark `00000032-00000000-000050f9-cded0b9a637a3ca8de724dfb34fae1b6` |
 | Original static site | Version `a3c0f17b-d52a-47e3-9d71-5049e87a7a34`, git tag `pre-accounts-2026-09-29` |
 | Previous checkpoint | Git tag `checkpoint-2026-10-06` |
-| This checkpoint | Git tag `checkpoint-2026-10-12` |
+| Earlier checkpoint today | Git tag `checkpoint-2026-10-12` (assistant first built) |
+| This checkpoint | Git tag `checkpoint-2026-10-12-redesign` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 

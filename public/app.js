@@ -404,6 +404,7 @@
 
   // What goes under a listing card, depending on who is looking.
   function interestFooter(u) {
+    if (u.demo) return `<p class="small muted interest">Demo listing: it's made up, so there's no landlord to contact.</p>`;
     if (u.external) return ""; // the card links to its source instead
     if (u.sample) return `<p class="small muted interest">Sample listing: there is no landlord to contact.</p>`;
     if (!me.user) return `<p class="small interest"><a href="/renter">Sign in as a renter</a> to tell the landlord you're interested.</p>`;
@@ -1812,19 +1813,42 @@
       </li>`;
   }
 
+  // A simple drawing per kind of place, used as the demo listings' picture. Drawn here; nothing is loaded.
+  const ART = {
+    bed: '<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>',
+    calendar: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
+    key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>',
+    people: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    building: '<rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/>',
+    studio: '<path d="M3 21V8l9-5 9 5v13"/><rect x="8" y="12" width="8" height="9"/>',
+  };
+  const ART_FOR = { Studio: "studio", "Private room": "bed", "Shared room": "people", "Whole apartment": "building", Sublet: "calendar", "Lease takeover": "key", "Replacing a roommate": "people" };
+  const demoArt = (kind) =>
+    `<div class="demo-art" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ART[ART_FOR[kind] || "bed"]}</svg><span>${esc(kind || "Room")} · demo picture</span></div>`;
+  const demoTag = `<span class="tag tag-demo" title="Made up for Demo mode">Demo</span>`;
+  const rentLine = (u) => (u.rent_basis === "unit" ? `${money(u.monthly_rent)}/mo for the whole place · ${plural(u.bedrooms || u.rooms_available, "bedroom", "bedrooms")}` : `${money(u.monthly_rent)}/mo${u.demo ? " per room" : ""} · ${plural(u.rooms_available, "room", "rooms")}`);
+  const demoFacts = (u) =>
+    u.demo
+      ? `<p class="facts-line">${[u.lease && u.lease.label, u.utilities, u.furnished === true ? "Furnished" : u.furnished === false ? "Unfurnished" : "", u.transit].filter(Boolean).map(esc).join(" · ")}</p>`
+      : "";
+
   function roomCard(c) {
     const key = `res:${c.ref}`;
     chatCards.set(key, c);
     const u = c.unit;
     const save = c.savedId
       ? unsaveButton(c.savedId)
-      : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="room" data-unit="${esc(u.id)}" aria-pressed="false">Save</button>`;
+      : u.demo
+        ? ""
+        : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="room" data-unit="${esc(u.id)}" aria-pressed="false">Save</button>`;
     return `
       <li>
-        <article class="res-card${resSelected === c.ref ? " selected" : ""}" data-ref="${esc(c.ref)}" tabindex="-1">
-          <div class="res-card-top"><span class="ref">${esc(c.ref)}</span><h3 class="mini-title">${esc(u.name)}</h3>${u.sample ? `<span class="tag" title="Fictional listing for demonstration">Sample</span>` : ""}</div>
+        <article class="res-card${resSelected === c.ref ? " selected" : ""}${u.demo ? " is-demo" : ""}" data-ref="${esc(c.ref)}" tabindex="-1">
+          ${u.demo ? demoArt(u.kind) : ""}
+          <div class="res-card-top"><span class="ref">${esc(c.ref)}</span><h3 class="mini-title">${esc(u.name)}</h3>${u.demo ? demoTag : ""}${u.sample ? `<span class="tag" title="Fictional listing for demonstration">Sample</span>` : ""}</div>
           <p class="small muted">${esc(u.area)}${c.km != null ? ` · about ${c.km} km from Brandeis` : ""}</p>
-          <p class="mini-stats">${money(u.monthly_rent)}/mo · ${plural(u.rooms_available, "room", "rooms")} · from ${fmtDate(u.move_in_date)}</p>
+          <p class="mini-stats">${rentLine(u)} · from ${fmtDate(u.move_in_date)}</p>
+          ${demoFacts(u)}
           ${fitLists(c)}
           <div class="mini-actions">
             <button class="btn btn-small btn-quiet" type="button" data-action="chat-details" data-key="${esc(key)}">Details</button>
@@ -1839,14 +1863,17 @@
   function personCard(c) {
     const save = c.savedId
       ? unsaveButton(c.savedId)
-      : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="person" data-ref="${esc(c.ref)}" data-first="${esc(c.firstName)}" aria-pressed="false">Save</button>`;
+      : c.demo
+        ? ""
+        : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="person" data-ref="${esc(c.ref)}" data-first="${esc(c.firstName)}" aria-pressed="false">Save</button>`;
     return `
       <li>
-        <article class="res-card" data-ref="${esc(c.ref)}" tabindex="-1">
+        <article class="res-card${c.demo ? " is-demo" : ""}" data-ref="${esc(c.ref)}" tabindex="-1">
           <div class="res-card-top"><span class="ref">${esc(c.ref)}</span><span class="person"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(c.firstName))}</span><span class="name">${esc(c.firstName)}</span></span>
-            <span class="card-tags">${c.sample ? `<span class="tag" title="Fictional person for demonstration">Sample</span>` : ""}<span class="pill pill-ok" title="Compatibility score out of 100, worked out by coHabit">${c.score}% compatible</span></span></div>
+            <span class="card-tags">${c.demo ? demoTag : ""}${c.sample ? `<span class="tag" title="Fictional person for demonstration">Sample</span>` : ""}<span class="pill pill-ok" title="Compatibility score out of 100, worked out by coHabit">${c.score}% compatible</span></span></div>
+          ${c.about ? `<p class="small muted">${esc(c.about)}</p>` : ""}
           ${fitLists(c, "What you have in common")}
-          ${c.email ? `<a class="card-link small" href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : `<p class="small muted">Hasn't shared contact details.</p>`}
+          ${c.demo ? `<p class="small muted">Demo profile: made up, with no contact details.</p>` : c.email ? `<a class="card-link small" href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : `<p class="small muted">Hasn't shared contact details.</p>`}
           <div class="mini-actions">${save}</div>
         </article>
       </li>`;
@@ -1953,6 +1980,10 @@
     if (!top || !chat) return;
     for (const k of [...chatCards.keys()]) if (k.startsWith("res:")) chatCards.delete(k);
     const r = chat.results;
+    document.getElementById("res-demo").innerHTML = chat.demo
+      ? `<div class="demo-banner" role="note"><strong>Demo mode.</strong> These 15 listings and 20 people are made up so you can try coHabit. None of them is real, nothing can be saved, and nobody gets contacted. <button class="link-button" type="button" data-action="demo-toggle">Turn off</button></div>`
+      : "";
+    document.getElementById("demo-switch").setAttribute("aria-checked", String(!!chat.demo));
     document.getElementById("res-chips").innerHTML = prefChipsHtml();
     let parts = { head: "", list: "", map: false };
     if (!r.goal) {
@@ -2037,19 +2068,20 @@
     for (const c of located) {
       const pin = document.createElement("button");
       pin.type = "button";
-      pin.className = "res-pin" + (c.unit.sample ? " res-pin-sample" : "") + (resSelected === c.ref ? " selected" : "");
+      pin.className = "res-pin" + (c.unit.demo ? " res-pin-demo" : c.unit.sample ? " res-pin-sample" : "") + (resSelected === c.ref ? " selected" : "");
       pin.dataset.ref = c.ref;
       pin.textContent = c.ref;
       pin.addEventListener("click", () => selectResult(c.ref, true));
       resMarkers.push(new maplibregl.Marker({ element: pin }).setLngLat([c.unit.location.lng, c.unit.location.lat]).addTo(resMap));
-      pin.setAttribute("aria-label", `${c.ref}: ${c.unit.name}, ${money(c.unit.monthly_rent)} a month${c.unit.sample ? ", sample listing" : ""}${c.unit.location.precision === "approximate" ? ", approximate area" : ""}. Show its card.`);
+      pin.title = c.unit.demo ? `${c.ref}: demo listing (made up)` : `${c.ref}: ${c.unit.name}`;
+      pin.setAttribute("aria-label", `${c.ref}: ${c.unit.name}, ${money(c.unit.monthly_rent)} a month${c.unit.demo ? ", demo listing, made up" : c.unit.sample ? ", sample listing" : ""}${c.unit.location.precision === "approximate" ? ", approximate area" : ""}. Show its card.`);
     }
     const points = located.map((c) => [c.unit.location.lng, c.unit.location.lat]).concat([BRANDEIS_LNGLAT]);
     const bounds = points.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(points[0], points[0]));
     resMap.fitBounds(bounds, { padding: 56, maxZoom: 14, duration: 0 });
     const unplaced = items.length - located.length;
     note.textContent = located.length
-      ? `Pins show approximate areas unless a landlord chose to share the exact spot.${unplaced ? ` ${plural(unplaced, "room has", "rooms have")} no map location (still in the list).` : ""}`
+      ? `${chat.results.demo ? "Demo pins (dashed) are made-up spots, shown as approximate areas." : "Pins show approximate areas unless a landlord chose to share the exact spot."}${unplaced ? ` ${plural(unplaced, "room has", "rooms have")} no map location (still in the list).` : ""}`
       : "None of these rooms has a map location yet. They're all in the list below.";
     if (resSelected) selectResult(resSelected, false);
   }
@@ -2106,6 +2138,21 @@
     dialog.dataset.field = field;
     dialog.showModal();
     document.getElementById("pref-value").focus();
+  }
+
+  async function toggleDemo() {
+    try {
+      const d = await api("/api/assistant/demo", { method: "POST", body: { on: !chat.demo } });
+      chat.demo = d.demo;
+      chat.results = d.results;
+      resSelected = null;
+      resShowAll = false;
+      renderResults();
+      toast(d.demo ? "Demo mode on: made-up listings and people." : "Demo mode off: real listings and people again.");
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      toast(e.message);
+    }
   }
 
   function applyChatUpdate(d) {
@@ -2279,6 +2326,7 @@
       <div class="asst" data-pane="${chatPane}">
         <div class="asst-top">
           <h1 tabindex="-1">Find your room. Find your people.</h1>
+          <button class="demo-switch" type="button" role="switch" id="demo-switch" data-action="demo-toggle" aria-checked="${!!chat.demo}"><span class="demo-knob" aria-hidden="true"></span>Demo mode</button>
         </div>
         <div class="pane-tabs" role="tablist" aria-label="Show">
           <button role="tab" type="button" id="tab-chat" data-action="pane" data-pane="chat" aria-controls="pane-chat" aria-selected="${chatPane === "chat"}">Chat</button>
@@ -2286,6 +2334,7 @@
         </div>
         <div class="asst-grid">
           <section class="asst-results" id="pane-results" aria-label="Results">
+            <div id="res-demo"></div>
             <div id="res-chips"></div>
             <div id="res-top"></div>
             <div class="res-map-box" id="res-map-box" hidden><div class="res-map" id="res-map"></div><p class="small muted" id="res-map-note"></p></div>
@@ -2456,13 +2505,15 @@
           ? `<p class="small muted">The landlord shares an approximate area only (about 500 m wide), not the street address.</p>`
           : `<p class="small muted">No map location given.</p>`;
     dialog.querySelector(".details-body").innerHTML = `
-      <div class="card-top"><h2 id="details-title" class="card-title">${esc(u.name)}</h2>${u.sample ? `<span class="tag">Sample (fictional)</span>` : ""}</div>
+      <div class="card-top"><h2 id="details-title" class="card-title">${esc(u.name)}</h2>${u.demo ? demoTag : u.sample ? `<span class="tag">Sample (fictional)</span>` : ""}</div>
       <p class="muted small">${esc(u.area)}${c.km != null ? ` · about ${c.km} km from Brandeis in a straight line` : ""}</p>
       ${where}
-      ${unitStats(u)}
+      <p class="mini-stats">${rentLine(u)} · from ${fmtDate(u.move_in_date)}</p>
+      ${u.demo ? demoArt(u.kind) : ""}
       ${u.description ? `<p class="desc">${esc(u.description)}</p>` : `<p class="small muted">No description.</p>`}
+      ${demoFacts(u)}
       ${fitLists(c)}
-      <p class="hint">Listings don't record lease length, utilities, furnishing or fees unless the description says so. Ask the landlord.</p>
+      ${u.demo ? `<p class="hint">Demo listing: made up so you can try coHabit. It isn't available and nobody can be contacted.</p>` : `<p class="hint">Listings don't record lease length, utilities, furnishing or fees unless the description says so. Ask the landlord.</p>`}
       ${interestFooter(u)}`;
     dialog.showModal();
   }
@@ -2930,6 +2981,7 @@
         ).then((d) => d && reloadChat());
       else if (a === "chat-unsave") chatRequest(`/api/assistant/saved/${encodeURIComponent(action.dataset.id)}`, { method: "DELETE" }, "Removed from saved.").then((d) => d && reloadChat());
       else if (a === "pane") setPane(action.dataset.pane);
+      else if (a === "demo-toggle") toggleDemo();
       else if (a === "res-tab") {
         resTab = action.dataset.tab;
         resShowAll = false;
