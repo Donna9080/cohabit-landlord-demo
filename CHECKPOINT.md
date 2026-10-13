@@ -24,8 +24,9 @@ No real listings were imported because no authorized data source exists yet (see
 ## Deployment status
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `d7e38548-66c4-4eab-890c-ac0c692a1bcd`, deployed 2026-10-12 with the owner's approval: the chat assistant (basic mode)
-  and the external listing import tool. Matches git commit `a5f8e92` (on GitHub).
+- **Live version:** `bdc3fd32-43b6-4d4b-957a-5ae097605f44`, deployed 2026-10-12 with the owner's approval: rooms with no map
+  location are no longer hidden by a distance must-have (commit `27df59b`). The version before it, `d7e38548-66c4-4eab-890c-ac0c692a1bcd`,
+  brought the chat assistant (basic mode) and the external listing import tool (commit `a5f8e92`).
 - **Live database (`cohabit-db`):** migrations 0001 to 0006 applied. 0005 and 0006 were applied on 2026-10-12 with
   the owner's approval, after a restore point (bookmark `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90`). Both only added tables and one empty column;
   existing data was checked afterwards (11 users, 5 units, 2 requests, 4 questionnaires).

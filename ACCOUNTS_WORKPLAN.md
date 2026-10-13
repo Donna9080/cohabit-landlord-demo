@@ -79,6 +79,9 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90`, migrations 0005 and 0006 applied (data checked after: 11 users, 5 units,
       2 requests, 4 questionnaires), deployed as `d7e38548-66c4-4eab-890c-ac0c692a1bcd` in basic mode. Live checks: pages 200,
       signed-out assistant/admin APIs 401, cross-site chat message 403, signed-out `/assistant` page and new home text.
+- [x] Rooms with no map location shown (marked distance unknown) instead of hidden by a distance must-have:
+      only 1 of 4 active live units had a location. 315/315 tests; deployed as `bdc3fd32-43b6-4d4b-957a-5ae097605f44`.
+- [ ] Owner adds addresses to the 3 active live units without one
 - [ ] Owner tries the live assistant as a renter (manual test part 9)
 - [ ] Owner checks live: dragging the pin (1 km limit), the real Use my location permission prompt, a real unit with an address
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
