@@ -1740,20 +1740,28 @@
     }
   }
 
-  // ── Assistant: one chat, results beside it (in it on phones), confirmations inside it ──
-  // Everything shown in a result card comes from the database through /api/assistant; the AI only writes the
-  // message text. Saving to the profile or contacting a landlord happens only when the renter clicks Confirm.
-  const STARTERS = ["Find me a room near Brandeis", "I'm looking for a roommate", "What should I consider before signing a lease?"];
+  // ── Assistant: results on the left, guided chat on the right (Chat / Results tabs on phones) ──
+  // Results come from /api/assistant, worked out by code from the renter's answers every time they change. The chat
+  // asks the questions. Nothing is saved to the profile or sent to a landlord until the renter clicks Confirm.
+  const GOALS = ["A room", "A roommate", "Both"];
   const BASIC_REASONS = {
-    not_configured: "The AI assistant isn't switched on yet, so you're in basic mode. It understands short answers about budget, move-in month, towns, distance from campus, rooms and lifestyle.",
-    user_limit: "You've used today's AI replies, so you're in basic mode until tomorrow (UTC). Your chat and answers are kept.",
-    site_limit: "The AI assistant has reached today's limit for coHabit, so you're in basic mode until tomorrow (UTC).",
-    unavailable: "The AI assistant isn't available right now, so you're in basic mode. Try again in a little while.",
+    user_limit: "You've used today's AI replies, so the chat is guided until tomorrow (UTC). Your answers are kept.",
+    site_limit: "The AI assistant has reached today's limit for coHabit, so the chat is guided until tomorrow (UTC).",
+    unavailable: "The AI assistant isn't available right now, so the chat is guided. Try again in a little while.",
   };
-  let chat = null; // { messages, memory, saved, mode, basicReason, usage, keepDays, hasProfile, roommateMatching }
-  let chatSideId = null; // which reply's results are shown beside the chat
+  const STRICT_FIELDS = ["budget_max", "move_in_month", "areas", "max_distance_km"];
+  const BRANDEIS_LNGLAT = [-71.2589, 42.3656];
+  let chat = null; // what /api/assistant returned: messages, memory, results, saved, mode…
   let chatBusy = false;
-  const chatCards = new Map(); // "<message id>:<ref>" or "saved:<id>" -> card, for the details box
+  let chatPane = "chat"; // phones: which tab is showing
+  let resTab = "rooms"; // "Both": which results tab is showing
+  let resView = "list"; // rooms: list or map
+  let resShowAll = false;
+  let resSelected = null; // ref of the card selected on the list or the map
+  let resMap = null;
+  let resMapReady = null;
+  let resMarkers = [];
+  const chatCards = new Map(); // key -> card, for the details box
 
   // Server text -> safe HTML: paragraphs, with "- " lines as a list.
   function richText(text) {
@@ -1778,50 +1786,368 @@
     (c.fits.length ? `<ul class="fit-list" aria-label="${fitsLabel}">${c.fits.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : "") +
     (c.misses.length ? `<ul class="miss-list" aria-label="What doesn't fit">${c.misses.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : "");
 
-  const saveButton = (c, msgId) =>
-    c.savedId
-      ? `<button class="btn btn-small btn-quiet" type="button" data-action="chat-unsave" data-id="${esc(c.savedId)}" aria-pressed="true">Saved ✓</button>`
-      : msgId && c.available
-        ? `<button class="btn btn-small btn-quiet" type="button" data-action="chat-save" data-msg="${esc(msgId)}" data-ref="${esc(c.ref)}" aria-pressed="false">Save</button>`
-        : "";
+  const unsaveButton = (id) => `<button class="btn btn-small btn-quiet" type="button" data-action="chat-unsave" data-id="${esc(id)}" aria-pressed="true">Saved ✓</button>`;
 
-  function chatCard(c, msgId, key) {
-    chatCards.set(key, c);
-    const ref = c.ref ? `<span class="ref" aria-label="Result ${esc(c.ref)}">${esc(c.ref)}</span>` : "";
-    if (!c.available) {
-      return `<li class="mini-card is-gone">${ref}<p class="small muted">${c.kind === "room" ? "This room is no longer listed." : "This person is no longer looking for roommates."}</p>${c.savedId ? saveButton(c) : ""}</li>`;
+  // A saved option (in "Saved"), shown compactly.
+  function savedCard(s) {
+    const key = `saved:${s.id}`;
+    chatCards.set(key, s);
+    if (!s.available) {
+      return `<li class="mini-card is-gone"><p class="small muted">${s.kind === "room" ? "This room is no longer listed." : "This person is no longer looking for roommates."}</p>${unsaveButton(s.savedId)}</li>`;
     }
-    if (c.kind === "person") {
+    if (s.kind === "person") {
       return `
         <li class="mini-card">
-          <div class="mini-top">${ref}<span class="person"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(c.firstName))}</span><span class="name">${esc(c.firstName)}</span></span>
-            <span class="card-tags">${c.sample ? `<span class="tag" title="Fictional person for demonstration">Sample</span>` : ""}${c.score != null ? `<span class="pill pill-ok" title="Compatibility score out of 100, worked out by coHabit">${c.score}% compatible</span>` : ""}</span></div>
-          ${fitLists(c, "What you have in common")}
-          ${c.email ? `<a class="card-link" href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : `<p class="small muted">Hasn't shared contact details.</p>`}
-          <div class="mini-actions">${saveButton(c, msgId)}</div>
+          <div class="mini-top"><span class="person"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(s.firstName))}</span><span class="name">${esc(s.firstName)}</span></span>${s.sample ? `<span class="tag">Sample</span>` : ""}</div>
+          ${s.email ? `<a class="card-link small" href="mailto:${esc(s.email)}">${esc(s.email)}</a>` : `<p class="small muted">Hasn't shared contact details.</p>`}
+          <div class="mini-actions">${unsaveButton(s.savedId)}</div>
         </li>`;
     }
-    const u = c.unit;
+    const u = s.unit;
     return `
       <li class="mini-card">
-        <div class="mini-top">${ref}<h3 class="mini-title">${esc(u.name)}</h3>${u.sample ? `<span class="tag" title="Fictional listing for demonstration">Sample</span>` : ""}</div>
-        <p class="small muted">${esc(u.area)}${c.km != null ? ` · about ${c.km} km from Brandeis` : ""}</p>
-        <p class="mini-stats">${money(u.monthly_rent)}/mo · ${plural(u.rooms_available, "room", "rooms")} · from ${fmtDate(u.move_in_date)}</p>
-        ${fitLists(c)}
-        <div class="mini-actions">
-          <button class="btn btn-small btn-quiet" type="button" data-action="chat-details" data-key="${esc(key)}">Details</button>
-          ${saveButton(c, msgId)}
-          ${c.interestSent ? `<span class="saved small">Request sent</span>` : ""}
-        </div>
+        <div class="mini-top"><h3 class="mini-title">${esc(u.name)}</h3>${u.sample ? `<span class="tag">Sample</span>` : ""}</div>
+        <p class="small muted">${money(u.monthly_rent)}/mo · ${esc(u.area)}</p>
+        <div class="mini-actions"><button class="btn btn-small btn-quiet" type="button" data-action="chat-details" data-key="${esc(key)}">Details</button>${unsaveButton(s.savedId)}</div>
       </li>`;
   }
 
-  const resultLabel = (m) => {
-    const rooms = m.cards.filter((c) => c.kind === "room").length;
-    const people = m.cards.length - rooms;
-    return [rooms ? plural(rooms, "room", "rooms") : "", people ? plural(people, "person", "people") : ""].filter(Boolean).join(" and ");
+  function roomCard(c) {
+    const key = `res:${c.ref}`;
+    chatCards.set(key, c);
+    const u = c.unit;
+    const save = c.savedId
+      ? unsaveButton(c.savedId)
+      : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="room" data-unit="${esc(u.id)}" aria-pressed="false">Save</button>`;
+    return `
+      <li>
+        <article class="res-card${resSelected === c.ref ? " selected" : ""}" data-ref="${esc(c.ref)}" tabindex="-1">
+          <div class="res-card-top"><span class="ref">${esc(c.ref)}</span><h3 class="mini-title">${esc(u.name)}</h3>${u.sample ? `<span class="tag" title="Fictional listing for demonstration">Sample</span>` : ""}</div>
+          <p class="small muted">${esc(u.area)}${c.km != null ? ` · about ${c.km} km from Brandeis` : ""}</p>
+          <p class="mini-stats">${money(u.monthly_rent)}/mo · ${plural(u.rooms_available, "room", "rooms")} · from ${fmtDate(u.move_in_date)}</p>
+          ${fitLists(c)}
+          <div class="mini-actions">
+            <button class="btn btn-small btn-quiet" type="button" data-action="chat-details" data-key="${esc(key)}">Details</button>
+            ${save}
+            ${u.location ? `<button class="btn btn-small btn-quiet" type="button" data-action="res-on-map" data-ref="${esc(c.ref)}">On map</button>` : ""}
+            ${c.interestSent ? `<span class="saved small">Request sent</span>` : ""}
+          </div>
+        </article>
+      </li>`;
+  }
+
+  function personCard(c) {
+    const save = c.savedId
+      ? unsaveButton(c.savedId)
+      : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="person" data-ref="${esc(c.ref)}" data-first="${esc(c.firstName)}" aria-pressed="false">Save</button>`;
+    return `
+      <li>
+        <article class="res-card" data-ref="${esc(c.ref)}" tabindex="-1">
+          <div class="res-card-top"><span class="ref">${esc(c.ref)}</span><span class="person"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(c.firstName))}</span><span class="name">${esc(c.firstName)}</span></span>
+            <span class="card-tags">${c.sample ? `<span class="tag" title="Fictional person for demonstration">Sample</span>` : ""}<span class="pill pill-ok" title="Compatibility score out of 100, worked out by coHabit">${c.score}% compatible</span></span></div>
+          ${fitLists(c, "What you have in common")}
+          ${c.email ? `<a class="card-link small" href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : `<p class="small muted">Hasn't shared contact details.</p>`}
+          <div class="mini-actions">${save}</div>
+        </article>
+      </li>`;
+  }
+
+  // ── Results panel ──
+  const findFact = (field) => chat.memory.find((f) => f.field === field);
+  const CHIP_TEXT = {
+    looking_for: (v) => ({ room: "Looking for a room", roommates: "Looking for a roommate", both: "Room + roommate" })[v],
+    budget_max: (v) => `Up to ${money(v)}/mo`,
+    budget_min: (v) => `From ${money(v)}/mo`,
+    move_in_month: (v) => `Move-in ${fmtDate(v)}`,
+    areas: (v) => v.join(", "),
+    max_distance_km: (v) => `≤ ${v} km from campus`,
+    rooms_needed: (v) => plural(v, "room", "rooms"),
+    lease_months: (v) => `${v}-month lease`,
+    chores: (v) => (CHORES.find((c) => c[0] === v) || [, v])[1],
+    wishes: (v) => v.join(", "),
+  };
+  const chipText = (f) => (CHIP_TEXT[f.field] ? CHIP_TEXT[f.field](f.raw) : CHOICES[f.field] ? (CHOICES[f.field][1].find((o) => o[0] === f.raw) || [, f.value])[1] : f.value);
+
+  function prefChipsHtml() {
+    const facts = chat.memory;
+    if (!facts.length) return "";
+    return `
+      <div class="pref-chips" role="group" aria-label="Your answers. Tap one to change it.">
+        ${facts
+          .map(
+            (f) =>
+              `<button class="pref-chip${f.mustHave ? " must" : ""}" type="button" data-action="pref-edit" data-field="${esc(f.field)}" aria-label="${esc(f.label)}: ${esc(f.value)}${f.mustHave ? ", must-have" : ""}. Change">${esc(chipText(f))}${f.mustHave ? `<span class="pref-must" aria-hidden="true">must</span>` : ""}</button>`
+          )
+          .join("")}
+      </div>`;
+  }
+
+  const RELAX_FIELD = { budget: "budget_max", month: "move_in_month", area: "areas", distance: "max_distance_km", rooms: "rooms_needed" };
+
+  function noRoomsHtml(rooms) {
+    const musts = rooms.mustHaves.map(findFact).filter(Boolean);
+    const relax = rooms.ifRelaxed
+      .map((o) => {
+        const field = RELAX_FIELD[o.condition];
+        const fact = findFact(field);
+        const mode = fact && fact.mustHave ? "flexible" : "edit";
+        return `<button class="chip" type="button" data-action="res-relax" data-field="${field}" data-mode="${mode}">${esc(o.change)} <span class="muted">(+${o.extraRooms})</span></button>`;
+      })
+      .join("");
+    return `
+      <div class="empty res-empty">
+        <p class="empty-title">No rooms match all your must-haves</p>
+        ${musts.length ? `<p>Your must-haves: ${musts.map((f) => `<strong>${esc(chipText(f))}</strong>`).join(", ")}. coHabit won't loosen these unless you change them.</p>` : ""}
+        ${relax ? `<p>Changing one would bring some back:</p><div class="quick res-relax">${relax}</div>` : `<p>Nothing comes close right now. Check back as landlords add rooms, or <a href="/listings">browse all listings</a>.</p>`}
+        ${rooms.samplesHidden ? `<p class="small">${plural(rooms.samplesHidden, "sample (fictional) listing", "sample (fictional) listings")} would fit. Say “show sample listings” in the chat to include ${rooms.samplesHidden === 1 ? "it" : "them"}.</p>` : ""}
+      </div>`;
+  }
+
+  function roomsParts(rooms) {
+    if (!rooms || rooms.status === "need_more") {
+      const left = rooms && rooms.missing.length ? ` Still to answer: ${esc(rooms.missing.join(", "))}.` : "";
+      return { head: "", list: emptyState("Rooms show up here", `Answer a couple more questions in the chat and the rooms that fit will appear.${left}`), map: false };
+    }
+    if (rooms.status === "none") return { head: "", list: noRoomsHtml(rooms), map: false };
+    const showMap = resView === "map";
+    const items = showMap || resShowAll ? rooms.items : rooms.items.slice(0, 3);
+    const count = rooms.total > rooms.items.length ? `Best ${rooms.items.length} of ${rooms.total} that fit` : rooms.total === 1 ? "1 room fits" : `${rooms.total} rooms fit`;
+    const head = `
+      <div class="res-head">
+        <div><h2 class="res-title">Rooms</h2><p class="small muted">${count}${rooms.preliminary ? ` so far` : ""}</p></div>
+        <div class="seg" role="group" aria-label="Show rooms as">
+          <button type="button" data-action="res-view" data-view="list" aria-pressed="${!showMap}">List</button>
+          <button type="button" data-action="res-view" data-view="map" aria-pressed="${showMap}">Map</button>
+        </div>
+      </div>
+      ${rooms.preliminary ? `<p class="prelim">Early results. Answer ${esc(rooms.missing.join(" and "))} to sharpen them.</p>` : ""}
+      ${rooms.samplesHidden ? `<p class="small muted">${plural(rooms.samplesHidden, "sample (fictional) listing also fits", "sample (fictional) listings also fit")}. They're hidden unless you ask for them.</p>` : ""}`;
+    const more = !showMap && !resShowAll && rooms.items.length > 3 ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${rooms.items.length - 3} more</button>` : "";
+    return { head, list: `<ul class="res-grid" role="list" aria-label="Rooms">${items.map(roomCard).join("")}</ul>${more}`, map: showMap };
+  }
+
+  function peopleParts(people) {
+    if (!people) return { head: "", list: "" };
+    const ask = `<div class="quick"><button class="chip" type="button" data-action="chat-say" data-text="Find a roommate">Find a roommate</button></div>`;
+    if (people.status === "missing_answers" || ((people.status === "needs_profile" || people.status === "opt_in_required") && people.missing.length))
+      return { head: "", list: emptyState("Roommates show up here", `Answer the lifestyle questions in the chat first. Still to answer: ${esc(people.missing.join(", "))}.`, ask) };
+    if (people.status === "needs_profile" || people.status === "opt_in_required")
+      return {
+        head: "",
+        list: emptyState("Turn on roommate matching to see people", "You only see renters who turned it on too, and they only see your first name and what you have in common. The chat will ask you to confirm.", ask),
+      };
+    if (people.status === "none")
+      return { head: "", list: emptyState("No roommate matches yet", "Nobody who turned on roommate matching fits your area, timing and lifestyle right now. Check back as more students join.") };
+    const items = resShowAll ? people.items : people.items.slice(0, 3);
+    const more = !resShowAll && people.items.length > 3 ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${people.items.length - 3} more</button>` : "";
+    return {
+      head: `<div class="res-head"><div><h2 class="res-title">Roommates</h2><p class="small muted">${people.total === 1 ? "1 person fits" : `${people.total} people fit`}. Only students who chose to be found.</p></div></div>`,
+      list: `<ul class="res-grid" role="list" aria-label="Roommates">${items.map(personCard).join("")}</ul>${more}`,
+    };
+  }
+
+  const resultsCount = (r) => (r.rooms && r.rooms.status === "ok" ? r.rooms.total : 0) + (r.people && r.people.status === "ok" ? r.people.total : 0);
+
+  function renderResults() {
+    const top = document.getElementById("res-top");
+    if (!top || !chat) return;
+    for (const k of [...chatCards.keys()]) if (k.startsWith("res:")) chatCards.delete(k);
+    const r = chat.results;
+    document.getElementById("res-chips").innerHTML = prefChipsHtml();
+    let parts = { head: "", list: "", map: false };
+    if (!r.goal) {
+      parts.list = `
+        <div class="res-opening">
+          <span class="res-opening-icon" aria-hidden="true">${icon("house", 28)}</span>
+          <p class="empty-title">Your matches will show up here</p>
+          <p class="muted">Answer a few quick questions in the chat. Rooms and roommates that fit appear here, with the reasons why.</p>
+        </div>`;
+    } else {
+      const tabs =
+        r.goal === "both"
+          ? `<div class="res-tabs" role="tablist" aria-label="Results">
+              <button role="tab" type="button" data-action="res-tab" data-tab="rooms" aria-selected="${resTab === "rooms"}">Rooms${r.rooms && r.rooms.status === "ok" ? ` <span class="count">${r.rooms.total}</span>` : ""}</button>
+              <button role="tab" type="button" data-action="res-tab" data-tab="people" aria-selected="${resTab === "people"}">Roommates${r.people && r.people.status === "ok" ? ` <span class="count">${r.people.total}</span>` : ""}</button>
+            </div>`
+          : "";
+      const showRooms = r.goal === "room" || (r.goal === "both" && resTab === "rooms");
+      parts = showRooms ? roomsParts(r.rooms) : peopleParts(r.people);
+      parts.head = tabs + parts.head;
+    }
+    top.innerHTML = parts.head;
+    document.getElementById("res-list").innerHTML = parts.list;
+    const box = document.getElementById("res-map-box");
+    box.hidden = !parts.map;
+    if (parts.map) drawResultsMap();
+    const n = resultsCount(r);
+    document.getElementById("results-count").textContent = n ? String(n) : "";
+    document.getElementById("side-memory").innerHTML = memoryHtml();
+  }
+
+  // ── Map of the room results, kept in step with the list ──
+  function currentRooms() {
+    const r = chat && chat.results;
+    return r && r.rooms && r.rooms.status === "ok" ? r.rooms.items : [];
+  }
+
+  async function drawResultsMap() {
+    const box = document.getElementById("res-map");
+    const note = document.getElementById("res-map-note");
+    if (!box) return;
+    if (!resMap || resMap.getContainer() !== box) {
+      if (!resMapReady) {
+        box.innerHTML = `<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading map…</div>`;
+        resMapReady = createMap(box, { center: BRANDEIS_LNGLAT, zoom: 12 })
+          .then((m) => {
+            resMap = m;
+            const loading = box.querySelector(".loading");
+            if (loading) loading.remove();
+          })
+          .catch((e) => {
+            resMap = null;
+            box.innerHTML = `<p class="map-error small">${esc(e.message)} The list below still works.</p>`;
+          })
+          .finally(() => (resMapReady = null));
+      }
+      await resMapReady;
+      if (!resMap || !document.body.contains(box)) return;
+    }
+    const maplibregl = window.maplibregl;
+    resMarkers.forEach((m) => m.remove());
+    resMarkers = [];
+    const items = currentRooms();
+    const located = items.filter((c) => c.unit.location);
+    const areas = {
+      type: "FeatureCollection",
+      features: located
+        .filter((c) => c.unit.location.precision === "approximate")
+        .map((c) => ({ type: "Feature", properties: {}, geometry: circlePolygon([c.unit.location.lng, c.unit.location.lat], c.unit.location.radiusM || 500) })),
+    };
+    const source = resMap.getSource("res-areas");
+    if (source) source.setData(areas);
+    else {
+      resMap.addSource("res-areas", { type: "geojson", data: areas });
+      resMap.addLayer({ id: "res-areas-fill", type: "fill", source: "res-areas", paint: { "fill-color": "#1d4fbf", "fill-opacity": 0.1 } });
+      resMap.addLayer({ id: "res-areas-line", type: "line", source: "res-areas", paint: { "line-color": "#1d4fbf", "line-opacity": 0.4, "line-width": 1 } });
+    }
+    const campus = document.createElement("span");
+    campus.className = "campus-pin";
+    campus.textContent = "Brandeis";
+    resMarkers.push(new maplibregl.Marker({ element: campus }).setLngLat(BRANDEIS_LNGLAT).addTo(resMap));
+    for (const c of located) {
+      const pin = document.createElement("button");
+      pin.type = "button";
+      pin.className = "res-pin" + (c.unit.sample ? " res-pin-sample" : "") + (resSelected === c.ref ? " selected" : "");
+      pin.dataset.ref = c.ref;
+      pin.textContent = c.ref;
+      pin.addEventListener("click", () => selectResult(c.ref, true));
+      resMarkers.push(new maplibregl.Marker({ element: pin }).setLngLat([c.unit.location.lng, c.unit.location.lat]).addTo(resMap));
+      pin.setAttribute("aria-label", `${c.ref}: ${c.unit.name}, ${money(c.unit.monthly_rent)} a month${c.unit.sample ? ", sample listing" : ""}${c.unit.location.precision === "approximate" ? ", approximate area" : ""}. Show its card.`);
+    }
+    const points = located.map((c) => [c.unit.location.lng, c.unit.location.lat]).concat([BRANDEIS_LNGLAT]);
+    const bounds = points.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(points[0], points[0]));
+    resMap.fitBounds(bounds, { padding: 56, maxZoom: 14, duration: 0 });
+    const unplaced = items.length - located.length;
+    note.textContent = located.length
+      ? `Pins show approximate areas unless a landlord chose to share the exact spot.${unplaced ? ` ${plural(unplaced, "room has", "rooms have")} no map location (still in the list).` : ""}`
+      : "None of these rooms has a map location yet. They're all in the list below.";
+    if (resSelected) selectResult(resSelected, false);
+  }
+
+  function selectResult(ref, fromMap) {
+    resSelected = ref;
+    document.querySelectorAll(".res-card").forEach((el) => el.classList.toggle("selected", el.dataset.ref === ref));
+    resMarkers.forEach((m) => {
+      const el = m.getElement();
+      if (el.dataset.ref) el.classList.toggle("selected", el.dataset.ref === ref);
+    });
+    const card = document.querySelector(`.res-card[data-ref="${CSS.escape(ref)}"]`);
+    if (fromMap && card) {
+      card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      card.focus({ preventScroll: true });
+    }
+    const c = currentRooms().find((x) => x.ref === ref);
+    if (!fromMap && resMap && c && c.unit.location && !document.getElementById("res-map-box").hidden) {
+      resMap.easeTo({ center: [c.unit.location.lng, c.unit.location.lat], zoom: Math.max(resMap.getZoom(), 13), duration: 400 });
+    }
+  }
+
+  // ── Editing an answer from its chip ──
+  const NUMBER_FIELDS = {
+    budget_max: { min: 1, max: 50000, step: 50 },
+    budget_min: { min: 0, max: 50000, step: 50 },
+    max_distance_km: { min: 0.5, max: 50, step: 0.5 },
+    rooms_needed: { min: 1, max: 10, step: 1 },
+    lease_months: { min: 1, max: 24, step: 1 },
+  };
+  const CHOICE_FIELDS = {
+    looking_for: [["room", "A room"], ["roommates", "A roommate"], ["both", "Both"]],
+    chores: CHORES.filter((c) => c[0]),
+    ...Object.fromEntries(Object.entries(CHOICES).map(([k, [, opts]]) => [k, opts])),
   };
 
+  function openPrefEditor(field) {
+    const f = findFact(field);
+    const dialog = document.getElementById("pref-editor");
+    if (!f || !dialog) return;
+    let control;
+    if (NUMBER_FIELDS[field]) {
+      const n = NUMBER_FIELDS[field];
+      control = `<input id="pref-value" type="number" min="${n.min}" max="${n.max}" step="${n.step}" inputmode="decimal" value="${esc(f.raw)}" />`;
+    } else if (field === "move_in_month") control = `<input id="pref-value" type="month" value="${esc(f.raw)}" />`;
+    else if (CHOICE_FIELDS[field]) control = `<select id="pref-value">${CHOICE_FIELDS[field].map(([v, l]) => `<option value="${esc(v)}"${v === f.raw ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+    else control = `<input id="pref-value" type="text" maxlength="200" value="${esc(Array.isArray(f.raw) ? f.raw.join(", ") : f.raw)}" /><p class="hint">Separate several with commas.</p>`;
+    document.getElementById("pref-title").textContent = f.label;
+    document.getElementById("pref-control").innerHTML = `<label class="sr-only" for="pref-value">${esc(f.label)}</label>${control}`;
+    const strict = STRICT_FIELDS.includes(field);
+    document.getElementById("pref-must-row").hidden = !strict;
+    document.getElementById("pref-must").checked = !!f.mustHave;
+    document.getElementById("pref-error").textContent = "";
+    dialog.dataset.field = field;
+    dialog.showModal();
+    document.getElementById("pref-value").focus();
+  }
+
+  function applyChatUpdate(d) {
+    if (d.memory) chat.memory = d.memory;
+    if (d.results) chat.results = d.results;
+    renderResults();
+  }
+
+  async function savePref(forget) {
+    const dialog = document.getElementById("pref-editor");
+    const field = dialog.dataset.field;
+    const errorEl = document.getElementById("pref-error");
+    const body = { field };
+    if (forget) body.forget = true;
+    else {
+      const el = document.getElementById("pref-value");
+      const raw = el.value.trim();
+      body.value = NUMBER_FIELDS[field] ? Number(raw) : field === "areas" || field === "wishes" ? raw.split(",").map((s) => s.trim()).filter(Boolean) : raw;
+      if (STRICT_FIELDS.includes(field)) body.mustHave = document.getElementById("pref-must").checked;
+    }
+    try {
+      applyChatUpdate(await api("/api/assistant/memory", { method: "POST", body }));
+      dialog.close();
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      errorEl.textContent = e.message;
+    }
+  }
+
+  async function relaxResult(button) {
+    const { field, mode } = button.dataset;
+    if (mode === "edit") return openPrefEditor(field);
+    button.disabled = true;
+    try {
+      applyChatUpdate(await api("/api/assistant/memory", { method: "POST", body: { field, mustHave: false } }));
+    } catch (e) {
+      button.disabled = false;
+      toast(e.message);
+    }
+  }
+
+  // ── Chat ──
   function actionCard(a) {
     const pending = a.status === "pending";
     const status =
@@ -1843,7 +2169,7 @@
       return `
         <div class="action-card" data-card="${esc(a.id)}">
           <p class="action-title">${a.roommateOptIn ? "Turn on roommate matching?" : "Save these answers to your profile?"}</p>
-          ${a.roommateOptIn ? `<p class="small">Renters who also turned it on will see your first name, a compatibility score and what you have in common. You can turn it off at any time.</p>` : ""}
+          ${a.roommateOptIn ? `<p class="small">Renters who also turned it on will see your first name, a compatibility score and what you have in common. You can turn it off any time.</p>` : ""}
           <table class="changes"><tbody>${rows}</tbody></table>
           ${pending ? `${a.roommateOptIn ? `<label class="check small"><input type="checkbox" name="share_email" /><span>Also let my roommate matches see my email (${esc(me.user.email)})</span></label>` : ""}${buttons(a.roommateOptIn ? "Turn on and save" : "Save to my profile")}` : status}
         </div>`;
@@ -1864,48 +2190,31 @@
 
   function chatMessage(m, isLast) {
     if (m.role === "user") return `<li class="msg msg-user"><span class="sr-only">You said:</span><div class="bubble">${richText(m.text)}</div></li>`;
-    const cards = m.cards.length
-      ? `<ul class="inline-cards" role="list" aria-label="Results">${m.cards.map((c) => chatCard(c, m.id, `${m.id}:${c.ref}`)).join("")}</ul>
-         <button class="results-chip" type="button" data-action="chat-show" data-msg="${esc(m.id)}"${chatSideId === m.id ? ' aria-current="true"' : ""}>${resultLabel(m)}${chatSideId === m.id ? " · shown beside the chat" : " · show beside the chat"}</button>`
-      : "";
     return `
       <li class="msg msg-bot">
-        <span class="sr-only">coHabit assistant said:</span>
+        <span class="sr-only">coHabit said:</span>
         ${m.notice ? `<p class="msg-notice">${esc(m.notice)}</p>` : ""}
         <div class="bubble">${richText(m.text)}</div>
-        ${cards}
+        ${m.cards.length ? `<button class="see-results" type="button" data-action="pane" data-pane="results">See results</button>` : ""}
         ${m.actions.map(actionCard).join("")}
-        ${isLast && m.quickReplies.length ? `<div class="quick" aria-label="Quick answers">${m.quickReplies.map((q) => `<button class="chip" type="button" data-action="chat-say" data-text="${esc(q)}">${esc(q)}</button>`).join("")}</div>` : ""}
-        <span class="msg-meta">${m.mode === "ai" ? "AI assistant" : "Basic mode"}</span>
+        ${isLast && m.quickReplies.length ? `<div class="quick" aria-label="Answers">${m.quickReplies.map((q) => `<button class="chip" type="button" data-action="chat-say" data-text="${esc(q)}">${esc(q)}</button>`).join("")}</div>` : ""}
       </li>`;
   }
 
   function chatLogHtml() {
     if (!chat.messages.length) {
-      const first = esc((me.user.name || "").split(" ")[0]);
       return `
         <li class="msg msg-bot">
-          <div class="bubble">
-            <p>Hi${first ? " " + first : ""}! I'm coHabit's assistant for Brandeis students. Tell me what you're looking for, like your budget, when you'd move in and where, and I'll find rooms or roommates that fit and explain why.</p>
-            <p>I'll ask one thing at a time, and you can correct me whenever.</p>
-          </div>
-          <div class="quick" aria-label="Ways to start">${STARTERS.map((q) => `<button class="chip" type="button" data-action="chat-say" data-text="${esc(q)}">${esc(q)}</button>`).join("")}</div>
+          <div class="bubble"><p>Hey! What are you looking for?</p></div>
+          <div class="quick" aria-label="Answers">${GOALS.map((q) => `<button class="chip" type="button" data-action="chat-say" data-text="${esc(q)}">${esc(q)}</button>`).join("")}</div>
         </li>`;
     }
     const last = chat.messages[chat.messages.length - 1];
     return chat.messages.map((m) => chatMessage(m, m === last)).join("");
   }
 
-  function sideResultsHtml() {
-    const withCards = chat.messages.filter((m) => m.role === "assistant" && m.cards.length);
-    const m = withCards.find((x) => x.id === chatSideId) || withCards[withCards.length - 1];
-    if (!m) return `<p class="small muted">Rooms and roommates I find appear here, up to 3 at a time.</p>`;
-    chatSideId = m.id;
-    return `<ul class="side-cards" role="list">${m.cards.map((c) => chatCard(c, m.id, `${m.id}:${c.ref}`)).join("")}</ul>`;
-  }
-
   function memoryHtml() {
-    if (!chat.memory.length) return `<p class="small muted">Nothing yet. What you tell me shows up here, and you can change it any time.</p>`;
+    if (!chat.memory.length) return `<p class="small muted">Nothing yet. Your answers show up here, and you can change them any time.</p>`;
     return `
       <ul class="memory" role="list">${chat.memory
         .map(
@@ -1923,15 +2232,25 @@
   }
 
   const savedHtml = () =>
-    chat.saved.length
-      ? `<ul class="side-cards" role="list">${chat.saved.map((s) => chatCard({ ...s, ref: "" }, null, `saved:${s.id}`)).join("")}</ul>`
-      : `<p class="small muted">Use Save on a room or person to keep it here.</p>`;
+    chat.saved.length ? `<ul class="side-cards" role="list">${chat.saved.map(savedCard).join("")}</ul>` : `<p class="small muted">Tap Save on a room or person to keep it here.</p>`;
 
-  const modePill = () =>
-    chat.mode === "ai"
-      ? `<span class="pill pill-ok" title="${chat.usage.usedToday} of ${chat.usage.perUserDaily} AI replies used today"><span class="dot" aria-hidden="true"></span>AI assistant</span>`
-      : `<span class="pill pill-off"><span class="dot" aria-hidden="true"></span>Basic mode</span>`;
-  const modeNotice = () => (chat.mode === "ai" ? "" : `<div class="notice notice-info" role="note"><span>${esc(BASIC_REASONS[chat.basicReason] || BASIC_REASONS.unavailable)}</span></div>`);
+  const modeNotice = () => (chat.mode === "ai" || !BASIC_REASONS[chat.basicReason] ? "" : `<p class="msg-notice">${esc(BASIC_REASONS[chat.basicReason])}</p>`);
+
+  function chatInfoHtml() {
+    const ai = chat.mode === "ai";
+    return `
+      <details class="chat-info">
+        <summary>${ai ? "AI assistant" : "Guided chat"} <span class="muted">· how it works</span></summary>
+        <div class="chat-info-body small">
+          ${
+            ai
+              ? `<p>An AI model writes the replies. Results and reasons come from coHabit's own search, never from the AI.</p>`
+              : `<p>Tap an answer, or type something short like a budget, a month, a town or a distance. It can't answer open-ended questions.</p>`
+          }
+          <p>Your chat and answers are saved to your account so you can pick up later. They're deleted when you clear the chat or delete your account, or after ${chat.keepDays} days without use. ${ai ? "Messages are sent to Anthropic (the company behind Claude) to write replies; other renters' names and contact details never are. " : ""}Please don't share phone numbers or addresses. <a href="/privacy">Privacy policy</a></p>
+        </div>
+      </details>`;
+  }
 
   async function assistantPage() {
     if (!me.user) {
@@ -1939,9 +2258,9 @@
         title: "Assistant",
         html: `
         <div class="panel">
-          <p class="eyebrow">coHabit assistant</p>
-          <h1 tabindex="-1">Find a room or roommate by chatting</h1>
-          <p class="muted">Tell the assistant your budget, move-in month and where you'd like to live. It shows up to three rooms or roommates that fit, explains why, and asks before saving or contacting anyone.</p>
+          <p class="eyebrow">coHabit for Brandeis students</p>
+          <h1 tabindex="-1">Find your room. Find your people.</h1>
+          <p class="muted">Answer a few quick questions. See rooms and roommates that fit, and why.</p>
           <div class="actions"><button class="btn" type="button" data-action="sign-in" data-next="/assistant">${icon("google", 18)} Sign in with Google</button></div>
         </div>`,
       };
@@ -1950,78 +2269,99 @@
     if (blocked !== undefined) return blocked;
     const [state] = await Promise.all([api("/api/assistant"), loadMyInterests()]);
     chat = state;
-    chatSideId = null;
+    resSelected = null;
+    resShowAll = false;
+    resMap = null;
+    if (chat.results.goal === "roommates") resTab = "people";
     return {
       title: "Assistant",
       html: `
-      <div class="assistant">
-        <section class="chat-col" aria-labelledby="chat-heading">
-          <div class="chat-head">
-            <div class="heading">
-              <h1 id="chat-heading" tabindex="-1">Your housing assistant</h1>
-              <p class="muted">Rooms and roommates near Brandeis, with the reasons they fit.</p>
+      <div class="asst" data-pane="${chatPane}">
+        <div class="asst-top">
+          <h1 tabindex="-1">Find your room. Find your people.</h1>
+        </div>
+        <div class="pane-tabs" role="tablist" aria-label="Show">
+          <button role="tab" type="button" id="tab-chat" data-action="pane" data-pane="chat" aria-controls="pane-chat" aria-selected="${chatPane === "chat"}">Chat</button>
+          <button role="tab" type="button" id="tab-results" data-action="pane" data-pane="results" aria-controls="pane-results" aria-selected="${chatPane === "results"}">Results <span class="count" id="results-count"></span></button>
+        </div>
+        <div class="asst-grid">
+          <section class="asst-results" id="pane-results" aria-label="Results">
+            <div id="res-chips"></div>
+            <div id="res-top"></div>
+            <div class="res-map-box" id="res-map-box" hidden><div class="res-map" id="res-map"></div><p class="small muted" id="res-map-note"></p></div>
+            <div id="res-list"></div>
+            <details class="fold"><summary>All your answers</summary><div id="side-memory">${memoryHtml()}</div></details>
+            <details class="fold"><summary>Saved <span class="count" id="saved-count">${chat.saved.length || ""}</span></summary><div id="side-saved">${savedHtml()}</div></details>
+            <p class="links small">Prefer to browse? <a href="/listings">All listings</a> · <a href="/renter">My matches and questionnaire</a></p>
+          </section>
+          <section class="asst-chat" id="pane-chat" aria-labelledby="chat-heading">
+            <div class="chat-head">
+              <h2 class="sr-only" id="chat-heading">Chat</h2>
+              <div id="chat-info">${chatInfoHtml()}</div>
+              <button class="btn btn-small btn-quiet" type="button" data-action="chat-clear" id="chat-clear">Clear chat</button>
             </div>
-            <div class="chat-tools"><span id="chat-pill">${modePill()}</span><button class="btn btn-small btn-quiet" type="button" data-action="chat-clear" id="chat-clear">Clear chat</button></div>
-          </div>
-          <div id="chat-mode">${modeNotice()}</div>
-          <ol class="chat-log" id="chat-log" role="log" aria-live="polite" aria-label="Conversation">${chatLogHtml()}</ol>
-          <form class="chat-form" id="chat-form" novalidate>
-            <label class="sr-only" for="chat-input">Message to the assistant</label>
-            <textarea id="chat-input" name="text" rows="1" maxlength="800" placeholder="Your budget, move-in month, where you'd like to live…" autocomplete="off"></textarea>
-            <button class="btn" type="submit" id="chat-send">Send</button>
-          </form>
-          <p class="field-error" id="chat-error" role="alert"></p>
-          <p class="footnote">Your chat and what the assistant learns are saved to your coHabit account so you can pick up where you left off. They're deleted when you clear the chat or delete your account, or after ${chat.keepDays} days without use. When the AI is on, your messages and answers are sent to Anthropic (the company behind Claude) to write replies; other renters' names and contact details never are. Please don't share phone numbers, addresses or other personal details. <a href="/privacy">Privacy policy</a></p>
-        </section>
-        <aside class="side-col" aria-label="Results and your answers">
-          <section class="side-box side-results" aria-labelledby="results-heading"><h2 class="side-title" id="results-heading">Results</h2><div id="side-results">${sideResultsHtml()}</div></section>
-          <details class="side-box" open><summary class="side-title">What I know so far</summary><div id="side-memory">${memoryHtml()}</div></details>
-          <details class="side-box" open><summary class="side-title">Saved</summary><div id="side-saved">${savedHtml()}</div></details>
-          <p class="links small">Prefer to browse? <a href="/listings">All listings</a> · <a href="/renter">My matches and questionnaire</a></p>
-        </aside>
+            <div id="chat-mode">${modeNotice()}</div>
+            <ol class="chat-log" id="chat-log" role="log" aria-live="polite" aria-label="Conversation">${chatLogHtml()}</ol>
+            <form class="chat-form" id="chat-form" novalidate>
+              <label class="sr-only" for="chat-input">Message (optional: you can tap answers instead)</label>
+              <textarea id="chat-input" name="text" rows="1" maxlength="800" placeholder="Or type a reply…" autocomplete="off"></textarea>
+              <button class="btn" type="submit" id="chat-send">Send</button>
+            </form>
+            <p class="field-error" id="chat-error" role="alert"></p>
+          </section>
+        </div>
       </div>`,
       mount: () => {
         document.getElementById("chat-clear").disabled = !chat.messages.length;
+        renderResults();
         scrollChat();
-        if (window.matchMedia("(min-width: 901px)").matches) document.getElementById("chat-input").focus({ preventScroll: true });
       },
     };
   }
 
+  function setPane(pane) {
+    chatPane = pane;
+    const root = document.querySelector(".asst");
+    if (!root) return;
+    root.dataset.pane = pane;
+    document.getElementById("tab-chat").setAttribute("aria-selected", String(pane === "chat"));
+    document.getElementById("tab-results").setAttribute("aria-selected", String(pane === "results"));
+    if (pane === "results") {
+      if (resMap) resMap.resize();
+      document.querySelector(".pane-tabs").scrollIntoView({ block: "start" });
+    } else scrollChat();
+  }
+
+  const isPhone = () => window.matchMedia("(max-width: 900px)").matches;
   function scrollChat() {
     const log = document.getElementById("chat-log");
     if (!log) return;
     log.scrollTop = log.scrollHeight;
-    // On phones the whole page scrolls: keep the newest reply in view.
-    if (window.matchMedia("(max-width: 900px)").matches) {
-      const last = log.lastElementChild;
-      if (last) last.scrollIntoView({ block: "nearest" });
-    }
+    // On phones the page scrolls, not the log: bring the newest message into view.
+    if (isPhone() && chatPane === "chat" && log.lastElementChild) log.lastElementChild.scrollIntoView({ block: "end" });
   }
 
   function refreshChat() {
     if (!document.getElementById("chat-log")) return;
     chatCards.clear();
     document.getElementById("chat-log").innerHTML = chatLogHtml();
-    document.getElementById("side-results").innerHTML = sideResultsHtml();
-    document.getElementById("side-memory").innerHTML = memoryHtml();
-    document.getElementById("side-saved").innerHTML = savedHtml();
-    document.getElementById("chat-pill").innerHTML = modePill();
+    document.getElementById("chat-info").innerHTML = chatInfoHtml();
     document.getElementById("chat-mode").innerHTML = modeNotice();
     document.getElementById("chat-clear").disabled = !chat.messages.length;
+    document.getElementById("side-saved").innerHTML = savedHtml();
+    document.getElementById("saved-count").textContent = chat.saved.length || "";
+    renderResults();
     scrollChat();
   }
 
   async function reloadChat() {
-    const keep = chatSideId;
     chat = await api("/api/assistant");
-    chatSideId = keep;
     refreshChat();
   }
 
   function growInput(el) {
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+    el.style.height = Math.min(el.scrollHeight, 140) + "px";
   }
 
   async function sendChat(text) {
@@ -2038,7 +2378,7 @@
     log.insertAdjacentHTML(
       "beforeend",
       `<li class="msg msg-user pending"><span class="sr-only">You said:</span><div class="bubble">${richText(text)}</div></li>
-       <li class="msg msg-bot typing"><div class="bubble"><span class="dots" aria-hidden="true"><span></span><span></span><span></span></span><span class="sr-only">The assistant is writing a reply.</span></div></li>`
+       <li class="msg msg-bot typing"><div class="bubble"><span class="dots" aria-hidden="true"><span></span><span></span><span></span></span><span class="sr-only">Writing a reply.</span></div></li>`
     );
     input.value = "";
     growInput(input);
@@ -2046,10 +2386,13 @@
     scrollChat();
     try {
       const data = await api("/api/assistant/messages", { method: "POST", body: { text } });
+      const goalBefore = chat.results.goal;
       chat.messages = chat.messages.concat(data.messages);
-      Object.assign(chat, { memory: data.memory, saved: data.saved, mode: data.mode, basicReason: data.basicReason, usage: data.usage });
-      const reply = data.messages.find((m) => m.role === "assistant");
-      if (reply && reply.cards.length) chatSideId = reply.id;
+      Object.assign(chat, { memory: data.memory, saved: data.saved, results: data.results, mode: data.mode, basicReason: data.basicReason, usage: data.usage });
+      if (data.results.goal !== goalBefore) {
+        resTab = data.results.goal === "roommates" ? "people" : "rooms";
+        resShowAll = false;
+      }
       refreshChat();
     } catch (e) {
       if (e.status === 401) return showView(errorView(e));
@@ -2060,7 +2403,6 @@
     } finally {
       chatBusy = false;
       send.disabled = false;
-      if (window.matchMedia("(min-width: 901px)").matches) input.focus({ preventScroll: true });
     }
   }
 
@@ -2580,26 +2922,48 @@
       else if (a === "details-close") document.getElementById("details").close();
       else if (a === "chat-confirm") decideChatAction(action, "confirm");
       else if (a === "chat-dismiss") decideChatAction(action, "dismiss");
-      else if (a === "chat-save")
-        chatRequest("/api/assistant/saved", { method: "POST", body: { messageId: action.dataset.msg, ref: action.dataset.ref } }, "Saved. It's under Saved beside the chat.").then((d) => d && reloadChat());
+      else if (a === "res-save")
+        chatRequest(
+          "/api/assistant/saved",
+          { method: "POST", body: action.dataset.kind === "room" ? { kind: "room", unitId: action.dataset.unit } : { kind: "person", ref: action.dataset.ref, firstName: action.dataset.first } },
+          "Saved. You'll find it under Saved."
+        ).then((d) => d && reloadChat());
       else if (a === "chat-unsave") chatRequest(`/api/assistant/saved/${encodeURIComponent(action.dataset.id)}`, { method: "DELETE" }, "Removed from saved.").then((d) => d && reloadChat());
-      else if (a === "chat-show") {
-        chatSideId = action.dataset.msg;
-        const log = document.getElementById("chat-log");
-        const top = log.scrollTop;
-        refreshChat();
-        log.scrollTop = top;
-        document.querySelector(".side-results").scrollIntoView({ block: "nearest", behavior: "smooth" });
-      } else if (a === "chat-strict" || a === "chat-forget") {
+      else if (a === "pane") setPane(action.dataset.pane);
+      else if (a === "res-tab") {
+        resTab = action.dataset.tab;
+        resShowAll = false;
+        renderResults();
+      } else if (a === "res-view") {
+        resView = action.dataset.view;
+        renderResults();
+      } else if (a === "res-more") {
+        resShowAll = true;
+        renderResults();
+      } else if (a === "res-on-map") {
+        resView = "map";
+        resSelected = action.dataset.ref;
+        renderResults();
+        document.getElementById("res-map-box").scrollIntoView({ block: "nearest", behavior: "smooth" });
+      } else if (a === "res-relax") relaxResult(action);
+      else if (a === "pref-edit") openPrefEditor(action.dataset.field);
+      else if (a === "pref-cancel") document.getElementById("pref-editor").close();
+      else if (a === "pref-remove") savePref(true);
+      else if (a === "chat-strict" || a === "chat-forget") {
         const body = a === "chat-forget" ? { field: action.dataset.field, forget: true } : { field: action.dataset.field, mustHave: action.dataset.must === "true" };
-        chatRequest("/api/assistant/memory", { method: "POST", body }).then((d) => {
-          if (!d) return;
-          chat.memory = d.memory;
-          document.getElementById("side-memory").innerHTML = memoryHtml();
-        });
+        chatRequest("/api/assistant/memory", { method: "POST", body }).then((d) => d && applyChatUpdate(d));
       } else if (a === "chat-clear")
-        confirmDialog({ title: "Clear this chat?", text: "This deletes your messages and what the assistant learned from them. Your saved options and your saved profile stay.", confirmLabel: "Clear chat", danger: true }).then(
-          (ok) => ok && chatRequest("/api/assistant/clear", { method: "POST", body: {} }, "Chat cleared.").then((d) => d && reloadChat())
+        confirmDialog({ title: "Clear this chat?", text: "This deletes your messages and the answers in it. Your saved options and saved profile stay.", confirmLabel: "Clear chat", danger: true }).then(
+          (ok) =>
+            ok &&
+            chatRequest("/api/assistant/clear", { method: "POST", body: {} }, "Chat cleared.").then((d) => {
+              if (!d) return;
+              resTab = "rooms";
+              resView = "list";
+              resShowAll = false;
+              resSelected = null;
+              reloadChat();
+            })
         );
       return;
     }
@@ -2612,6 +2976,11 @@
     navigate(url.pathname + url.search);
   });
 
+  document.addEventListener("click", (e) => {
+    const card = e.target.closest(".res-card");
+    if (card && !e.target.closest("button, a")) selectResult(card.dataset.ref, false);
+  });
+
   document.addEventListener("submit", (e) => {
     if (e.target.id === "unit-form") {
       e.preventDefault();
@@ -2622,6 +2991,9 @@
     } else if (e.target.id === "chat-form") {
       e.preventDefault();
       sendChat(e.target.elements.text.value);
+    } else if (e.target.id === "pref-form") {
+      e.preventDefault();
+      savePref(false);
     } else if (e.target.id === "delete-account-form") {
       e.preventDefault();
       submitDeleteAccount(e.target);

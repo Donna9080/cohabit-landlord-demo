@@ -57,6 +57,21 @@
       <div class="actions"><button class="btn btn-quiet" type="button" data-action="details-close">Close</button></div>
     </dialog>
 
+    <!-- Change one of the assistant's answers (opened from its chip). -->
+    <dialog class="dialog" id="pref-editor" aria-labelledby="pref-title">
+      <form id="pref-form" novalidate>
+        <h2 id="pref-title"></h2>
+        <div id="pref-control"></div>
+        <label class="check small" id="pref-must-row"><input type="checkbox" id="pref-must" /><span><strong>Must-have.</strong> Hide rooms that don't meet it.</span></label>
+        <p class="field-error" id="pref-error" role="alert"></p>
+        <div class="actions">
+          <button class="btn btn-quiet btn-text-danger" type="button" data-action="pref-remove">Remove</button>
+          <button class="btn btn-quiet" type="button" data-action="pref-cancel">Cancel</button>
+          <button class="btn" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
     <!-- Short messages such as "Request removed" appear here. -->
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 

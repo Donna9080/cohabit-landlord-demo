@@ -679,6 +679,23 @@ try {
     check("Assistant (AI): the near-campus room is shown with why it fits", rooms.some((c) => c.unit.id === ROOM_NEAR && c.fits.includes("$1,250 a month, within your $1,300 budget")));
     check("Assistant (AI): inactive, sample and over-budget rooms are not shown", !rooms.some((c) => [ROOM_OFF, ROOM_SAMPLE, ROOM_NEWTON, "00000000-0000-4000-8000-000000000099"].includes(c.unit.id)));
     check("Assistant (AI): what it learned is listed, budget as a must-have", r.data.memory.find((f) => f.field === "budget_max")?.mustHave === true && r.data.memory.some((f) => f.field === "areas" && f.value === "Waltham"));
+    let res = r.data.results;
+    check("Results panel: goal is a room; rooms worked out from the answers, all real, active and within budget", res.goal === "room" && res.rooms.status === "ok" && res.rooms.preliminary === false && res.people === null && res.rooms.items.length >= 1 && res.rooms.items.length <= 12 && res.rooms.items.every((c) => !c.unit.sample && c.unit.monthly_rent <= 1300 && c.fits.length));
+    check("Results panel: the first results match the cards the AI was shown", res.rooms.items.slice(0, 3).map((c) => c.unit.id).join() === rooms.map((c) => c.unit.id).join());
+    r = await api("/api/assistant", { as: chatAi });
+    check("Results panel: the same results come back when the page is opened again", r.data.results.rooms.items.map((c) => c.unit.id).join() === res.rooms.items.map((c) => c.unit.id).join());
+    r = await api("/api/assistant/memory", { method: "POST", as: chatAi, body: { field: "budget_max", value: 1200, mustHave: true } });
+    check("Editing an answer from its chip refreshes the results (no AI call)", r.status === 200 && r.data.memory.find((f) => f.field === "budget_max")?.value === "$1,200 a month" && r.data.results.rooms.items.every((c) => c.unit.monthly_rent <= 1200));
+    r = await api("/api/assistant/memory", { method: "POST", as: chatAi, body: { field: "budget_max", value: 300, mustHave: true } });
+    check("A must-have that nothing meets gives an empty list naming it; nothing is loosened silently", r.data.results.rooms.status === "none" && r.data.results.rooms.items.length === 0 && r.data.results.rooms.mustHaves.includes("budget_max") && Array.isArray(r.data.results.rooms.ifRelaxed) && r.data.memory.find((f) => f.field === "budget_max")?.mustHave === true, JSON.stringify(r.data.results.rooms).slice(0, 200));
+    r = await api("/api/assistant/memory", { method: "POST", as: chatAi, body: { field: "budget_max", value: "lots" } });
+    check("An invalid chip value is refused (400) and the answer is kept", r.status === 400 && r.data.field === "value");
+    r = await api("/api/assistant/memory", { method: "POST", as: chatAi, body: { field: "budget_max", value: 1300, mustHave: true } });
+    r = await api("/api/assistant/saved", { method: "POST", as: chatAi, body: { kind: "room", unitId: ROOM_NEAR } });
+    check("Save a room from the results panel by its listing id", r.status === 201 && r.data.saved.some((s) => s.kind === "room" && s.unit?.id === ROOM_NEAR && s.fits.length));
+    r = await api("/api/assistant/saved", { method: "POST", as: chatAi, body: { kind: "room", unitId: ROOM_OFF } });
+    check("An inactive room can't be saved (409)", r.status === 409);
+    await api(`/api/assistant/saved/${(await api("/api/assistant", { as: chatAi })).data.saved.find((s) => s.kind === "room").id}`, { method: "DELETE", as: chatAi });
     const first = fake.requests[before];
     check("AI request: model, low effort, cached instructions, 4 tools, tool use optional", first.body.model === "claude-opus-5-5" && first.body.output_config?.effort === "low" && first.body.system?.[0]?.cache_control?.type === "ephemeral" && first.body.tools.length === 4 && first.body.tool_choice?.type === "auto" && first.body.max_tokens === 4000);
     check("AI request: refusal fallback turned on", first.body.fallbacks === "default" && String(first.headers["anthropic-beta"]).includes("server-side-fallback-2026-07-01"));
@@ -753,6 +770,11 @@ try {
     check("Assistant (AI): only renters who chose to be found are shown, by first name", mates.length >= 2 && mates.every((c) => c.kind === "person" && c.available) && !mates.some((c) => c.firstName === "Hidden") && mates.some((c) => c.firstName === "Alexandra") && mates.some((c) => c.firstName === "Bartholomew"), JSON.stringify(mates).slice(0, 300));
     check("Assistant (AI): sample people are left out unless asked for", !mates.some((c) => c.sample));
     check("Assistant (AI): an email is shown only if that person chose to share it", mates.find((c) => c.firstName === "Alexandra")?.email === "alexandra@example.test" && mates.find((c) => c.firstName === "Bartholomew")?.email === null);
+    const people = r.data.results.people;
+    check("Results panel: roommates shown with first names and shared traits only; no ids or answers", people.status === "ok" && people.items.length >= 2 && people.items.every((p) => p.firstName && p.fits.length && !("userId" in p) && !("prefs" in p)) && !JSON.stringify(people).includes("t_mate_"));
+    const alexandra = people.items.find((p) => p.firstName === "Alexandra");
+    r = await api("/api/assistant/saved", { method: "POST", as: chatMate, body: { kind: "person", ref: alexandra.ref, firstName: "Somebody" } });
+    check("Saving a person needs their current label and first name (404 otherwise)", r.status === 404);
     check("AI request: other renters' names, emails and ids are never sent", !["Alexandra", "Bartholomew", "Mateone", "alexandra@", "t_mate_"].some((w) => sentToAi().includes(w)));
     r = await api("/api/assistant/saved", { method: "POST", as: chatMate, body: { messageId: reply.id, ref: mates.find((c) => c.firstName === "Alexandra").ref } });
     check("Assistant: save a person", r.status === 201 && r.data.saved.some((s) => s.kind === "person" && s.firstName === "Alexandra"));
@@ -784,6 +806,8 @@ try {
     ]) {
       r = await say(chatBasic, text);
       check(`Basic mode: "${text}" → next question`, expect.test(replyOf(r).text), replyOf(r).text);
+      if (text === "Up to $1,300") check("Results panel: with one answer, rooms wait for more", r.data.results.rooms.status === "need_more" && r.data.results.rooms.missing.length === 3);
+      if (text === "June 2027") check("Results panel: with two answers, early results appear, marked preliminary", r.data.results.rooms.status === "ok" && r.data.results.rooms.preliminary === true && r.data.results.rooms.items.every((c) => c.unit.monthly_rent <= 1300));
     }
     r = await say(chatBasic, "Just me (1 room)");
     reply = replyOf(r);

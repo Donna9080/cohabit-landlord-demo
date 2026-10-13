@@ -2,7 +2,7 @@
 //
 //   GET    /api/assistant                 the chat, what it has learned, saved options, mode and limits
 //   POST   /api/assistant/messages        send a message; returns the reply (AI or basic mode)
-//   POST   /api/assistant/memory          forget an answer, or mark it must-have / flexible (no AI call)
+//   POST   /api/assistant/memory          change or forget an answer, or mark it must-have / flexible (no AI call)
 //   POST   /api/assistant/clear           delete the chat and what it learned (saved options stay)
 //   POST   /api/assistant/actions/<id>    confirm or dismiss a confirmation card
 //   POST   /api/assistant/saved           save a room or person from a reply
@@ -23,6 +23,8 @@ import { LABELS, STRICTNESS_FIELDS, applyUpdates, isRequired, memoryFacts, merge
 import { BRANDEIS, kmBetween, searchRoommates, searchRooms } from "./search.js";
 
 const HISTORY_FOR_MODEL = 12; // earlier messages replayed to the model as context
+const PANEL_ROOMS = 12; // rooms in the results panel (the AI's search tool still gets the top 3)
+const PANEL_PEOPLE = 9; // people in the results panel
 const SHOW_MESSAGES = 60; // messages returned to the page
 const KEEP_MESSAGES = 100; // older messages are deleted
 export const INACTIVE_DAYS = 90; // chats untouched this long are deleted by the daily cleanup
@@ -225,6 +227,7 @@ async function pageState(db, env, user) {
   return {
     messages,
     saved,
+    results: await liveResults(db, env, user, thread.memory, prefs),
     memory: memoryFacts(thread.memory),
     hasProfile: !!prefs,
     roommateMatching: !!prefs?.roommate_visible,
@@ -263,10 +266,10 @@ async function findRooms(ctx) {
   return found;
 }
 
-// Returns { status, found?, missing? }. Only renters who turned roommate matching on are compared.
-async function findRoommates(ctx) {
-  const { db, user, saved, turn } = ctx;
-  const merged = mergedPreferences(turn.memory, saved);
+// Returns { status, found?, missing? }. Only renters who turned roommate matching on are compared,
+// and only for a renter who turned it on too.
+async function roommateSearch(db, user, memory, saved, { limit } = {}) {
+  const merged = mergedPreferences(memory, saved);
   if (!saved || !saved.roommate_visible) return { status: saved ? "opt_in_required" : "needs_profile", missing: merged.missing || [] };
   if (merged.missing) return { status: "missing_answers", missing: merged.missing };
   const { results } = await db
@@ -280,12 +283,92 @@ async function findRoommates(ctx) {
     .bind(user.id)
     .all();
   const others = results.map((r) => ({ userId: r.user_id, prefs: r, firstName: firstNameOf(r.name), email: r.share_email ? r.email : null, sample: !!r.sample }));
-  const found = searchRoommates(turn.memory, merged.prefs, others);
+  return { status: "ok", found: searchRoommates(memory, merged.prefs, others, { limit }) };
+}
+
+async function findRoommates(ctx) {
+  const { db, user, saved, turn } = ctx;
+  const r = await roommateSearch(db, user, turn.memory, saved);
+  if (r.status !== "ok") return r;
+  const found = r.found;
   turn.found = { kind: "person", found };
   turn.items = found.results.map((r) => ({ kind: "person", ref: r.ref, targetId: r.userId, fits: r.fits, misses: r.misses, score: r.score }));
   turn.state.people = found.results.map((r) => ({ ref: r.ref, userId: r.userId }));
   turn.state.rooms = [];
   return { status: "ok", found };
+}
+
+// ── The results panel ────────────────────────────────────────────────────────
+// Worked out from the renter's current answers every time they change, separately from the chat, so results
+// appear (marked preliminary) once there is enough to go on and refresh as answers change. Must-haves are
+// never loosened here: an empty list says which ones are blocking and what loosening each would bring back.
+async function liveResults(db, env, user, memory, saved) {
+  const goal = memory.v.looking_for || null;
+  const out = { goal, rooms: null, people: null };
+  if (!goal) return out;
+  const [{ results: savedRows }, { results: sentRows }] = await Promise.all([
+    db.prepare(`SELECT id, kind, target_id FROM saved_options WHERE user_id = ?1`).bind(user.id).all(),
+    db.prepare(`SELECT unit_id FROM unit_interests WHERE renter_user_id = ?1`).bind(user.id).all(),
+  ]);
+  const savedId = new Map(savedRows.map((s) => [`${s.kind}:${s.target_id}`, s.id]));
+  const sent = new Set(sentRows.map((r) => r.unit_id));
+
+  if (goal !== "roommates") {
+    const missing = missingBasics(memory);
+    const strict = STRICTNESS_FIELDS.filter((f) => memory.v[f] != null && isRequired(memory, f));
+    if (missing.length >= 3) out.rooms = { status: "need_more", missing: missing.map((f) => NOT_KNOWN[f]) };
+    else {
+      const listings = await activeListings(db, env);
+      const byId = new Map(listings.map((u) => [u.id, u]));
+      const found = searchRooms(memory, listings, { limit: PANEL_ROOMS });
+      out.rooms = {
+        status: found.results.length ? "ok" : "none",
+        preliminary: missing.length > 0,
+        missing: missing.map((f) => NOT_KNOWN[f]),
+        total: found.totalMatching,
+        ifRelaxed: found.ifRelaxed,
+        samplesHidden: found.samplesHidden,
+        mustHaves: [...(memory.v.rooms_needed > 1 ? ["rooms_needed"] : []), ...strict],
+        items: found.results.map((r) => ({
+          kind: "room",
+          ref: r.ref,
+          available: true,
+          unit: byId.get(r.unitId),
+          km: r.km_from_brandeis,
+          fits: r.fits,
+          misses: r.misses,
+          savedId: savedId.get(`room:${r.unitId}`) || null,
+          interestSent: sent.has(r.unitId),
+        })),
+      };
+    }
+  }
+
+  if (goal !== "room") {
+    const r = await roommateSearch(db, user, memory, saved, { limit: PANEL_PEOPLE });
+    out.people =
+      r.status !== "ok"
+        ? { status: r.status, missing: r.missing.map((f) => LABELS[f] || f) }
+        : {
+            status: r.found.results.length ? "ok" : "none",
+            total: r.found.totalMatching,
+            samplesHidden: r.found.samplesHidden,
+            // Only what the two have in common, a first name, and an email only if that person chose to share it.
+            items: r.found.results.map((p) => ({
+              kind: "person",
+              ref: p.ref,
+              available: true,
+              firstName: p.firstName,
+              score: p.score,
+              fits: p.fits,
+              misses: p.misses,
+              email: p.email,
+              sample: p.sample,
+              savedId: savedId.get(`person:${p.userId}`) || null,
+            })),
+          };
+  }
+  return out;
 }
 
 // Creates a confirmation card. Values come from memory and the database, never from the model.
@@ -546,6 +629,7 @@ async function handleMessage({ request, env, db, user }) {
   return {
     messages,
     saved: savedList,
+    results: await liveResults(db, env, user, turn.memory, saved),
     memory: memoryFacts(turn.memory),
     mode: nowReason ? "basic" : "ai",
     basicReason: nowReason,
@@ -584,12 +668,27 @@ async function decideAction({ request, db, user }, id) {
   return { status: body.decision === "confirm" ? "done" : "dismissed", ...result };
 }
 
-async function saveOption({ request, db, user }) {
+async function saveOption({ request, env, db, user }) {
   const body = await readJson(request);
-  const m = isUnitId(body?.messageId)
-    ? await db.prepare(`SELECT cards FROM assistant_messages WHERE id = ?1 AND user_id = ?2 AND role = 'assistant'`).bind(body.messageId, user.id).first()
-    : null;
-  const it = parseJson(m?.cards, {}).items?.find((x) => x.ref === body?.ref);
+  let it;
+  if (body?.kind === "room" || body?.kind === "person") {
+    // From the results panel. Fits and misses are worked out again here, never taken from the request.
+    const { memory } = await loadThread(db, user.id);
+    if (body.kind === "room" && isUnitId(body.unitId)) {
+      const found = searchRooms(memory, await activeListings(db, env), { limit: 200 });
+      const r = found.results.find((x) => x.unitId === body.unitId);
+      it = { kind: "room", ref: r?.ref || "", targetId: body.unitId, fits: r?.fits || [], misses: r?.misses || [] };
+    } else if (body.kind === "person" && typeof body.ref === "string") {
+      const r = await roommateSearch(db, user, memory, await loadPreferences(db, user.id), { limit: PANEL_PEOPLE });
+      const p = r.status === "ok" ? r.found.results.find((x) => x.ref === body.ref && x.firstName === body.firstName) : null;
+      if (p) it = { kind: "person", ref: p.ref, targetId: p.userId, fits: p.fits, misses: p.misses, score: p.score };
+    }
+  } else {
+    const m = isUnitId(body?.messageId)
+      ? await db.prepare(`SELECT cards FROM assistant_messages WHERE id = ?1 AND user_id = ?2 AND role = 'assistant'`).bind(body.messageId, user.id).first()
+      : null;
+    it = parseJson(m?.cards, {}).items?.find((x) => x.ref === body?.ref);
+  }
   if (!it) throw new HttpError(404, "not_found", "That result is no longer available.");
   const still =
     it.kind === "room"
@@ -618,14 +717,20 @@ export async function handleAssistant({ request, env, db, user, path, method, re
   if (path === "/api/assistant/memory" && method === "POST") {
     const body = await readJson(request);
     const field = body?.field;
-    const input =
-      body?.forget === true ? { forget: [field] } : body?.mustHave === true ? { must_have: [field] } : body?.mustHave === false ? { flexible: [field] } : null;
-    if (!input || typeof field !== "string") throw new InvalidInput("field", "Choose an answer to change.");
-    const thread = await loadThread(db, user.id);
+    if (typeof field !== "string") throw new InvalidInput("field", "Choose an answer to change.");
+    const input = {};
+    if (body.forget === true) input.forget = [field];
+    else {
+      if ("value" in body) input[field] = body.value;
+      if (body.mustHave === true) input.must_have = [field];
+      if (body.mustHave === false) input.flexible = [field];
+    }
+    if (!Object.keys(input).length) throw new InvalidInput("field", "Nothing to change.");
+    const [thread, prefs] = await Promise.all([loadThread(db, user.id), loadPreferences(db, user.id)]);
     const r = applyUpdates(thread.memory, input, today());
-    if (r.errors.length) throw new InvalidInput("field", r.errors[0].message);
+    if (r.errors.length) throw new InvalidInput("value", r.errors[0].message);
     await saveThread(db, user.id, r.memory, thread.state).run();
-    return reply({ memory: memoryFacts(r.memory) });
+    return reply({ memory: memoryFacts(r.memory), results: await liveResults(db, env, user, r.memory, prefs) });
   }
 
   if (path === "/api/assistant/clear" && method === "POST") {

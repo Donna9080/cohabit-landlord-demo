@@ -133,7 +133,7 @@ function relaxOptions(memory) {
 }
 
 // listings: active units as renters see them (src/listings.js). Samples are left out unless asked for.
-export function searchRooms(memory, listings) {
+export function searchRooms(memory, listings, { limit = MAX_RESULTS } = {}) {
   const includeSamples = !!memory.v.include_samples;
   const evaluated = listings.map((u) => ({ u, ...evaluate(memory, u) }));
   const passes = (e) => CONDITIONS.every((c) => e.ok[c]);
@@ -150,7 +150,7 @@ export function searchRooms(memory, listings) {
   }
 
   const samplesHidden = includeSamples ? 0 : evaluated.filter((e) => passes(e) && e.u.sample).length;
-  const results = matching.slice(0, MAX_RESULTS).map((e, i) => ({
+  const results = matching.slice(0, limit).map((e, i) => ({
     ref: `R${i + 1}`,
     unitId: e.u.id,
     name: e.u.name,
@@ -169,7 +169,7 @@ export function searchRooms(memory, listings) {
 
 // me: the renter's merged answers (memory over saved profile). others: renters who turned on roommate
 // matching, as { userId, prefs, firstName, email (null unless they share it), sample }.
-export function searchRoommates(memory, me, others) {
+export function searchRoommates(memory, me, others, { limit = MAX_RESULTS } = {}) {
   const includeSamples = !!memory.v.include_samples;
   const scored = others
     .map((o) => ({ o, ...scoreRoommate(me, o.prefs) }))
@@ -177,7 +177,7 @@ export function searchRoommates(memory, me, others) {
   const shown = scored
     .filter((m) => includeSamples || !m.o.sample)
     .sort((a, b) => b.score - a.score || b.shared.length - a.shared.length || a.o.userId.localeCompare(b.o.userId));
-  const results = shown.slice(0, MAX_RESULTS).map((m, i) => ({
+  const results = shown.slice(0, limit).map((m, i) => ({
     ref: `P${i + 1}`,
     userId: m.o.userId,
     firstName: m.o.firstName,

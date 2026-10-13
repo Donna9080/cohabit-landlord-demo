@@ -192,6 +192,7 @@ export function memoryFacts(memory) {
   return FIELD_NAMES.filter((f) => memory.v[f] != null && f !== "include_samples").map((f) => ({
     field: f,
     label: LABELS[f],
+    raw: memory.v[f],
     value: displayValue(f, memory.v[f]),
     ...(STRICTNESS_FIELDS.includes(f) ? { mustHave: isRequired(memory, f) } : {}),
   }));
