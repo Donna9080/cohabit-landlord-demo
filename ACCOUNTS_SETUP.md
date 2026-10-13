@@ -23,7 +23,7 @@ commands to run, test, migrate and deploy it. Progress and decisions are in
  redirect and by the Worker exchanging the one-time code. Scopes: openid email profile.
 
  Anthropic (Claude API) is only contacted by the Worker, for a renter's chat message,
- and only when the ANTHROPIC_API_KEY secret is set (see "AI assistant"). Not yet deployed.
+ and only when the ANTHROPIC_API_KEY secret is set (see "AI assistant"). Not set: live runs basic mode.
 ```
 
 There is no R2 bucket and no file upload. Matching and search are rule-based code in `src/match.js`,
@@ -41,7 +41,7 @@ There is no R2 bucket and no file upload. Matching and search are rule-based cod
 | `units` | A landlord's units: name, general area, monthly rent, rooms available, move-in date, description, status; optionally a Massachusetts street address, pin (lat/lng), approximate/exact choice and the MapTiler attribution | Owner: everything. Everyone: active units' listing fields only (no owner, no status); the location as an approximate 500 m circle with no address, unless the landlord chose exact. Admin: a count per landlord |
 | `match_preferences` | A renter's questionnaire: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets, smoking, chores (optional) | Only that renter. Not landlords, not admin (admin sees "saved yes/no"). Other renters see nothing unless the renter turns on roommate matching (see below) |
 
-| `assistant_threads`, `assistant_messages`, `assistant_actions` | A renter's chat with the assistant, what it learned, and its confirmation cards (migration `0006`, local only so far) | Only that renter. Not landlords, not admin |
+| `assistant_threads`, `assistant_messages`, `assistant_actions` | A renter's chat with the assistant, what it learned, and its confirmation cards (migration `0006`) | Only that renter. Not landlords, not admin |
 | `saved_options` | Rooms and people a renter saved from the chat | Only that renter |
 | `assistant_usage` | AI replies and tokens per day, per renter and for the site | Nobody per renter; admin sees site totals |
 
@@ -176,7 +176,8 @@ worked example on the sample data are in [docs/SAMPLE_MATCHING.md](docs/SAMPLE_M
 
 ## AI assistant (chat)
 
-**Status (2026-10-12): built and tested locally only. Not deployed; the live database was not changed. The owner chose to stay on basic mode for now (no AI key).**
+**Status (2026-10-12): live in basic mode** (deployed as `d7e38548-66c4-4eab-890c-ac0c692a1bcd`, migrations 0005 and 0006 applied). The owner
+chose to stay on basic mode for now, so there is no AI key and it costs $0.
 Renters get one chat at `/assistant`, now their first stop after sign-in. The questionnaire and matches
 (`/renter`) and Listings are unchanged and linked from the chat.
 
@@ -317,14 +318,17 @@ Refusal fallback:
   declines for a safety reason, Anthropic answers with another model, billed at that model's rates.
 - If every model declines, coHabit answers in basic mode.
 
-### Deploying it (not done; each step needs the owner's approval)
+### Deploying it (done 2026-10-12, each step approved by the owner)
 
-Deploying also ships the earlier import tool (commit `8443019`), which needs migration 0005.
+This also shipped the earlier import tool (commit `8443019`), which needs migration 0005. Restore point taken before
+the migrations: bookmark `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90`. Steps used:
 
 1. Note a restore point: `npx wrangler d1 time-travel info DB`.
 2. Apply migrations 0005 and 0006 (both additive): `npx wrangler d1 migrations apply DB --remote`.
 3. Optional: set the `ANTHROPIC_API_KEY` secret (see above). Without it, the live site runs basic mode at $0.
 4. Deploy with `npx wrangler deploy`, then sign in as a renter and open `/assistant`.
+
+To turn AI mode on later, only step 3 is needed (no redeploy). Setting or changing a secret takes effect immediately.
 
 ## Sample data (fictional)
 
@@ -646,7 +650,7 @@ you create in part 2.
 Open the site on a phone, or narrow the browser window. The top-bar links move to a second row, the map sits
 above the list, cards stack in one column, and the admin list becomes one card per person. Nothing should scroll sideways.
 
-### 9. The assistant (5 minutes, renter B; only after the assistant is deployed)
+### 9. The assistant (5 minutes, renter B)
 
 1. As B, click **Assistant** in the top bar. The chat starts with a greeting and three starter buttons. The pill
    says **AI assistant**, or **Basic mode** with a note explaining why.

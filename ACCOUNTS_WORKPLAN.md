@@ -67,7 +67,7 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       data only. Re-running `scripts/sample-data.sql` would add all sample data back.
 - [ ] **Real listings imported: 0.** Blocked on authorized data: Apartments.com refuses automated access and there's
       no republication agreement; a licensed provider's license or landlords' written permission is needed first.
-- [ ] Production for the import tool: migration 0005 and deploy (each needs the owner's approval)
+- [x] Production for the import tool: migration 0005 and deploy (2026-10-12, with the assistant)
 - [x] Chat-first AI housing and roommate assistant (2026-10-12, local only, not deployed): `/assistant` for renters,
       rule-based search and fits/misses in code, Claude (official SDK, server side) only talks and explains, basic mode
       when the AI is off/over a limit/down, confirmation cards for saving the profile or contacting a landlord, saved
@@ -75,7 +75,11 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       locally only. SDK `@anthropic-ai/sdk` 0.129.0. 314/314 tests (84 new), checked in the browser on desktop and phone.
 - [x] **Owner decision (2026-10-12): stay on basic mode for now.** No Anthropic account or key; the assistant runs
       rule-based at $0. Turning AI on later: steps, model choice and expected cost in ACCOUNTS_SETUP.md, "AI assistant".
-- [ ] Production for the assistant: migrations 0005 and 0006, then deploy (each needs the owner's approval)
+- [x] Production for the assistant (2026-10-12, each approved by the owner): restore bookmark
+      `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90`, migrations 0005 and 0006 applied (data checked after: 11 users, 5 units,
+      2 requests, 4 questionnaires), deployed as `d7e38548-66c4-4eab-890c-ac0c692a1bcd` in basic mode. Live checks: pages 200,
+      signed-out assistant/admin APIs 401, cross-site chat message 403, signed-out `/assistant` page and new home text.
+- [ ] Owner tries the live assistant as a renter (manual test part 9)
 - [ ] Owner checks live: dragging the pin (1 km limit), the real Use my location permission prompt, a real unit with an address
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)
 - [x] Owner renamed the two test units that had street addresses in their names (checked in D1 and on `/api/listings`); live edit of a unit works

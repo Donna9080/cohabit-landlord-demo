@@ -8,12 +8,13 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 
 | | Count | Where checked |
 |---|---|---|
-| **Real external listings imported** | **0** | Live: the `external_listings` table doesn't exist yet (migration 0005 not applied). Local: 0. |
-| Real accounts | 10 | Live database, read-only query on 2026-10-06 (not re-checked; nothing live has changed since) |
+| **Real external listings imported** | **0** | Live (table created 2026-10-12, empty). Local: 0. |
+| Real accounts | 11 | Live database, 2026-10-12 (one new sign-up since 2026-10-06) |
 | Sample (fictional) accounts | 0 | Live: all 36 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
-| Real landlord units | 5 | Live, 2026-10-06 |
+| Real landlord units | 5 | Live, 2026-10-12 |
 | Sample units | 0 | Live: all 20 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
-| "I'm interested" requests | 2 | Live, 2026-10-06 |
+| "I'm interested" requests | 2 | Live, 2026-10-12 |
+| Saved questionnaires | 4 | Live, 2026-10-12 |
 | Admins | 1 | Live (the owner) |
 | Automated tests | 314 passing | `npm test`, local, 2026-10-12 |
 | AI cost so far | $0 | No Anthropic key exists; the assistant has only run in basic mode or against the test stand-in |
@@ -23,13 +24,16 @@ No real listings were imported because no authorized data source exists yet (see
 ## Deployment status
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `2e452e10-a5f3-4a87-b70a-b6970607f827`, deployed 2026-10-03 (always-on map). Matches git commit
-  `85c8524`.
-- **Not deployed (local commits only):**
-  - The external listing import tool (`8443019`).
-  - The chat assistant (this checkpoint).
-- **Live database (`cohabit-db`):** migrations 0001 to 0004 applied. **0005 (external listings) and 0006 (assistant)
-  are not applied.**
+- **Live version:** `d7e38548-66c4-4eab-890c-ac0c692a1bcd`, deployed 2026-10-12 with the owner's approval: the chat assistant (basic mode)
+  and the external listing import tool. Matches git commit `a5f8e92` (on GitHub).
+- **Live database (`cohabit-db`):** migrations 0001 to 0006 applied. 0005 and 0006 were applied on 2026-10-12 with
+  the owner's approval, after a restore point (bookmark `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90`). Both only added tables and one empty column;
+  existing data was checked afterwards (11 users, 5 units, 2 requests, 4 questionnaires).
+- **Checked live after deploy:**
+  - Public pages, including `/assistant`, return 200.
+  - Signed out, the assistant and admin APIs return 401, and a chat message from another site returns 403.
+  - `/assistant` shows its sign-in invitation, and the home page shows the new text.
+  - Not checked: the signed-in chat itself (that needs a real account; see Pending work).
 - **Cloudflare secrets (names only):** `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MAPTILER_KEY`.
   No `ANTHROPIC_API_KEY`.
 - **Google sign-in:** published (In production), External audience.
@@ -51,8 +55,8 @@ No real listings were imported because no authorized data source exists yet (see
 | Sample data | 6 landlords, 20 units, 30 renters, all tagged Sample; matching report in `docs/SAMPLE_MATCHING.md` (since deleted from live) | Removed |
 | Design | Option A cards, one navigation bar, unit page, in-page dialogs, loading/empty/error/success states | Yes |
 | Maps | Massachusetts-only place search, Use my location (browser only), always-on map, landlord address + draggable pin, approximate (500 m) or exact | Yes |
-| Import tool | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | **No (local only)** |
-| **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | **No (local only)** |
+| Import tool | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | Yes (2026-10-12) |
+| **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
 
 ### The assistant (2026-10-12)
 
@@ -75,8 +79,8 @@ No real listings were imported because no authorized data source exists yet (see
 - **Admin:** sees daily totals and an estimated cost.
 - **Changes to existing pages:** an optional chores answer on the questionnaire; updated privacy and terms pages;
   renters land on the assistant after sign-in.
-- **Not yet done:** Anthropic account, key and deploy. Each is the owner's decision; see ACCOUNTS_SETUP.md,
-  "AI assistant", for the steps and expected cost.
+- **Live in basic mode** since 2026-10-12. AI mode (Anthropic account and key) was declined for now; see
+  ACCOUNTS_SETUP.md, "AI assistant", for the steps and expected cost.
 
 ## Tests
 
@@ -117,8 +121,9 @@ No real listings were imported because no authorized data source exists yet (see
       later: create an Anthropic Console account, set a spend limit (for example $5 a month), create a key and enter it
       yourself, and choose the model. Default Opus 5.5 is about 2–6¢ per reply, Sonnet 5.5 about 1–3¢, Haiku 5.5
       about 0.1¢.
-- [ ] Apply migrations 0005 and 0006 to the live database (additive; take a restore point first).
-- [ ] Push and deploy the import tool and the assistant.
+- [x] Apply migrations 0005 and 0006 to the live database (2026-10-12, restore point taken first).
+- [x] Push and deploy the import tool and the assistant (2026-10-12, version `d7e38548…`).
+- [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
 
 **Blocked: real listings (0 imported).** Apartments.com refuses automated access, and there is no republication
 agreement with it or its owner CoStar. RentCast's API terms weren't confirmed to allow public display. To import,
@@ -145,7 +150,8 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Database before migrations 0005 and 0006 | Time Travel bookmark `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0004 | Time Travel bookmark `00000032-00000000-000050f9-cded0b9a637a3ca8de724dfb34fae1b6` |
 | Original static site | Version `a3c0f17b-d52a-47e3-9d71-5049e87a7a34`, git tag `pre-accounts-2026-09-29` |
 | Previous checkpoint | Git tag `checkpoint-2026-10-06` |
