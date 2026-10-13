@@ -87,14 +87,16 @@ function evaluate(memory, u) {
 
   // Distance uses the same approximate point renters see, so it is "about" and never reveals more.
   const km = u.location ? round1(kmBetween(u.location, BRANDEIS)) : null;
+  // A must-have distance hides rooms known to be farther. A room with no map location isn't hidden (many landlords
+  // haven't added an address); it ranks lower and says the distance is unknown.
   if (v.max_distance_km != null) {
     const slack = u.location?.precision === "approximate" ? 0.5 : 0;
     const within = km != null && km <= v.max_distance_km + slack;
-    ok.distance = isRequired(memory, "max_distance_km") ? within : true;
+    ok.distance = isRequired(memory, "max_distance_km") ? within || km == null : true;
     if (within) {
       score += 20;
       fits.push(`About ${km} km from Brandeis in a straight line, within your ${v.max_distance_km} km`);
-    } else if (km == null) misses.push("No map location, so the distance to Brandeis is unknown");
+    } else if (km == null) misses.push("No map location, so the distance to Brandeis is unknown. Ask the landlord where it is");
     else misses.push(`About ${km} km from Brandeis in a straight line, more than your ${v.max_distance_km} km`);
   } else ok.distance = true;
 

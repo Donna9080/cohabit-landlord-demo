@@ -203,6 +203,8 @@ Renters get one chat at `/assistant`, now their first stop after sign-in. The qu
   - Sample listings and people are left out unless the renter asks for them, and are always labeled.
   - Only renters who turned roommate matching on are compared.
   - Distance is straight-line from Brandeis, using the same approximate point renters see. There is no travel-time data.
+  - A must-have distance hides rooms known to be farther. A room with no map location is still shown, after the rooms
+    that fit, marked "distance to Brandeis unknown". Most live units had no address yet on 2026-10-12.
 - **The AI model explains** (Claude, called from the Worker with the official Anthropic SDK, `src/assistant/ai.js`).
   - It can only call four tools: `update_memory`, `search_rooms`, `search_roommates` and `propose_action`.
   - Every value it sends is checked like form input (`src/assistant/memory.js`). It cannot store anything outside

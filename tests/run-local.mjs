@@ -213,8 +213,13 @@ try {
     check("Search: a flexible area ranks but doesn't hide", s3.results.length === 1 && s3.results[0].misses[0].startsWith("In Waltham, MA, not one of your areas"));
     const s4 = searchRooms(mem({ areas: ["Newton"] }, { areas: true }), [unit({})]);
     check("Search: a must-have area hides other towns", s4.results.length === 0 && s4.ifRelaxed[0]?.condition === "area");
-    const s5 = searchRooms(mem({ max_distance_km: 2 }), [unit({ location: { precision: "approximate", lat: 42.37, lng: -71.245 } }), unit({})]);
-    check("Search: distance is from Brandeis; no map location means a must-have distance can't be met", s5.results.length === 1 && s5.results[0].fits.some((f) => f.includes("km from Brandeis")));
+    const s5 = searchRooms(mem({ max_distance_km: 2 }), [
+      unit({ id: "no-location", monthly_rent: 900 }),
+      unit({ id: "far", location: { precision: "exact", lat: 42.3601, lng: -71.0589 } }), // downtown Boston, about 16 km
+      unit({ id: "near", location: { precision: "approximate", lat: 42.37, lng: -71.245 } }),
+    ]);
+    check("Search: a must-have distance hides rooms known to be farther from Brandeis", !s5.results.some((r) => r.unitId === "far") && s5.ifRelaxed.some((o) => o.condition === "distance" && o.extraRooms === 1));
+    check("Search: a room with no map location still shows, after the ones that fit, marked distance unknown", s5.results.map((r) => r.unitId).join() === "near,no-location" && s5.results[0].fits.some((f) => f.includes("km from Brandeis")) && s5.results[1].misses[0].startsWith("No map location, so the distance to Brandeis is unknown"));
     const s6 = searchRooms(mem({}), [unit({ sample: true })]);
     check("Search: sample listings left out unless asked for, and counted", s6.results.length === 0 && s6.samplesHidden === 1 && searchRooms(mem({ include_samples: true }), [unit({ sample: true })]).results.length === 1);
     check("Search: at most 3 results", searchRooms(mem({}), [1, 2, 3, 4, 5].map(() => unit({}))).results.length === 3);
