@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-13 (Details and requests, local only)
+# coHabit project checkpoint: 2026-10-13 (Details and requests)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -9,12 +9,13 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 | | Count | Where checked |
 |---|---|---|
 | **Real external listings imported** | **0** | Live (table created 2026-10-12, empty). Local: 0. |
-| Real accounts | 11 | Live database, 2026-10-12 (one new sign-up since 2026-10-06) |
+| Real accounts | 12 | Live database, 2026-10-13 |
 | Sample (fictional) accounts | 0 | Live: all 36 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
 | Real landlord units | 5 | Live, 2026-10-12 |
 | Sample units | 0 | Live: all 20 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
-| "I'm interested" requests | 2 | Live, 2026-10-12 |
-| Saved questionnaires | 4 | Live, 2026-10-12 |
+| "I'm interested" requests | 3 | Live, 2026-10-13 |
+| Roommate requests | 0 | Live, 2026-10-13 (table created that day) |
+| Saved questionnaires | 4 | Live, 2026-10-13 |
 | Admins | 1 | Live (the owner) |
 | Automated tests | 395 passing | `npm test`, local, 2026-10-13 |
 | AI cost so far | $0 | No Anthropic key exists; the assistant has only run in basic mode or against the test stand-in |
@@ -23,21 +24,27 @@ No real listings were imported because no authorized data source exists yet (see
 
 ## Deployment status
 
-**Not deployed: the 2026-10-13 work** (Details and requests, below) is committed locally only, and migration 0007 is
-applied to the local databases only. The live site and live database are unchanged. The new code needs migration
-0007, so the order is: restore point, apply 0007 to the live database, deploy (each with the owner's approval).
-
-
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `e2da146e-2d3b-4c23-9591-63ae1e71a4b8`, deployed 2026-10-12 with the owner's approval: the assistant redesign and Demo mode
-  (commit `2c7a980`, tag `checkpoint-2026-10-12-redesign`). No database change was needed. Checked live after deploy:
+- **Live version:** `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9`, deployed 2026-10-13 with the owner's approval: Details and requests
+  (commit `d3d9734`, tag `checkpoint-2026-10-13-requests`). Order used: restore point, migration 0007, deploy. Checked
+  live after deploy:
+  - Pages return 200 (home, assistant, listings, My matches, privacy, terms), and the new code and privacy text are served.
+  - Signed out, the requests, assistant and roommate APIs return 401, and a cross-site request returns 403.
+  - Public listings contain no demo ids and no emails.
+  - Not checked: the signed-in flows (that needs two real renter accounts; see Pending work).
+
+  Before it: `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (assistant redesign and Demo mode, commit `2c7a980`, tag
+  `checkpoint-2026-10-12-redesign`). Checked live after that deploy:
   - Pages return 200, and `/assistant` shows the new headline.
   - Signed out, the assistant, Demo and admin APIs return 401, and a cross-site Demo request returns 403.
   - Public listings contain no demo ids.
 
   Before it: `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (rooms with no map location shown, commit `27df59b`). The version before it, `d7e38548-66c4-4eab-890c-ac0c692a1bcd`,
   brought the chat assistant (basic mode) and the external listing import tool (commit `a5f8e92`).
-- **Live database (`cohabit-db`):** migrations 0001 to 0006 applied. 0005 and 0006 were applied on 2026-10-12 with
+- **Live database (`cohabit-db`):** migrations 0001 to 0007 applied. 0007 was applied on 2026-10-13 with the owner's
+  approval, after a restore point (bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c`). It only added a column (off for
+  everyone) and two empty tables with four indexes; existing data was checked before and after (12 users, 5 units,
+  3 "I'm interested" requests, 4 questionnaires, 2 chats, 1 saved option: unchanged). 0005 and 0006 were applied on 2026-10-12 with
   the owner's approval, after a restore point (bookmark `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90`). Both only added tables and one empty column;
   existing data was checked afterwards (11 users, 5 units, 2 requests, 4 questionnaires).
 - **Checked live after deploy:**
@@ -69,9 +76,9 @@ applied to the local databases only. The live site and live database are unchang
 | Import tool | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | Yes (2026-10-12) |
 | **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
 | **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
-| **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | **No, local only** (migration 0007 pending) |
+| **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | Yes (2026-10-13) |
 
-### Details and requests (2026-10-13, local only)
+### Details and requests (2026-10-13, live as `d4ea27c7…`)
 
 - **Layout:**
   - Results and chat start at the same height; the chat stays in view while the results scroll, including the map.
@@ -201,8 +208,9 @@ Earlier runs:
 - [x] Push and deploy the import tool and the assistant (2026-10-12, version `d7e38548…`).
 - [x] Deploy the assistant redesign and Demo mode (2026-10-12, version `e2da146e…`, no migration).
 - [ ] Owner tries the redesigned assistant on the live site as a renter (manual test part 9, including Demo mode).
-- [ ] Approve applying migration 0007 to the live database (restore point first), then deploying the 2026-10-13
-      work, then run part 10 of the manual test with two real renter accounts.
+- [x] Apply migration 0007 to the live database and deploy the 2026-10-13 work (restore point first; version `d4ea27c7…`).
+- [ ] Run part 10 of the manual test with two real renter accounts (Details, Connect, Accept, Messages, room request).
+- [ ] Push commits `d3d9734` and the deploy record to GitHub (not pushed yet).
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
 
 **Blocked: real listings (0 imported).** Apartments.com refuses automated access, and there is no republication
@@ -230,14 +238,15 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Database before migration 0007 | Time Travel bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c` (only added a column and tables, so rolling back the code alone is usually enough) |
 | Database before migrations 0005 and 0006 | Time Travel bookmark `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0004 | Time Travel bookmark `00000032-00000000-000050f9-cded0b9a637a3ca8de724dfb34fae1b6` |
 | Original static site | Version `a3c0f17b-d52a-47e3-9d71-5049e87a7a34`, git tag `pre-accounts-2026-09-29` |
 | Previous checkpoint | Git tag `checkpoint-2026-10-06` |
 | Earlier checkpoint today | Git tag `checkpoint-2026-10-12` (assistant first built) |
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-12-redesign` |
-| This checkpoint (local only) | Git tag `checkpoint-2026-10-13-requests` |
+| This checkpoint (live) | Git tag `checkpoint-2026-10-13-requests` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 

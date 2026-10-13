@@ -176,7 +176,7 @@ worked example on the sample data are in [docs/SAMPLE_MATCHING.md](docs/SAMPLE_M
 - Admin still sees none of this. Turning the switch off, or deleting the account, removes the renter from other
   people's results on the next request.
 
-### Details and Connect (roommate requests, migration `0007`, local only so far)
+### Details and Connect (roommate requests, migration `0007`, live since 2026-10-13)
 
 - **A third switch, `share_profile`** ("Share my details with my matches"), off by default and only possible with
   `roommate_visible` on. Details then shows that person's budget range, move-in month, area, lifestyle tags and where
@@ -598,9 +598,10 @@ Real Google sign-in locally needs your Google client values in `.dev.vars` and
 
 ## Migrations and deploy (exact commands used)
 
-**Pending: migration `0007_roommate_requests.sql`** (adds the `share_profile` column, `roommate_requests` and
-`roommate_messages`; additive only). Applied to the local databases only. The code from 2026-10-13 needs it, so
-apply it to the live database **before** deploying that code, with a restore point first and the owner's approval.
+**Migration `0007_roommate_requests.sql`** (adds the `share_profile` column, `roommate_requests` and
+`roommate_messages`; additive only) was applied to the live database on 2026-10-13 with the owner's approval, after
+a restore point (bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c`), and before deploying version `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9`,
+which needs it. Existing data was unchanged.
 
 ```powershell
 npx wrangler d1 migrations apply DB --local     # always first; then npm test
@@ -762,7 +763,7 @@ These steps describe the redesigned assistant, live since 2026-10-12.
 7. On a phone, switch **Chat** / **Results**: the chat and the map keep their place.
 8. Reload: everything is still there. Then **Clear chat** and confirm: the chat and answers are gone, **Saved** stays.
 
-### 10. Details and requests (8 minutes, renters B and C; needs migration 0007)
+### 10. Details and requests (8 minutes, renters B and C)
 
 1. As B and as C, on **My matches**, tick **Show me to compatible renters** and **Share my details with my matches**,
    and save. Use similar answers (same area and month) so they match.

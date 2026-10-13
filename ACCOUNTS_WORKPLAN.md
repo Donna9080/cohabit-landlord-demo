@@ -207,7 +207,7 @@ by the live test.
   answer (only `/api/*` reaches the Worker first), so the job never ran in tests. Tests now use
   `/cdn-cgi/local/scheduled` and check that the job ran.
 
-## Results, Details and requests (2026-10-13, local only)
+## Results, Details and requests (2026-10-13)
 
 - **Reused, not rebuilt.** Room Details and "I'm interested" are the existing listing flow and API; a confirmation
   box was added before sending, and one function keeps "Request sent" in step on every screen.
@@ -221,10 +221,11 @@ by the live test.
 - **Cards stay short.** Two reasons and one important difference (a flexible answer, or "OK with pets" vs "has a
   pet", isn't one), with exact and partial matches grouped separately and the same counts in the chat and the results.
 - **No notifications.** Email would need a paid service; requests show when the person opens coHabit.
-- **Not deployed, and the live database not changed**, as asked.
+- **Built and tested locally first**, without deploying or changing the live database. Then, with the owner's
+  approval: restore point (bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c`), migration 0007 on the live database
+  (data unchanged), and deploy as `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9`.
 
 ## Next safe step
 
-With the owner's approval: take a restore point, apply migration 0007 to the live database, then deploy and
-run part 10 of the manual test with two real renter accounts. After that: a "new request" badge for landlords and
-renters. If admins ever get write actions, add an audit table in that change.
+Run part 10 of the manual test on the live site with two real renter accounts. After that: a "new request" badge
+for landlords and renters. If admins ever get write actions, add an audit table in that change.
