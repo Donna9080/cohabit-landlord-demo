@@ -1897,16 +1897,16 @@
     return `
       <div class="empty res-empty">
         <p class="empty-title">No rooms match all your must-haves</p>
-        ${musts.length ? `<p>Your must-haves: ${musts.map((f) => `<strong>${esc(chipText(f))}</strong>`).join(", ")}. coHabit won't loosen these unless you change them.</p>` : ""}
-        ${relax ? `<p>Changing one would bring some back:</p><div class="quick res-relax">${relax}</div>` : `<p>Nothing comes close right now. Check back as landlords add rooms, or <a href="/listings">browse all listings</a>.</p>`}
+        ${musts.length ? `<p>Your must-haves: ${musts.map((f) => `<strong>${esc(chipText(f))}</strong>`).join(", ")}. We won't loosen these unless you do.</p>` : ""}
+        ${relax ? `<p>Changing one would help:</p><div class="quick res-relax">${relax}</div>` : `<p>Nothing comes close yet. New rooms get listed all the time, so check back, or <a href="/listings">browse all listings</a>.</p>`}
         ${rooms.samplesHidden ? `<p class="small">${plural(rooms.samplesHidden, "sample (fictional) listing", "sample (fictional) listings")} would fit. Say “show sample listings” in the chat to include ${rooms.samplesHidden === 1 ? "it" : "them"}.</p>` : ""}
       </div>`;
   }
 
   function roomsParts(rooms) {
     if (!rooms || rooms.status === "need_more") {
-      const left = rooms && rooms.missing.length ? ` Still to answer: ${esc(rooms.missing.join(", "))}.` : "";
-      return { head: "", list: emptyState("Rooms show up here", `Answer a couple more questions in the chat and the rooms that fit will appear.${left}`), map: false };
+      const left = rooms && rooms.missing.length ? ` Still to go: ${esc(rooms.missing.join(", "))}.` : "";
+      return { head: "", list: emptyState("Rooms show up here", `A couple more answers and they'll appear.${left}`), map: false };
     }
     if (rooms.status === "none") return { head: "", list: noRoomsHtml(rooms), map: false };
     const showMap = resView === "map";
@@ -1920,7 +1920,7 @@
           <button type="button" data-action="res-view" data-view="map" aria-pressed="${showMap}">Map</button>
         </div>
       </div>
-      ${rooms.preliminary ? `<p class="prelim">Early results. Answer ${esc(rooms.missing.join(" and "))} to sharpen them.</p>` : ""}
+      ${rooms.preliminary ? `<p class="prelim">Early results. Add your ${esc(rooms.missing.join(" and "))} to narrow them down.</p>` : ""}
       ${rooms.samplesHidden ? `<p class="small muted">${plural(rooms.samplesHidden, "sample (fictional) listing also fits", "sample (fictional) listings also fit")}. They're hidden unless you ask for them.</p>` : ""}`;
     const more = !showMap && !resShowAll && rooms.items.length > 3 ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${rooms.items.length - 3} more</button>` : "";
     return { head, list: `<ul class="res-grid" role="list" aria-label="Rooms">${items.map(roomCard).join("")}</ul>${more}`, map: showMap };
@@ -1930,14 +1930,14 @@
     if (!people) return { head: "", list: "" };
     const ask = `<div class="quick"><button class="chip" type="button" data-action="chat-say" data-text="Find a roommate">Find a roommate</button></div>`;
     if (people.status === "missing_answers" || ((people.status === "needs_profile" || people.status === "opt_in_required") && people.missing.length))
-      return { head: "", list: emptyState("Roommates show up here", `Answer the lifestyle questions in the chat first. Still to answer: ${esc(people.missing.join(", "))}.`, ask) };
+      return { head: "", list: emptyState("Roommates show up here", `Answer the roommate questions in the chat first. Still to go: ${esc(people.missing.join(", "))}.`, ask) };
     if (people.status === "needs_profile" || people.status === "opt_in_required")
       return {
         head: "",
-        list: emptyState("Turn on roommate matching to see people", "You only see renters who turned it on too, and they only see your first name and what you have in common. The chat will ask you to confirm.", ask),
+        list: emptyState("Turn on roommate matching to see people", "You'll only see students who turned it on too, and they only see your first name and what you have in common. The chat asks you to confirm.", ask),
       };
     if (people.status === "none")
-      return { head: "", list: emptyState("No roommate matches yet", "Nobody who turned on roommate matching fits your area, timing and lifestyle right now. Check back as more students join.") };
+      return { head: "", list: emptyState("No roommate matches yet", "Nobody open to roommates fits your area, timing and lifestyle yet. Check back as more students join.") };
     const items = resShowAll ? people.items : people.items.slice(0, 3);
     const more = !resShowAll && people.items.length > 3 ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${people.items.length - 3} more</button>` : "";
     return {
@@ -1960,7 +1960,7 @@
         <div class="res-opening">
           <span class="res-opening-icon" aria-hidden="true">${icon("house", 28)}</span>
           <p class="empty-title">Your matches will show up here</p>
-          <p class="muted">Answer a few quick questions in the chat. Rooms and roommates that fit appear here, with the reasons why.</p>
+          <p class="muted">Answer a few quick questions and the rooms or roommates that fit appear here, with the reasons why.</p>
         </div>`;
     } else {
       const tabs =
@@ -2245,9 +2245,9 @@
           ${
             ai
               ? `<p>An AI model writes the replies. Results and reasons come from coHabit's own search, never from the AI.</p>`
-              : `<p>Tap an answer, or type something short like a budget, a month, a town or a distance. It can't answer open-ended questions.</p>`
+              : `<p>This free chat follows a set of questions. Tap an answer, or type something short like a budget, a month, a town or a distance. It can't answer open-ended questions.</p>`
           }
-          <p>Your chat and answers are saved to your account so you can pick up later. They're deleted when you clear the chat or delete your account, or after ${chat.keepDays} days without use. ${ai ? "Messages are sent to Anthropic (the company behind Claude) to write replies; other renters' names and contact details never are. " : ""}Please don't share phone numbers or addresses. <a href="/privacy">Privacy policy</a></p>
+          <p>Your chat and answers stay on your account so you can pick up later, until you clear the chat, delete your account, or leave it unused for ${chat.keepDays} days. ${ai ? "Messages go to Anthropic (the company behind Claude) to write replies; other students' names and contact details never do. " : ""}Please don't share phone numbers or addresses. <a href="/privacy">Privacy policy</a></p>
         </div>
       </details>`;
   }

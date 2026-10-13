@@ -34,6 +34,7 @@ const people = {
   chatAi: { id: "t_chat_ai", name: "Chatty Aitester", email: "chat-ai@example.test", type: "renter" },
   chatMate: { id: "t_chat_mate", name: "Mia Chatmate", email: "chat-mate@example.test", type: "renter" },
   chatBasic: { id: "t_chat_basic", name: "Basil Basictester", email: "chat-basic@example.test", type: "renter" },
+  chatFresh: { id: "t_chat_fresh", name: "Frankie Freshtester", email: "chat-fresh@example.test", type: "renter" },
 };
 const future = new Date(Date.now() + 86400_000).toISOString();
 const past = new Date(Date.now() - 60_000).toISOString();
@@ -59,7 +60,7 @@ for (const p of Object.values(people)) {
   sql += `INSERT INTO "session" (id,"expiresAt",token,"createdAt","updatedAt","userId") VALUES ('s_chat_ai_2',${q(future)},${q(token)},${q(now)},${q(now)},'t_chat_ai');\n`;
 }
 // This renter has already used today's AI replies, so the assistant answers in basic mode.
-sql += `INSERT INTO assistant_usage (day, user_id, replies) VALUES (${q(now.slice(0, 10))}, 't_chat_basic', ${AI_DAILY_PER_USER});\n`;
+sql += `INSERT INTO assistant_usage (day, user_id, replies) VALUES (${q(now.slice(0, 10))}, 't_chat_basic', ${AI_DAILY_PER_USER}), (${q(now.slice(0, 10))}, 't_chat_fresh', ${AI_DAILY_PER_USER});\n`;
 const expiredToken = randomBytes(24).toString("base64url");
 sql += `INSERT INTO "session" (id,"expiresAt",token,"createdAt","updatedAt","userId") VALUES ('s_expired',${q(past)},${q(expiredToken)},${q(now)},${q(now)},'t_landlord_a');\n`;
 
@@ -147,7 +148,7 @@ for (let i = 0; i < 60; i++) {
   await sleep(500);
 }
 
-const { landlordA, landlordB, renterA, renterB, newbie, admin, rater, chatAi, chatMate, chatBasic } = people;
+const { landlordA, landlordB, renterA, renterB, newbie, admin, rater, chatAi, chatMate, chatBasic, chatFresh } = people;
 
 try {
   // ── Matching rules (pure function, no server) ─────────────────────────────
@@ -708,7 +709,7 @@ try {
     r = await say(chatAi, `How much is R1? [[invented_price]]`);
     check("Assistant (AI): an invented price is removed from the reply", !replyOf(r).text.includes("7,777") && replyOf(r).text.includes("commuter rail"), replyOf(r).text);
     r = await say(chatAi, `Compare them. [[search_rooms]] [[only_invented]]`);
-    check("Assistant (AI): a reply with nothing true left is rewritten from the search results", !replyOf(r).text.includes("8,888") && /coHabit listing/.test(replyOf(r).text) && replyOf(r).text.includes("R1 ·"), replyOf(r).text);
+    check("Assistant (AI): a reply with nothing true left is rewritten from the search results", !replyOf(r).text.includes("8,888") && /rooms? fits? your must-haves/.test(replyOf(r).text) && replyOf(r).text.includes("Top pick: R1 · "), replyOf(r).text);
 
     r = await api("/api/assistant", { as: chatAi.cookie2 });
     check("Assistant: after signing in again the chat continues, in order", r.data.messages.length === 6 && r.data.messages[0].role === "user" && r.data.messages[1].text === "Here are the best fits. R1 looks strongest." && r.data.memory.some((f) => f.field === "budget_max"));
@@ -797,30 +798,39 @@ try {
     check("Assistant: over the daily AI limit → basic mode", r.data.mode === "basic" && r.data.basicReason === "user_limit");
     r = await say(chatBasic, "hello");
     reply = replyOf(r);
-    check("Basic mode: greets, asks one question, offers quick replies, says why it's in basic mode", reply.text.endsWith("Are you looking for a room, a roommate, or both?") && (reply.text.match(/\?/g) || []).length === 1 && reply.quickReplies.includes("A room") && /today's 20 AI replies/.test(reply.notice || ""), JSON.stringify(reply));
+    check("Guided chat: a greeting gets \"Hey!\" and the opening question once, with answer buttons and why it's guided", reply.text === "Hey!\nWhat are you looking for?" && reply.quickReplies.join() === "A room,A roommate,Both" && /today's 20 AI replies/.test(reply.notice || ""), JSON.stringify(reply));
+    const basicTexts = [];
     for (const [text, expect] of [
-      ["A room", /most you can pay/],
-      ["Up to $1,300", /When do you want to move in/],
-      ["June 2027", /Where would you like to live/],
-      ["Waltham", /How many rooms/],
+      ["A room", /^What's your max rent per month\?$/],
+      ["Up to $1,300", /^Noted: budget up to \$1,300\.\nWhen do you want to move in\?$/], // not one of the buttons, so it counts as typed
+      ["June 2027", /^Where do you want to live\? Pick a town, or how far from campus works\.$/],
+      ["Waltham", /^How many rooms do you need\?$/],
     ]) {
       r = await say(chatBasic, text);
-      check(`Basic mode: "${text}" → next question`, expect.test(replyOf(r).text), replyOf(r).text);
+      basicTexts.push(replyOf(r).text);
+      check(`Guided chat: "${text}" → the next question (echoed only when typed)`, expect.test(replyOf(r).text), replyOf(r).text);
       if (text === "Up to $1,300") check("Results panel: with one answer, rooms wait for more", r.data.results.rooms.status === "need_more" && r.data.results.rooms.missing.length === 3);
       if (text === "June 2027") check("Results panel: with two answers, early results appear, marked preliminary", r.data.results.rooms.status === "ok" && r.data.results.rooms.preliminary === true && r.data.results.rooms.items.every((c) => c.unit.monthly_rent <= 1300));
     }
-    r = await say(chatBasic, "Just me (1 room)");
+    r = await say(chatBasic, "Just me");
+    basicTexts.push(replyOf(r).text);
     reply = replyOf(r);
     check("Basic mode: with the basics, it shows real rooms within budget", reply.cards.length >= 1 && reply.cards.every((c) => c.available && !c.unit.sample && c.unit.monthly_rent <= 1300), reply.text);
-    check("Basic mode: each result is named with its rent and any mismatch", /R1 · .+: \$[\d,]+ a month/.test(reply.text) && /Each card shows why it fits/.test(reply.text), reply.text);
+    check("Guided chat: results summed up in short, pointing to the Results panel", /^\d+ rooms? fits? your must-haves\./.test(reply.text) && /Top pick: R1 · .+, \$[\d,]+ a month\./.test(reply.text), reply.text);
     check("Basic mode: matching sample listings are mentioned, not shown", /sample \(fictional\) listing/.test(reply.text));
     r = await api("/api/assistant/saved", { method: "POST", as: chatBasic, body: { messageId: reply.id, ref: "R1" } });
     const keptSaved = r.status === 201;
     r = await say(chatBasic, "Actually my budget is $1,000 max");
     reply = replyOf(r);
-    check("Basic mode: accepts corrections and searches again", r.data.memory.find((f) => f.field === "budget_max")?.value === "$1,000 a month" && (reply.text.includes("No coHabit listing fits") || reply.cards.every((c) => c.unit.monthly_rent <= 1000)), reply.text);
+    basicTexts.push(reply.text);
+    check("Guided chat: a typed answer gets a short \"Noted\" so the student sees what was understood", reply.text.startsWith("Noted: budget up to $1,000."), reply.text);
+    check("Basic mode: accepts corrections and searches again", r.data.memory.find((f) => f.field === "budget_max")?.value === "$1,000 a month" && (reply.text.includes("No rooms match all your must-haves") || reply.cards.every((c) => c.unit.monthly_rent <= 1000)), reply.text);
     r = await say(chatBasic, "What should I consider?");
     check("Basic mode: lists things to consider", /security deposit/.test(replyOf(r).text));
+    basicTexts.push(replyOf(r).text);
+    check("Guided chat: never says \"Got it\"", basicTexts.every((t) => !/got it/i.test(t)), basicTexts.join(" | "));
+    r = await say(chatFresh, "A room");
+    check("Guided chat: the first tap answers the opening question (looking for a room), then the next question", r.data.memory.find((f) => f.field === "looking_for")?.raw === "room" && replyOf(r).text === "What's your max rent per month?" && r.data.results.goal === "room", replyOf(r).text);
     check("Basic mode: never calls the AI service", fake.requests.length === before);
 
     r = await api("/api/assistant/clear", { method: "POST", as: chatBasic, body: {} });

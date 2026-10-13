@@ -100,9 +100,9 @@ async function basicReason(env, db, userId) {
   return null;
 }
 const BASIC_NOTICES = {
-  user_limit: (env) => `You've used today's ${limitsFor(env).perUserDaily} AI replies, so I'm answering in basic mode until tomorrow (UTC).`,
-  site_limit: () => "The AI assistant has reached today's limit for all of coHabit, so I'm answering in basic mode until tomorrow (UTC).",
-  unavailable: () => "The AI assistant isn't available right now, so I answered in basic mode.",
+  user_limit: (env) => `You've used today's ${limitsFor(env).perUserDaily} AI replies, so this is the guided chat until tomorrow (UTC).`,
+  site_limit: () => "The AI assistant has hit today's limit for coHabit, so this is the guided chat until tomorrow (UTC).",
+  unavailable: () => "The AI assistant isn't available right now, so this is the guided chat.",
 };
 
 // Statements that remove everything the assistant stored about a user (used when an account is deleted).
@@ -247,6 +247,7 @@ function contextNote(turn, saved, pending) {
   const lines = [
     "coHabit system note (from coHabit, not from the student).",
     `Today: ${today()}.`,
+    ...(turn.state.welcomed ? [] : ['The page greeted the student with "Hey! What are you looking for?" and the buttons A room, A roommate and Both.']),
     `Memory: ${Object.keys(v).length ? JSON.stringify({ values: v, must_have: strict.filter((f) => isRequired(turn.memory, f)), flexible: strict.filter((f) => !isRequired(turn.memory, f)) }) : "nothing yet."}`,
     `Still needed before a room search: ${missingBasics(turn.memory).map((f) => NOT_KNOWN[f]).join(", ") || "nothing"}.`,
     `Saved coHabit profile: ${saved ? `yes, roommate matching ${saved.roommate_visible ? "on" : "off"}` : "no"}.`,
@@ -472,9 +473,14 @@ function aiTools(ctx) {
 async function basicTurn(ctx, text) {
   const { turn } = ctx;
   const state = turn.state;
-  const { updates, intents } = understand(text, today(), state.asked);
+  // The page opens with "What are you looking for?" (A room / A roommate / Both), so that's the first question.
+  const asked = state.asked ?? (state.welcomed ? null : "looking_for");
+  state.welcomed = true;
+  const { updates, intents } = understand(text, today(), asked);
   const skipped = new Set(state.skipped || []);
-  if (intents.has("skip") && state.asked) skipped.add(state.asked);
+  if (intents.has("skip") && asked) skipped.add(asked);
+  // A tapped answer button needs no echo; a typed answer gets a short "Noted" so the student sees what was understood.
+  const tapped = !!asked && question(asked, today(), turn.memory).options.some((o) => o.toLowerCase() === text.trim().toLowerCase());
   const r = applyUpdates(turn.memory, updates, today());
   turn.memory = r.memory;
   const v = turn.memory.v;
@@ -483,11 +489,10 @@ async function basicTurn(ctx, text) {
   const understood = r.changed.length || r.errors.length || [...intents].some((i) => i !== "greeting");
   const lines = [];
 
-  if (intents.has("greeting")) lines.push("Hi! I can help you find a room near Brandeis, or a compatible roommate.");
+  if (intents.has("greeting")) lines.push("Hey!");
   else if (!understood) lines.push(`Sorry, I didn't catch that. ${BASIC_INTRO}`);
   const said = r.changed.map((f) => describeAnswer(f, v[f])).filter(Boolean);
-  if (said.length) lines.push(`Got it: ${said.join(", ")}.`);
-  else if (r.changed.length) lines.push("Got it.");
+  if (said.length && !tapped) lines.push(`Noted: ${said.join(", ")}.`);
   for (const e of r.errors) lines.push(e.message);
   if (intents.has("considerations")) lines.push(CONSIDERATIONS);
 
@@ -515,7 +520,7 @@ async function basicTurn(ctx, text) {
         else if (!state.optInOffered || intents.has("roommates")) {
           try {
             await proposeAction(ctx, "turn_on_roommate_matching");
-            lines.push("To see possible roommates, turn on roommate matching. Renters who also turned it on will see your first name and what you have in common. Check the card below: nothing changes until you confirm.");
+            lines.push("To see roommates, turn on roommate matching. Students who did will see your first name and what you have in common. Nothing changes until you confirm below.");
             state.optInOffered = true;
           } catch (e) {
             if (!(e instanceof ToolRefused)) throw e;
@@ -529,7 +534,7 @@ async function basicTurn(ctx, text) {
   if (intents.has("save")) {
     try {
       await proposeAction(ctx, "save_profile");
-      lines.push("Here's what would be saved to your profile. Check the card and confirm if it looks right.");
+      lines.push("Here's what would go on your profile. Confirm below if it looks right.");
     } catch (e) {
       if (!(e instanceof ToolRefused)) throw e;
       if (e.extra.missing?.length) ask ??= e.extra.missing[0];
@@ -543,7 +548,7 @@ async function basicTurn(ctx, text) {
     lines.push(q.text);
     quick = q.options;
   } else if (!turn.items && !turn.actions.length) {
-    lines.push("Anything else? I can show rooms again, look for a roommate, or list things to consider.");
+    lines.push("Anything else? Tap an option or type a change.");
     quick = ["Show rooms", "Find a roommate", "What should I consider?"];
   }
   state.asked = ask || null;
@@ -600,6 +605,7 @@ async function handleMessage({ request, env, db, user }) {
       reply = grounded.ok ? grounded.text : factualSummary(ctx);
       mode = "ai";
       turn.state.asked = null;
+      turn.state.welcomed = true;
       writes.push(...addUsage(db, user.id, 1, out.usage));
     } catch (e) {
       if (!(e instanceof AiUnavailable)) throw e;

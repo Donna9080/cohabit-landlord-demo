@@ -175,25 +175,27 @@ export function understand(text, today, lastAsked) {
   return { updates, intents };
 }
 
+// Same questions, order and answers as before; only the wording is shorter. Each answer button keeps its meaning
+// (OPTION_ANSWERS maps the labels to the stored values; the rest are read by understand()).
 const QUESTIONS = {
-  looking_for: () => ({ text: "Are you looking for a room, a roommate, or both?", options: OPTION_ANSWERS.looking_for.map(([l]) => l) }),
-  budget_max: () => ({ text: "What's the most you can pay in rent each month?", options: ["Up to $900", "Up to $1,200", "Up to $1,500", "Up to $2,000"] }),
+  looking_for: () => ({ text: "What are you looking for?", options: OPTION_ANSWERS.looking_for.map(([l]) => l) }),
+  budget_max: () => ({ text: "What's your max rent per month?", options: ["Up to $900", "Up to $1,200", "Up to $1,500", "Up to $2,000"] }),
   move_in_month: (today) => ({
-    text: "When do you want to move in? A month and year is enough.",
+    text: "When do you want to move in?",
     options: [1, 5, 6, 9].map((n) => nextOccurrence(n, today)).sort().map((ym) => fmtMonth(ym).replace(/^(\w+)/, (m) => ({ Jan: "January", May: "May", Jun: "June", Sep: "September" })[m] || m)),
   }),
   areas: (today, memory) =>
     memory?.v.max_distance_km != null
-      ? { text: "Which towns or neighborhoods should go on your profile? Roommate matching compares areas by name.", options: ["Waltham", "Newton", "Watertown"] }
-      : { text: "Where would you like to live? Name towns or neighborhoods, or tell me how far from campus is OK.", options: ["Waltham", "Newton", "Watertown", "Within 3 km of campus"] },
-  rooms_needed: () => ({ text: "How many rooms do you need: one for you, or more for friends moving with you?", options: ["Just me (1 room)", "2 rooms", "3 rooms"] }),
-  sleep_schedule: () => ({ text: "For roommate matching: are you an early bird, a night owl, or flexible?", options: OPTION_ANSWERS.sleep_schedule.map(([l]) => l) }),
-  cleanliness: () => ({ text: "How tidy do you like your home?", options: OPTION_ANSWERS.cleanliness.map(([l]) => l) }),
-  noise: () => ({ text: "How much noise at home is OK for you?", options: OPTION_ANSWERS.noise.map(([l]) => l) }),
-  guests: () => ({ text: "How often do you have guests over?", options: OPTION_ANSWERS.guests.map(([l]) => l) }),
-  pets: () => ({ text: "What about pets?", options: OPTION_ANSWERS.pets.map(([l]) => l) }),
+      ? { text: "Which town should go on your profile? Roommate matching goes by town.", options: ["Waltham", "Newton", "Watertown"] }
+      : { text: "Where do you want to live? Pick a town, or how far from campus works.", options: ["Waltham", "Newton", "Watertown", "Within 3 km of campus"] },
+  rooms_needed: () => ({ text: "How many rooms do you need?", options: ["Just me", "2 rooms", "3 rooms"] }),
+  sleep_schedule: () => ({ text: "Now a few roommate questions. Early bird, night owl, or flexible?", options: OPTION_ANSWERS.sleep_schedule.map(([l]) => l) }),
+  cleanliness: () => ({ text: "How tidy do you keep your place?", options: OPTION_ANSWERS.cleanliness.map(([l]) => l) }),
+  noise: () => ({ text: "How much noise is OK at home?", options: OPTION_ANSWERS.noise.map(([l]) => l) }),
+  guests: () => ({ text: "How often do you have people over?", options: OPTION_ANSWERS.guests.map(([l]) => l) }),
+  pets: () => ({ text: "How do you feel about pets?", options: OPTION_ANSWERS.pets.map(([l]) => l) }),
   smoking: () => ({ text: "And smoking?", options: OPTION_ANSWERS.smoking.map(([l]) => l) }),
-  chores: () => ({ text: "Last one (optional): how do you like to share chores?", options: OPTION_ANSWERS.chores.map(([l]) => l) }),
+  chores: () => ({ text: "Last one, and optional: how do you like to split chores?", options: OPTION_ANSWERS.chores.map(([l]) => l) }),
 };
 
 export function question(field, today, memory) {
@@ -214,59 +216,51 @@ export function nextQuestion(memory, { wantsRoommates, skipped = [] } = {}) {
 
 const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
+// The Results panel shows every card with what fits and what doesn't; the chat says what was found, in short.
 export function describeRooms(found) {
   const lines = [];
+  const n = found.totalMatching;
   if (found.results.length) {
-    lines.push(
-      found.totalMatching > found.results.length
-        ? `Here are the ${found.results.length} best of ${found.totalMatching} coHabit listings that fit what you told me:`
-        : `${found.results.length === 1 ? "One coHabit listing fits" : `${found.results.length} coHabit listings fit`} what you told me:`
-    );
-    // The cards list every reason; the message names each result with its key facts and any mismatch.
-    for (const r of found.results) {
-      const facts = [`${money(r.monthly_rent)} a month`, r.km_from_brandeis != null ? `about ${r.km_from_brandeis} km from Brandeis` : ""].filter(Boolean).join(", ");
-      const verdict = r.misses.length ? `but ${r.misses.map((m) => m[0].toLowerCase() + m.slice(1)).join("; ")}` : "fits everything you told me";
-      lines.push(`- ${r.ref} · ${r.name}${r.sample ? " (sample, fictional)" : ""}: ${facts}. ${verdict[0].toUpperCase() + verdict.slice(1)}.`);
-    }
-    lines.push("Each card shows why it fits. Open one for details or to save it, or tell me what to change.");
+    const partial = found.results.some((r) => r.misses.length);
+    lines.push(`${n === 1 ? "1 room fits" : `${n} rooms fit`} your must-haves. ${partial ? "Each card says what matches and what doesn't." : "They match everything you've told me."}`);
+    lines.push(`Top pick: ${found.results[0].ref} · ${found.results[0].name}${found.results[0].sample ? " (sample, fictional)" : ""}, ${money(found.results[0].monthly_rent)} a month.`);
   } else {
-    lines.push("No coHabit listing fits all of that right now.");
+    lines.push("No rooms match all your must-haves right now.");
     if (found.ifRelaxed.length) {
-      lines.push("Here's what would bring some back:");
-      for (const o of found.ifRelaxed) lines.push(`- ${o.change}: ${plural(o.extraRooms, "more listing")}`);
-      lines.push("Which would you like to change?");
-    } else lines.push("Nothing comes close yet. You could check back later, or browse all listings.");
+      lines.push("Changing one would help:");
+      for (const o of found.ifRelaxed) lines.push(`- ${o.change}: ${plural(o.extraRooms, "more room")}`);
+      lines.push("Want to change one? Tap it in Results, or tell me.");
+    } else lines.push("Nothing comes close yet. New rooms get listed all the time, so check back.");
   }
-  if (found.samplesHidden) lines.push(`${plural(found.samplesHidden, "sample (fictional) listing")} also ${found.samplesHidden === 1 ? "fits" : "fit"}. Say "show sample listings" if you'd like to see ${found.samplesHidden === 1 ? "it" : "them"}.`);
+  if (found.samplesHidden) lines.push(`${plural(found.samplesHidden, "sample (fictional) listing")} also ${found.samplesHidden === 1 ? "fits" : "fit"}. Say “show sample listings” to see ${found.samplesHidden === 1 ? "it" : "them"}.`);
   return lines.join("\n");
 }
 
 export function describeRoommates(found) {
   if (!found.results.length) {
-    const tail = found.samplesHidden ? ` (${plural(found.samplesHidden, "sample person")} would fit. Say "show sample listings" to include them.)` : "";
-    return `Nobody who turned on roommate matching fits your area, timing and lifestyle right now.${tail} Check back as more students join.`;
+    const tail = found.samplesHidden ? ` (${plural(found.samplesHidden, "sample person", "sample people")} would fit. Say “show sample listings” to include them.)` : "";
+    return `Nobody who's open to roommates fits your area, timing and lifestyle yet.${tail} Check back as more students join.`;
   }
-  const lines = [`${found.results.length === 1 ? "One renter fits" : `${found.results.length} renters fit`}. You only see people who chose to be shown:`];
-  for (const r of found.results) {
-    const shared = r.fits.filter((f) => !/^Both (looking in|moving in)|^Moving within|^Budgets overlap/.test(f)).length;
-    lines.push(`- ${r.ref}${r.sample ? " (sample, fictional)" : ""}: ${r.score}% compatible, with ${plural(shared, "lifestyle answer")} in common.`);
-  }
-  lines.push("Their cards show what you have in common, their first name, and an email only if they chose to share it.");
-  return lines.join("\n");
+  const n = found.totalMatching;
+  const top = found.results[0];
+  return [
+    `${n === 1 ? "1 student fits" : `${n} students fit`}. You only see people who chose to be found.`,
+    `Top pick: ${top.ref}${top.sample ? " (sample, fictional)" : ""}, ${top.score}% compatible. The cards show what you have in common.`,
+  ].join("\n");
 }
 
 export const CONSIDERATIONS = [
-  "A few things students often miss:",
-  "- Total move-in cost: first month's rent, plus any last month's rent and security deposit. Ask for the full list in writing before paying.",
-  "- What's included: heat, hot water, electricity and internet. coHabit listings don't say, so ask the landlord.",
-  "- Lease dates: does the lease fit your academic year, and can you sublet over the summer?",
-  "- Getting to campus in winter: check the walk, bike or shuttle route.",
-  "- See the place in person or on a live video call before paying anything, and never wire money to someone you haven't verified.",
-  "- Get the lease in writing and keep a record of every payment.",
-  "For questions about your rights as a tenant, the Massachusetts Attorney General's guide for tenants and your university's housing office are good places to start.",
+  "Worth checking before you sign:",
+  "- Move-in cost: first month, plus any last month's rent and security deposit. Get the list in writing.",
+  "- What's included: heat, hot water, electricity, internet. Listings often don't say, so ask.",
+  "- Lease dates: do they fit your school year? Can you sublet for the summer?",
+  "- Getting to campus in winter: walk, bike or shuttle.",
+  "- See the place (in person or on a live video call) before paying anything. Never wire money to someone you haven't verified.",
+  "- Keep the lease and every payment in writing.",
+  "Questions about tenant rights? The Massachusetts Attorney General's guide for tenants and your university's housing office can help.",
 ].join("\n");
 
-export const BASIC_INTRO = "I'm in basic mode, so I understand short answers about budget, move-in month, towns, distance from campus, rooms and lifestyle.";
+export const BASIC_INTRO = "Tap an answer, or type something short like “$1,200”, “June” or “Waltham”.";
 
 export const describeAnswer = (field, value) => {
   if (field === "budget_max") return `budget up to ${money(value)}`;

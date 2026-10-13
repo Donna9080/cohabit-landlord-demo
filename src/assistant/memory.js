@@ -83,7 +83,7 @@ const FIELDS = {
   move_in_month: (v, today) => {
     if (typeof v !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(v)) throw new Bad("Use a month like 2027-06.");
     const ahead = monthIndex(v) - monthIndex(today.slice(0, 7));
-    if (ahead < 0) throw new Bad("That month has already passed. Ask which year they mean.");
+    if (ahead < 0) throw new Bad("That month has already passed. Which year do you mean?");
     if (ahead > 24) throw new Bad("Pick a month within the next two years.");
     return v;
   },
