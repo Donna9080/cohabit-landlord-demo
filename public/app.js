@@ -309,14 +309,14 @@
       html: `
       <article class="prose">
         <h1 tabindex="-1">Privacy policy</h1>
-        <p class="muted">Last updated October 12, 2026. coHabit is a student project for shared student housing.</p>
+        <p class="muted">Last updated October 13, 2026. coHabit is a student project for shared student housing.</p>
 
         <h2>What we collect</h2>
         <ul>
           <li><strong>From Google when you sign in:</strong> your name, your email address, and Google's ID for your account. We ask Google only for basic sign-in information (openid, email, profile). We do not keep Google access tokens or your profile photo, and we never see your Google password.</li>
           <li><strong>Your account type:</strong> whether you chose landlord or renter.</li>
           <li><strong>If you are a landlord:</strong> the units you add: name, general area, monthly rent, rooms available, move-in date, description and status. If you choose to add one, the unit's street address and map pin (Massachusetts only), and whether renters see an approximate area or the exact location.</li>
-          <li><strong>If you are a renter:</strong> your questionnaire answers: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets and smoking. Also any “I'm interested” requests you send, with your note.</li>
+          <li><strong>If you are a renter:</strong> your questionnaire answers: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets and smoking. Also any “I'm interested” requests you send, with your note, and any roommate requests you send or receive, with the introduction and the messages you exchange after one is accepted.</li>
           <li><strong>If you use the assistant:</strong> your chat messages, the answers it learns from them (budget, move-in month, areas, distance from campus, rooms, lease length, lifestyle and chores), the results and confirmation cards it showed you, options you save, and a daily count of AI replies.</li>
           <li><strong>To keep you signed in:</strong> one cookie that holds your session. It can't be read by scripts and expires after 7 days without use.</li>
           <li><strong>To limit abuse:</strong> short-lived request counters that include your IP address. They are deleted within about a day.</li>
@@ -329,7 +329,8 @@
           <li><strong>Everyone:</strong> active units' listing details (name, area, rent, rooms, move-in date, description). Never the landlord's name or email.</li>
           <li><strong>A unit's location:</strong> by default renters see only an approximate area, a circle about 500 m wide, and never the street address. Only if the landlord chooses “Exact location” do renters see the pin and the address.</li>
           <li><strong>Only you:</strong> your inactive units, your assistant chat and saved options, and your questionnaire answers. Landlords cannot see your answers. Other renters cannot either, unless you turn on roommate matching.</li>
-          <li><strong>Other renters, only if you turn on roommate matching:</strong> renters who also turned it on can see your first name, a compatibility score, and the things you have in common (for example “Both early birds”). They see your email address only if you tick the separate box to share it. Both are off by default and you can turn them off again at any time.</li>
+          <li><strong>Other renters, only if you turn on roommate matching:</strong> renters who also turned it on can see your first name, a compatibility score, and the things you have in common (for example “Both early birds”). They see your budget range, move-in month, area and lifestyle answers only if you tick “Share my details with my matches”, and only when they share theirs too. They see your email address only if you tick the separate box to share it, and then only in Details. All of these are off by default and you can turn them off again at any time.</li>
+          <li><strong>A renter you send a roommate request to:</strong> sees your first name, your introduction and what you have in common. They can accept or decline; you can withdraw while it's waiting. Once accepted, you can message each other on coHabit; only the two of you can read those messages. A request doesn't share your email.</li>
           <li><strong>A landlord, only when you click “I'm interested” on their unit:</strong> that landlord sees your name, your email address and the note you wrote, so they can reply. You can withdraw the request at any time and it disappears from their list. Landlords never see your questionnaire answers.</li>
           <li><strong>Renters never see a landlord's name or email</strong> through coHabit. A renter only learns it if the landlord chooses to reply.</li>
           <li><strong>The coHabit admin:</strong> a list of users with name, email, account type, join date, and either a count of units or whether preferences are saved, plus daily totals of AI replies for the whole site. Not your questionnaire answers or your chat.</li>
@@ -346,7 +347,7 @@
         <p>coHabit runs on Cloudflare, which stores the database and processes requests on our behalf, and keeps short-term technical logs. Google handles the sign-in step. Maps and place suggestions come from MapTiler: your browser sends it the text you type in a place or address search and the map area you are viewing, but not who you are.</p>
 
         <h2>Your choices</h2>
-        <p>You can edit or delete your units and edit your answers at any time. To delete your account and everything saved with it, sign in, click your name in the top bar, and use <a href="/account">Delete my account</a>. It takes effect immediately. You can also remove coHabit's access in your Google Account under Security → Your connections to third-party apps.</p>
+        <p>You can edit or delete your units and edit your answers at any time. Deleting your account also deletes your roommate requests and messages. To delete your account and everything saved with it, sign in, click your name in the top bar, and use <a href="/account">Delete my account</a>. It takes effect immediately. You can also remove coHabit's access in your Google Account under Security → Your connections to third-party apps.</p>
 
         <p class="links"><a href="/terms">Terms of use</a> · <a href="/">Back to home</a></p>
       </article>`,
@@ -360,11 +361,12 @@
       html: `
       <article class="prose">
         <h1 tabindex="-1">Terms of use</h1>
-        <p class="muted">Last updated October 12, 2026. coHabit is a student project and is offered free of charge.</p>
+        <p class="muted">Last updated October 13, 2026. coHabit is a student project and is offered free of charge.</p>
         <ul>
           <li><strong>Listings are provided by landlords,</strong> or imported from other websites that allow coHabit to show them (tagged External, with a link to the original). Check details on the original listing. coHabit does not verify landlords, units or renters, and is not a party to any lease or agreement. Check details yourself before making any commitment or payment.</li>
           <li><strong>Be accurate and lawful.</strong> Only list units you have the right to offer. Only put a street address in the address field (it is hidden from renters unless you choose exact location). Don't post phone numbers, other people's personal information, or anything discriminatory, misleading or illegal.</li>
           <li><strong>The assistant gives suggestions, not decisions.</strong> It can make mistakes, so check details with the landlord. A suggested room or roommate is not an approval by a landlord or by coHabit. coHabit doesn't match people on personal characteristics such as race, religion, national origin, sex, gender identity, sexual orientation, disability, age, family status or source of income.</li>
+          <li><strong>Roommate requests and messages.</strong> Be respectful and honest in introductions and messages, and don't send phone numbers or addresses through coHabit. A request is an introduction only, and an “I'm interested” request doesn't reserve a room.</li>
           <li><strong>Matches are suggestions.</strong> They are based on the budget, area, timing and rooms you entered, and are not a recommendation or guarantee.</li>
           <li><strong>No guarantees.</strong> The service is provided as is. It may change, be unavailable, or be shut down, and saved information may be removed.</li>
           <li><strong>Accounts.</strong> We may remove content or accounts that break these terms.</li>
@@ -404,8 +406,8 @@
 
   // What goes under a listing card, depending on who is looking.
   function interestFooter(u) {
-    if (u.demo) return `<p class="small muted interest">Demo listing: it's made up, so there's no landlord to contact.</p>`;
-    if (u.external) return ""; // the card links to its source instead
+    if (u.demo) return `<div class="interest" data-interest="${esc(u.id)}"><button class="btn btn-small" type="button" data-action="interest-open" data-unit="${esc(u.id)}">I'm interested (preview)</button><p class="small muted">Demo listing: you can try the request, but nothing is sent.</p></div>`;
+    if (u.external) return `<p class="small muted interest">Listed on ${esc(u.source.name)}: contact them through the original listing.</p>`;
     if (u.sample) return `<p class="small muted interest">Sample listing: there is no landlord to contact.</p>`;
     if (!me.user) return `<p class="small interest"><a href="/renter">Sign in as a renter</a> to tell the landlord you're interested.</p>`;
     if (!isRenter()) return "";
@@ -418,7 +420,7 @@
       <form class="interest-form" data-unit="${id}" novalidate>
         <label class="small" for="note-${id}">Note to the landlord (optional)</label>
         <textarea id="note-${id}" name="message" maxlength="500" rows="3" placeholder="A line about you and when you'd like to move in"></textarea>
-        <p class="hint">The landlord will see your name and your email (${esc(me.user.email)}) so they can reply. Don't include phone numbers.</p>
+        <p class="hint">${unitId.startsWith("demo-") ? "Demo listing: this is a preview. Nothing will be sent." : `The landlord will see your name and your email (${esc(me.user.email)}) so they can reply. A request doesn't reserve the room. Don't include phone numbers.`}</p>
         <p class="field-error" role="alert"></p>
         <div class="actions">
           <button class="btn btn-small" type="submit">Send</button>
@@ -455,6 +457,12 @@
     const unitId = form.dataset.unit;
     const btn = form.querySelector("[type=submit]");
     const errorEl = form.querySelector(".field-error");
+    if (unitId.startsWith("demo-")) {
+      if (!(await confirmDialog({ title: "Send this request? (preview)", text: "This is a demo listing, so nothing will be sent. On a real listing, the landlord would see your name, email and note.", confirmLabel: "Preview send" }))) return;
+      form.closest("[data-interest]").innerHTML = `<p class="small saved">Demo only, nothing sent.</p>`;
+      return toast("Demo only, nothing sent.");
+    }
+    if (!(await confirmDialog({ title: "Send this request?", text: "The landlord will see your name, your email and your note, and can reply by email. A request doesn't reserve the room.", confirmLabel: "Send request" }))) return;
     btn.disabled = true;
     errorEl.textContent = "";
     try {
@@ -467,10 +475,8 @@
         return;
       }
     }
-    myInterests.add(unitId);
-    const box = interestBox(unitId);
-    if (box) box.innerHTML = interestState(unitId);
-    refreshContacted().catch(() => {});
+    setInterest(unitId, true);
+    toast("Request sent. The landlord can reply by email.");
   }
 
   async function withdrawInterest(unitId) {
@@ -481,10 +487,7 @@
       if (e.status === 401) return showView(errorView(e));
       if (e.status !== 404) return toast(e.message);
     }
-    myInterests.delete(unitId);
-    const box = interestBox(unitId);
-    if (box) box.innerHTML = interestState(unitId);
-    refreshContacted().catch(() => {});
+    setInterest(unitId, false);
   }
 
   async function removeInterest(id, button) {
@@ -1560,6 +1563,7 @@
   const CHORES = [["", "No preference"], ["rotating_schedule", "A chore schedule"], ["split_by_task", "Split by task"], ["as_needed", "As needed"]];
 
   let lastMatches = null;
+  let lastRoommates = null;
   let matchSort = "best";
 
   function matchesHtml(data) {
@@ -1590,25 +1594,7 @@
       );
     if (!data.roommates.length)
       return emptyState("No compatible renters yet", "Nobody else has your area and move-in month right now. Check back as more people join.");
-    return `<ul class="grid" role="list">${data.roommates
-      .map(
-        (m) => `
-      <li>
-        <article class="card">
-          <div class="card-top">
-            <span class="person"><span class="avatar" aria-hidden="true">${esc(initials(m.firstName))}</span><span class="name">${esc(m.firstName)}</span></span>
-            <span class="card-tags">${m.sample ? `<span class="tag" title="Fictional person for demonstration">Sample</span>` : ""}<span class="pill pill-ok" title="Compatibility score out of 100">${m.score}% compatible</span></span>
-          </div>
-          <div>
-            <p class="small muted">What you have in common</p>
-            <ul class="reasons">${m.shared.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
-          </div>
-          <hr />
-          ${m.email ? `<a class="card-link" href="mailto:${esc(m.email)}">${esc(m.email)}</a>` : `<span class="small muted">Hasn't shared contact details</span>`}
-        </article>
-      </li>`
-      )
-      .join("")}</ul>`;
+    return `<ul class="res-grid" role="list">${data.roommates.map((m, i) => personCard(m, `mm:${i}`, { save: false })).join("")}</ul>`;
   }
 
   // Saved answers at a glance, so the long form only opens when the renter wants to change something.
@@ -1634,7 +1620,7 @@
         <ul class="reasons" aria-label="How you like to live">
           ${life.map((l) => `<li>${esc(l)}</li>`).join("")}
           ${p.chores ? `<li>Chores: ${esc((CHORES.find((c) => c[0] === p.chores) || [])[1].toLowerCase())}</li>` : ""}
-          <li>${p.roommate_visible ? (p.share_email ? "Roommate matching on, email shared" : "Roommate matching on") : "Roommate matching off"}</li>
+          <li>${p.roommate_visible ? `Roommate matching on${p.share_email ? ", email shared" : ""}${p.share_profile ? ", details shared" : ""}` : "Roommate matching off"}</li>
         </ul>
       </section>`;
   }
@@ -1643,6 +1629,7 @@
     const blocked = gate("renter");
     if (blocked !== undefined) return blocked;
     const [{ preferences: p }, matches, mates, contacted] = await Promise.all([api("/api/renter/preferences"), api("/api/renter/matches"), api("/api/renter/roommates"), loadMyInterests()]);
+    lastRoommates = mates;
     const v = p || { budget_min: "", budget_max: "", move_in_month: "", area: "", rooms_needed: 1 };
     const lifestyle = Object.entries(CHOICES)
       .map(([k, [label, opts]]) => field(k, label, select(k, (p ? [] : [["", "Choose…"]]).concat(opts), v[k] || "")))
@@ -1679,6 +1666,8 @@
             <span><strong>Show me to compatible renters.</strong> They see your first name, a compatibility score and what you have in common. Not your last name, and not answers you don't share.</span></label>
           <label class="check"><input type="checkbox" id="f-share_email" name="share_email" ${p && p.share_email ? "checked" : ""} ${p && p.roommate_visible ? "" : "disabled"} />
             <span><strong>Let my roommate matches see my email</strong> (${esc(me.user.email)}) so they can contact me.</span></label>
+          <label class="check"><input type="checkbox" id="f-share_profile" name="share_profile" ${p && p.share_profile ? "checked" : ""} ${p && p.roommate_visible ? "" : "disabled"} />
+            <span><strong>Share my details with my matches:</strong> budget range, move-in month, area and lifestyle answers. You'll see the same from matches who share theirs.</span></label>
           <p class="hint">Both are off unless you tick them. You can turn them off again at any time.</p>
         </fieldset>
         <p class="form-error" id="form-error" role="alert"></p>
@@ -1701,7 +1690,12 @@
       <section aria-labelledby="roommates-heading">
         <div class="section-heading"><h2 id="roommates-heading">Possible roommates</h2><span class="muted small" id="roommate-count">${mates.roommates.length ? plural(mates.roommates.length, "person", "people") : ""}</span></div>
         <div id="roommates">${roommatesHtml(mates)}</div>
+      </section>
+      <section aria-labelledby="requests-heading">
+        <div class="section-heading"><h2 id="requests-heading">Roommate requests</h2><span class="count" id="req-count"></span></div>
+        <div id="requests-body"><p class="small muted">Loading…</p></div>
       </section>`,
+      mount: loadRequests,
     };
   }
 
@@ -1725,6 +1719,7 @@
     const body = formData(form, ["budget_min", "budget_max", "rooms_needed"]);
     body.roommate_visible = form.elements.roommate_visible.checked;
     body.share_email = body.roommate_visible && form.elements.share_email.checked;
+    body.share_profile = body.roommate_visible && form.elements.share_profile.checked;
     const btn = form.querySelector("[type=submit]");
     const label = btn.textContent;
     btn.disabled = true;
@@ -1799,22 +1794,23 @@
     if (s.kind === "person") {
       return `
         <li class="mini-card">
-          <div class="mini-top"><span class="person"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(s.firstName))}</span><span class="name">${esc(s.firstName)}</span></span>${s.sample ? `<span class="tag">Sample</span>` : ""}</div>
-          ${s.email ? `<a class="card-link small" href="mailto:${esc(s.email)}">${esc(s.email)}</a>` : `<p class="small muted">Hasn't shared contact details.</p>`}
+          <div class="mini-top"><span class="avatar-pic avatar-sm" aria-hidden="true">${esc(initials(s.firstName))}</span><span class="name">${esc(s.firstName)}</span>${s.sample ? `<span class="tag">Sample</span>` : ""}</div>
           <div class="mini-actions">${unsaveButton(s.savedId)}</div>
         </li>`;
     }
     const u = s.unit;
     return `
       <li class="mini-card">
-        <div class="mini-top"><h3 class="mini-title">${esc(u.name)}</h3>${u.sample ? `<span class="tag">Sample</span>` : ""}</div>
+        <div class="mini-top"><h3 class="mini-title">${esc(u.name)}</h3>${u.sample ? `<span class="tag">Sample</span>` : ""}${myInterests.has(u.id) ? `<span class="badge-status">Request sent</span>` : ""}</div>
         <p class="small muted">${money(u.monthly_rent)}/mo · ${esc(u.area)}</p>
         <div class="mini-actions"><button class="btn btn-small btn-quiet" type="button" data-action="chat-details" data-key="${esc(key)}">Details</button>${unsaveButton(s.savedId)}</div>
       </li>`;
   }
 
-  // A simple drawing per kind of place, used as the demo listings' picture. Drawn here; nothing is loaded.
+  // Pictures: a listing's own photo when it has one (with its license), otherwise a drawing made here.
+  // Demo pictures are labeled. Nothing is loaded from elsewhere for the drawings.
   const ART = {
+    house: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
     bed: '<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>',
     calendar: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
     key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>',
@@ -1823,14 +1819,24 @@
     studio: '<path d="M3 21V8l9-5 9 5v13"/><rect x="8" y="12" width="8" height="9"/>',
   };
   const ART_FOR = { Studio: "studio", "Private room": "bed", "Shared room": "people", "Whole apartment": "building", Sublet: "calendar", "Lease takeover": "key", "Replacing a roommate": "people" };
-  const demoArt = (kind) =>
-    `<div class="demo-art" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ART[ART_FOR[kind] || "bed"]}</svg><span>${esc(kind || "Room")} · demo picture</span></div>`;
+  function roomPicture(u) {
+    if (u.photo && u.photo.url && u.photo.license)
+      return `<div class="card-pic"><img src="${esc(u.photo.url)}" alt="Photo of ${esc(u.name)}" loading="lazy" /><span class="pic-label">${esc(u.photo.license)}</span></div>`;
+    return `<div class="card-pic is-art${u.demo ? " is-demo" : ""}"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ART[ART_FOR[u.kind] || "house"]}</svg><span class="pic-label">${u.demo ? `${esc(u.kind || "Room")} · demo picture` : "No photo yet"}</span></div>`;
+  }
   const demoTag = `<span class="tag tag-demo" title="Made up for Demo mode">Demo</span>`;
+  const sampleTagSmall = `<span class="tag" title="Fictional listing for demonstration">Sample</span>`;
+  const priceLine = (u) => `${money(u.monthly_rent)}/mo${u.rent_basis === "unit" ? " whole place" : ""}`;
   const rentLine = (u) => (u.rent_basis === "unit" ? `${money(u.monthly_rent)}/mo for the whole place · ${plural(u.bedrooms || u.rooms_available, "bedroom", "bedrooms")}` : `${money(u.monthly_rent)}/mo${u.demo ? " per room" : ""} · ${plural(u.rooms_available, "room", "rooms")}`);
   const demoFacts = (u) =>
     u.demo
       ? `<p class="facts-line">${[u.lease && u.lease.label, u.utilities, u.furnished === true ? "Furnished" : u.furnished === false ? "Unfurnished" : "", u.transit].filter(Boolean).map(esc).join(" · ")}</p>`
       : "";
+  const matchPill = (m, person) => (m === "exact" ? `<span class="pill pill-ok">${person ? "Strong match" : "Matches everything"}</span>` : `<span class="pill pill-warn">Partial match</span>`);
+  // The card: the two strongest reasons and the most important mismatch. Everything else is in Details.
+  const shortReasons = (c) =>
+    (c.highlights && c.highlights.length ? `<ul class="fit-list" aria-label="Why it fits">${c.highlights.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : "") +
+    (c.mainMiss ? `<ul class="miss-list" aria-label="What doesn't fit"><li>${esc(c.mainMiss)}</li></ul>` : "");
 
   function roomCard(c) {
     const key = `res:${c.ref}`;
@@ -1840,41 +1846,67 @@
       ? unsaveButton(c.savedId)
       : u.demo
         ? ""
-        : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="room" data-unit="${esc(u.id)}" aria-pressed="false">Save</button>`;
+        : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="room" data-unit="${esc(u.id)}" aria-pressed="false" title="A bookmark for you. Nobody is told.">Save</button>`;
     return `
       <li>
-        <article class="res-card${resSelected === c.ref ? " selected" : ""}${u.demo ? " is-demo" : ""}" data-ref="${esc(c.ref)}" tabindex="-1">
-          ${u.demo ? demoArt(u.kind) : ""}
-          <div class="res-card-top"><span class="ref">${esc(c.ref)}</span><h3 class="mini-title">${esc(u.name)}</h3>${u.demo ? demoTag : ""}${u.sample ? `<span class="tag" title="Fictional listing for demonstration">Sample</span>` : ""}</div>
-          <p class="small muted">${esc(u.area)}${c.km != null ? ` · about ${c.km} km from Brandeis` : ""}</p>
-          <p class="mini-stats">${rentLine(u)} · from ${fmtDate(u.move_in_date)}</p>
-          ${demoFacts(u)}
-          ${fitLists(c)}
-          <div class="mini-actions">
-            <button class="btn btn-small btn-quiet" type="button" data-action="chat-details" data-key="${esc(key)}">Details</button>
-            ${save}
-            ${u.location ? `<button class="btn btn-small btn-quiet" type="button" data-action="res-on-map" data-ref="${esc(c.ref)}">On map</button>` : ""}
-            ${c.interestSent ? `<span class="saved small">Request sent</span>` : ""}
+        <article class="res-card${resSelected === c.ref ? " selected" : ""}${u.demo ? " is-demo" : ""}" data-ref="${esc(c.ref)}" tabindex="-1" aria-label="${esc(c.ref)}: ${esc(u.name)}">
+          ${roomPicture(u)}
+          <div class="res-body">
+            <div class="res-card-top"><span class="ref">${esc(c.ref)}</span>${matchPill(c.match)}${u.demo ? demoTag : ""}${u.sample ? sampleTagSmall : ""}${!u.demo && myInterests.has(u.id) ? `<span class="badge-status">Request sent</span>` : ""}</div>
+            <h3 class="mini-title">${esc(u.name)}</h3>
+            <p class="small muted">${esc(u.area)}${c.km != null ? ` · about ${c.km} km from Brandeis` : ""}</p>
+            <p class="mini-stats">${priceLine(u)} · from ${fmtDate(u.move_in_date)}</p>
+            ${shortReasons(c)}
+            <div class="mini-actions">
+              <button class="btn btn-small" type="button" data-action="chat-details" data-key="${esc(key)}">Details</button>
+              ${save}
+              ${u.location ? `<button class="btn btn-small btn-quiet" type="button" data-action="res-on-map" data-ref="${esc(c.ref)}">On map</button>` : ""}
+            </div>
           </div>
         </article>
       </li>`;
   }
 
-  function personCard(c) {
-    const save = c.savedId
+  // ── People: one card and one Details view, used by the assistant and My matches ──
+  const REQUEST_BADGE = {
+    "out:pending": "Request sent",
+    "in:pending": "Wants to connect",
+    "out:accepted": "Connected",
+    "in:accepted": "Connected",
+    "out:declined": "Declined",
+    "in:declined": "You declined",
+  };
+  const requestBadge = (r) => (r && REQUEST_BADGE[`${r.direction}:${r.status}`] ? `<span class="badge-status">${REQUEST_BADGE[`${r.direction}:${r.status}`]}</span>` : "");
+
+  // The main button: Connect, Respond, Message, or nothing while waiting.
+  function personPrimary(c, key) {
+    const r = c.request;
+    if (!r) return `<button class="btn btn-small" type="button" data-action="connect-open" data-key="${esc(key)}">Connect</button>`;
+    if (r.status === "pending" && r.direction === "in") return `<button class="btn btn-small" type="button" data-action="person-details" data-key="${esc(key)}">Respond</button>`;
+    if (r.status === "accepted") return `<button class="btn btn-small" type="button" data-action="messages-open" data-id="${esc(r.id)}" data-name="${esc(c.firstName)}">Message</button>`;
+    return "";
+  }
+
+  function personCard(c, key, { save = true } = {}) {
+    chatCards.set(key, c);
+    const saveBtn = !save || c.demo ? "" : c.savedId
       ? unsaveButton(c.savedId)
-      : c.demo
-        ? ""
-        : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="person" data-ref="${esc(c.ref)}" data-first="${esc(c.firstName)}" aria-pressed="false">Save</button>`;
+      : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="person" data-ref="${esc(c.ref)}" data-first="${esc(c.firstName)}" aria-pressed="false" title="A bookmark for you. Nobody is told.">Save</button>`;
     return `
       <li>
-        <article class="res-card${c.demo ? " is-demo" : ""}" data-ref="${esc(c.ref)}" tabindex="-1">
-          <div class="res-card-top"><span class="ref">${esc(c.ref)}</span><span class="person"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(c.firstName))}</span><span class="name">${esc(c.firstName)}</span></span>
-            <span class="card-tags">${c.demo ? demoTag : ""}${c.sample ? `<span class="tag" title="Fictional person for demonstration">Sample</span>` : ""}<span class="pill pill-ok" title="Compatibility score out of 100, worked out by coHabit">${c.score}% compatible</span></span></div>
+        <article class="res-card person-card${c.demo ? " is-demo" : ""}" data-ref="${esc(c.ref || "")}" tabindex="-1" aria-label="${esc(c.firstName)}">
+          <div class="person-head">
+            <span class="avatar-pic${c.demo ? " is-demo" : ""}" aria-hidden="true">${esc(initials(c.firstName))}</span>
+            <div class="person-name"><h3 class="mini-title">${esc(c.firstName)}</h3><span class="small muted" title="Compatibility score out of 100, worked out by coHabit">${c.score}% compatible</span></div>
+          </div>
           ${c.about ? `<p class="small muted">${esc(c.about)}</p>` : ""}
-          ${fitLists(c, "What you have in common")}
-          ${c.demo ? `<p class="small muted">Demo profile: made up, with no contact details.</p>` : c.email ? `<a class="card-link small" href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : `<p class="small muted">Hasn't shared contact details.</p>`}
-          <div class="mini-actions">${save}</div>
+          <div class="res-card-top">${matchPill(c.match || (c.mainMiss ? "partial" : "exact"), true)}${c.demo ? demoTag : ""}${c.sample ? sampleTagSmall : ""}${requestBadge(c.request)}</div>
+          ${shortReasons(c)}
+          <div class="mini-actions">
+            ${personPrimary(c, key)}
+            <button class="btn btn-small btn-quiet" type="button" data-action="person-details" data-key="${esc(key)}">Details</button>
+            ${saveBtn}
+          </div>
         </article>
       </li>`;
   }
@@ -1930,6 +1962,26 @@
       </div>`;
   }
 
+  // Cards grouped as "Matches everything" and "Partial matches", in the order the search ranked them.
+  function groupedCards(items, toHtml, { exactLabel, partialLabel, partialNote }) {
+    const exact = items.filter((c) => c.match === "exact");
+    const partial = items.filter((c) => c.match !== "exact");
+    return (
+      (exact.length ? `<h3 class="res-group">${exactLabel} <span class="count">${exact.length}</span></h3><ul class="res-grid" role="list">${exact.map(toHtml).join("")}</ul>` : "") +
+      (partial.length
+        ? `<h3 class="res-group">${partialLabel} <span class="count">${partial.length}</span></h3><p class="small muted res-group-note">${partialNote}</p><ul class="res-grid" role="list">${partial.map(toHtml).join("")}</ul>`
+        : "")
+    );
+  }
+
+  const VISIBLE = 6;
+  // "2 match everything, 1 partly": the same words the guided chat uses.
+  function exactSplit(total, exact, people) {
+    if (exact >= total) return people ? (total === 1 ? "a strong match" : "all strong matches") : total === 1 ? "it matches everything" : "all match everything";
+    if (!exact) return total === 1 ? "a partial match" : "all partial matches";
+    return people ? `${exact} strong, ${total - exact} partial` : `${exact} ${exact === 1 ? "matches" : "match"} everything, ${total - exact} partly`;
+  }
+
   function roomsParts(rooms) {
     if (!rooms || rooms.status === "need_more") {
       const left = rooms && rooms.missing.length ? ` Still to go: ${esc(rooms.missing.join(", "))}.` : "";
@@ -1937,11 +1989,11 @@
     }
     if (rooms.status === "none") return { head: "", list: noRoomsHtml(rooms), map: false };
     const showMap = resView === "map";
-    const items = showMap || resShowAll ? rooms.items : rooms.items.slice(0, 3);
-    const count = rooms.total > rooms.items.length ? `Best ${rooms.items.length} of ${rooms.total} that fit` : rooms.total === 1 ? "1 room fits" : `${rooms.total} rooms fit`;
+    const items = showMap || resShowAll ? rooms.items : rooms.items.slice(0, VISIBLE);
+    const count = `${rooms.total === 1 ? "1 room fits" : `${rooms.total} rooms fit`} your must-haves${rooms.preliminary ? " so far" : ""}: ${exactSplit(rooms.total, rooms.exact)}${rooms.total > rooms.items.length ? ` (best ${rooms.items.length} shown)` : ""}`;
     const head = `
       <div class="res-head">
-        <div><h2 class="res-title">Rooms</h2><p class="small muted">${count}${rooms.preliminary ? ` so far` : ""}</p></div>
+        <div><h2 class="res-title">Rooms</h2><p class="small muted">${count}</p></div>
         <div class="seg" role="group" aria-label="Show rooms as">
           <button type="button" data-action="res-view" data-view="list" aria-pressed="${!showMap}">List</button>
           <button type="button" data-action="res-view" data-view="map" aria-pressed="${showMap}">Map</button>
@@ -1949,8 +2001,12 @@
       </div>
       ${rooms.preliminary ? `<p class="prelim">Early results. Add your ${esc(rooms.missing.join(" and "))} to narrow them down.</p>` : ""}
       ${rooms.samplesHidden ? `<p class="small muted">${plural(rooms.samplesHidden, "sample (fictional) listing also fits", "sample (fictional) listings also fit")}. They're hidden unless you ask for them.</p>` : ""}`;
-    const more = !showMap && !resShowAll && rooms.items.length > 3 ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${rooms.items.length - 3} more</button>` : "";
-    return { head, list: `<ul class="res-grid" role="list" aria-label="Rooms">${items.map(roomCard).join("")}</ul>${more}`, map: showMap };
+    const more = !showMap && !resShowAll && rooms.items.length > VISIBLE ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${rooms.items.length - VISIBLE} more</button>` : "";
+    return {
+      head,
+      list: groupedCards(items, roomCard, { exactLabel: "Matches everything", partialLabel: "Partial matches", partialNote: "These meet your must-haves but miss something flexible; each card says what." }) + more,
+      map: showMap,
+    };
   }
 
   function peopleParts(people) {
@@ -1965,11 +2021,16 @@
       };
     if (people.status === "none")
       return { head: "", list: emptyState("No roommate matches yet", "Nobody open to roommates fits your area, timing and lifestyle yet. Check back as more students join.") };
-    const items = resShowAll ? people.items : people.items.slice(0, 3);
-    const more = !resShowAll && people.items.length > 3 ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${people.items.length - 3} more</button>` : "";
+    const items = resShowAll ? people.items : people.items.slice(0, VISIBLE);
+    const more = !resShowAll && people.items.length > VISIBLE ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${people.items.length - VISIBLE} more</button>` : "";
     return {
-      head: `<div class="res-head"><div><h2 class="res-title">Roommates</h2><p class="small muted">${people.total === 1 ? "1 person fits" : `${people.total} people fit`}. Only students who chose to be found.</p></div></div>`,
-      list: `<ul class="res-grid" role="list" aria-label="Roommates">${items.map(personCard).join("")}</ul>${more}`,
+      head: `<div class="res-head"><div><h2 class="res-title">Roommates</h2><p class="small muted">${people.total === 1 ? "1 person fits" : `${people.total} people fit`}: ${exactSplit(people.total, people.exact, true)}. Only students who chose to be found.</p></div></div>`,
+      list:
+        groupedCards(items, (c) => personCard(c, `res:${c.ref}`), {
+          exactLabel: "Strong matches",
+          partialLabel: "Partial matches",
+          partialNote: "Not every lifestyle answer matches; Details says where.",
+        }) + more,
     };
   }
 
@@ -2147,7 +2208,8 @@
       chat.results = d.results;
       resSelected = null;
       resShowAll = false;
-      renderResults();
+      if (d.event) chat.messages.push(d.event);
+      refreshChat();
       toast(d.demo ? "Demo mode on: made-up listings and people." : "Demo mode off: real listings and people again.");
     } catch (e) {
       if (e.status === 401) return showView(errorView(e));
@@ -2158,7 +2220,10 @@
   function applyChatUpdate(d) {
     if (d.memory) chat.memory = d.memory;
     if (d.results) chat.results = d.results;
-    renderResults();
+    if (d.event) {
+      chat.messages.push(d.event);
+      refreshChat();
+    } else renderResults();
   }
 
   async function savePref(forget) {
@@ -2218,7 +2283,7 @@
           <p class="action-title">${a.roommateOptIn ? "Turn on roommate matching?" : "Save these answers to your profile?"}</p>
           ${a.roommateOptIn ? `<p class="small">Renters who also turned it on will see your first name, a compatibility score and what you have in common. You can turn it off any time.</p>` : ""}
           <table class="changes"><tbody>${rows}</tbody></table>
-          ${pending ? `${a.roommateOptIn ? `<label class="check small"><input type="checkbox" name="share_email" /><span>Also let my roommate matches see my email (${esc(me.user.email)})</span></label>` : ""}${buttons(a.roommateOptIn ? "Turn on and save" : "Save to my profile")}` : status}
+          ${pending ? `${a.roommateOptIn ? `<label class="check small"><input type="checkbox" name="share_email" /><span>Also let my roommate matches see my email (${esc(me.user.email)})</span></label><label class="check small"><input type="checkbox" name="share_profile" /><span>Also share my budget, area, move-in month and lifestyle answers with matches who share theirs</span></label>` : ""}${buttons(a.roommateOptIn ? "Turn on and save" : "Save to my profile")}` : status}
         </div>`;
     }
     return `
@@ -2236,6 +2301,7 @@
   }
 
   function chatMessage(m, isLast) {
+    if (m.event) return `<li class="msg-event"><span>${esc(m.text)}</span></li>`;
     if (m.role === "user") return `<li class="msg msg-user"><span class="sr-only">You said:</span><div class="bubble">${richText(m.text)}</div></li>`;
     return `
       <li class="msg msg-bot">
@@ -2256,8 +2322,11 @@
           <div class="quick" aria-label="Answers">${GOALS.map((q) => `<button class="chip" type="button" data-action="chat-say" data-text="${esc(q)}">${esc(q)}</button>`).join("")}</div>
         </li>`;
     }
-    const last = chat.messages[chat.messages.length - 1];
-    return chat.messages.map((m) => chatMessage(m, m === last)).join("");
+    // Answer buttons belong to the latest question, even if notes about chip changes came after it.
+    const lastUser = chat.messages.map((m) => m.role).lastIndexOf("user");
+    let lastReply = -1;
+    chat.messages.forEach((m, i) => m.role === "assistant" && !m.event && (lastReply = i));
+    return chat.messages.map((m, i) => chatMessage(m, i === lastReply && lastReply > lastUser)).join("");
   }
 
   function memoryHtml() {
@@ -2332,13 +2401,13 @@
           <button role="tab" type="button" id="tab-chat" data-action="pane" data-pane="chat" aria-controls="pane-chat" aria-selected="${chatPane === "chat"}">Chat</button>
           <button role="tab" type="button" id="tab-results" data-action="pane" data-pane="results" aria-controls="pane-results" aria-selected="${chatPane === "results"}">Results <span class="count" id="results-count"></span></button>
         </div>
-        <div class="asst-grid">
           <section class="asst-results" id="pane-results" aria-label="Results">
             <div id="res-demo"></div>
             <div id="res-chips"></div>
             <div id="res-top"></div>
             <div class="res-map-box" id="res-map-box" hidden><div class="res-map" id="res-map"></div><p class="small muted" id="res-map-note"></p></div>
             <div id="res-list"></div>
+            <details class="fold" id="fold-requests"><summary>Roommate requests <span class="count" id="req-count"></span></summary><div id="requests-body"><p class="small muted">Loading…</p></div></details>
             <details class="fold"><summary>All your answers</summary><div id="side-memory">${memoryHtml()}</div></details>
             <details class="fold"><summary>Saved <span class="count" id="saved-count">${chat.saved.length || ""}</span></summary><div id="side-saved">${savedHtml()}</div></details>
             <p class="links small">Prefer to browse? <a href="/listings">All listings</a> · <a href="/renter">My matches and questionnaire</a></p>
@@ -2358,12 +2427,12 @@
             </form>
             <p class="field-error" id="chat-error" role="alert"></p>
           </section>
-        </div>
       </div>`,
       mount: () => {
         document.getElementById("chat-clear").disabled = !chat.messages.length;
         renderResults();
         scrollChat();
+        loadRequests();
       },
     };
   }
@@ -2477,6 +2546,8 @@
       if (note) body.note = note.value;
       const share = card.querySelector("input[name=share_email]");
       if (share) body.shareEmail = share.checked;
+      const profile = card.querySelector("input[name=share_profile]");
+      if (profile) body.shareProfile = profile.checked;
     }
     card.querySelectorAll("button").forEach((b) => (b.disabled = true));
     errorEl.textContent = "";
@@ -2493,6 +2564,7 @@
     }
   }
 
+  // ── Details: a room (the existing details box) or a person ──
   function openChatDetails(key) {
     const c = chatCards.get(key);
     const dialog = document.getElementById("details");
@@ -2505,17 +2577,251 @@
           ? `<p class="small muted">The landlord shares an approximate area only (about 500 m wide), not the street address.</p>`
           : `<p class="small muted">No map location given.</p>`;
     dialog.querySelector(".details-body").innerHTML = `
-      <div class="card-top"><h2 id="details-title" class="card-title">${esc(u.name)}</h2>${u.demo ? demoTag : u.sample ? `<span class="tag">Sample (fictional)</span>` : ""}</div>
+      ${roomPicture(u)}
+      <div class="card-top"><h2 id="details-title" class="card-title">${esc(u.name)}</h2><span class="card-tags">${c.match ? matchPill(c.match) : ""}${u.demo ? demoTag : u.sample ? `<span class="tag">Sample (fictional)</span>` : ""}</span></div>
       <p class="muted small">${esc(u.area)}${c.km != null ? ` · about ${c.km} km from Brandeis in a straight line` : ""}</p>
       ${where}
       <p class="mini-stats">${rentLine(u)} · from ${fmtDate(u.move_in_date)}</p>
-      ${u.demo ? demoArt(u.kind) : ""}
       ${u.description ? `<p class="desc">${esc(u.description)}</p>` : `<p class="small muted">No description.</p>`}
       ${demoFacts(u)}
-      ${fitLists(c)}
-      ${u.demo ? `<p class="hint">Demo listing: made up so you can try coHabit. It isn't available and nobody can be contacted.</p>` : `<p class="hint">Listings don't record lease length, utilities, furnishing or fees unless the description says so. Ask the landlord.</p>`}
+      ${c.fits && (c.fits.length || c.misses.length) ? `<h3 class="details-h">How it fits</h3>${fitLists(c)}` : ""}
+      ${u.demo ? `<p class="hint">Demo listing: made up so you can try coHabit. It isn't available.</p>` : `<p class="hint">Listings don't record lease length, utilities, furnishing or fees unless the description says so. Ask the landlord.</p>`}
       ${interestFooter(u)}`;
+    if (!dialog.open) dialog.showModal();
+  }
+
+  function personDetailsHtml(c, key) {
+    const r = c.request;
+    const why = !c.theyShare
+      ? `${esc(c.firstName)} hasn't chosen to share their budget, area, move-in month or lifestyle answers.`
+      : !c.youShare
+        ? `${esc(c.firstName)} shares these with matches who share theirs. Turn on “Share my details with my matches” in <a href="/renter">your preferences</a> to see them.`
+        : "";
+    const profile = c.details
+      ? `<dl class="pdetails">
+           <div><dt>Budget</dt><dd>${esc(c.details.budget)}</dd></div>
+           <div><dt>Move-in</dt><dd>${esc(c.details.moveIn)}</dd></div>
+           <div><dt>Looking in</dt><dd>${esc(c.details.area)}</dd></div>
+         </dl>
+         <h3 class="details-h">Lifestyle</h3><ul class="reasons" aria-label="Lifestyle">${c.details.lifestyle.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>`
+      : `<p class="small muted">${why}</p>`;
+    const differences = c.differences
+      ? c.differences.length
+        ? `<ul class="miss-list">${c.differences.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>`
+        : `<p class="small muted">None: your lifestyle answers match.</p>`
+      : `<p class="small muted">${c.differenceCount ? `${plural(c.differenceCount, "lifestyle answer differs", "lifestyle answers differ")}. Talk them through before deciding.` : "None: your lifestyle answers match."}</p>`;
+    let actions = "";
+    if (c.demo) actions = `<button class="btn" type="button" data-action="connect-open" data-key="${esc(key)}">Connect (preview)</button>`;
+    else if (!r) actions = `<button class="btn" type="button" data-action="connect-open" data-key="${esc(key)}">Connect</button>`;
+    else if (r.status === "pending" && r.direction === "out") actions = `<button class="btn btn-quiet" type="button" data-action="req-withdraw" data-id="${esc(r.id)}">Withdraw request</button>`;
+    else if (r.status === "pending") actions = `<button class="btn btn-quiet" type="button" data-action="req-decline" data-id="${esc(r.id)}">Decline</button><button class="btn" type="button" data-action="req-accept" data-id="${esc(r.id)}">Accept</button>`;
+    else if (r.status === "accepted") actions = `<button class="btn" type="button" data-action="messages-open" data-id="${esc(r.id)}" data-name="${esc(c.firstName)}">Message</button>`;
+    return `
+      <div class="person-head big">
+        <span class="avatar-pic${c.demo ? " is-demo" : ""}" aria-hidden="true">${esc(initials(c.firstName))}</span>
+        <div class="person-name"><h2 id="details-title" class="card-title">${esc(c.firstName)}</h2>${c.about ? `<p class="small muted">${esc(c.about)}</p>` : ""}</div>
+        <span class="pill pill-ok">${c.score}% compatible</span>
+      </div>
+      <div class="res-card-top">${matchPill(c.match || (c.mainMiss ? "partial" : "exact"), true)}${c.demo ? demoTag : ""}${c.sample ? sampleTagSmall : ""}${requestBadge(r)}</div>
+      ${profile}
+      <h3 class="details-h">What you have in common</h3>
+      <ul class="fit-list">${c.fits.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+      <h3 class="details-h">Differences</h3>
+      ${differences}
+      ${c.email ? `<p class="small">Email they chose to share: <a href="mailto:${esc(c.email)}">${esc(c.email)}</a></p>` : ""}
+      <p class="hint">${
+        c.demo
+          ? "Demo profile: made up. Connecting is a preview only; nothing is sent."
+          : r && r.status === "pending" && r.direction === "in"
+            ? `${esc(c.firstName)} sent you a request. Accepting lets you message each other here; your email stays private.`
+            : r && r.status === "accepted"
+              ? "You're connected. Messages stay on coHabit."
+              : "Connecting sends your first name and your note. Your email stays private unless you chose to share it with matches."
+      }</p>
+      <div class="actions details-actions person-actions"><button class="btn btn-quiet" type="button" data-action="details-close">Close</button>${actions}</div>`;
+  }
+
+  function openPersonDetails(key) {
+    const c = chatCards.get(key);
+    const dialog = document.getElementById("details");
+    if (!c || !dialog) return;
+    dialog.querySelector(".details-body").innerHTML = personDetailsHtml(c, key);
+    dialog.dataset.person = key;
+    if (!dialog.open) dialog.showModal();
+  }
+
+  // ── Connect: an editable introduction, sent only on "Send request" ──
+  function openConnect(key) {
+    const c = chatCards.get(key);
+    const dialog = document.getElementById("connect");
+    if (!c || !dialog) return;
+    const common = (c.highlights || []).map((h) => h[0].toLowerCase() + h.slice(1));
+    document.getElementById("connect-title").textContent = c.demo ? `Introduce yourself to ${c.firstName} (preview)` : `Introduce yourself to ${c.firstName}`;
+    document.getElementById("connect-info").textContent = c.demo
+      ? "Demo profile: this is a preview. Nothing will be sent."
+      : `${c.firstName} will see your first name, this note, and what you have in common. Nothing is sent until you click Send request.`;
+    document.getElementById("connect-intro").value = `Hi ${c.firstName}! ${common.length ? `I saw we have a few things in common (${common.join("; ")}). ` : ""}Want to talk about rooming together?`;
+    document.getElementById("connect-send").textContent = c.demo ? "Preview send" : "Send request";
+    document.getElementById("connect-error").textContent = "";
+    dialog.dataset.key = key;
     dialog.showModal();
+    document.getElementById("connect-intro").focus();
+  }
+
+  async function sendConnect() {
+    const dialog = document.getElementById("connect");
+    const c = chatCards.get(dialog.dataset.key);
+    const intro = document.getElementById("connect-intro").value;
+    const errorEl = document.getElementById("connect-error");
+    if (!c) return dialog.close();
+    if (c.demo) {
+      dialog.close();
+      toast("Demo only, nothing sent.");
+      const box = document.querySelector("#details .details-actions");
+      if (box && !box.querySelector(".demo-sent")) box.insertAdjacentHTML("afterbegin", `<p class="small muted demo-sent">Demo only, nothing sent.</p>`);
+      return;
+    }
+    const send = document.getElementById("connect-send");
+    send.disabled = true;
+    errorEl.textContent = "";
+    try {
+      const d = await api("/api/roommates/requests", { method: "POST", body: { handle: c.handle, intro } });
+      c.request = { id: d.request.id, status: "pending", direction: "out" };
+      dialog.close();
+      toast(`Request sent to ${c.firstName}. Nothing else is shared unless they accept.`);
+      afterPeopleChange(dialog.dataset.key);
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      errorEl.textContent = e.message;
+    } finally {
+      send.disabled = false;
+    }
+  }
+
+  // Keeps every place a person shows up in step after a request changes.
+  function afterPeopleChange(key) {
+    if (document.getElementById("res-top")) renderResults();
+    if (document.getElementById("roommates")) document.getElementById("roommates").innerHTML = roommatesHtml(lastRoommates);
+    const dialog = document.getElementById("details");
+    if (dialog.open && dialog.dataset.person && chatCards.get(dialog.dataset.person)) dialog.querySelector(".details-body").innerHTML = personDetailsHtml(chatCards.get(dialog.dataset.person), dialog.dataset.person);
+    loadRequests();
+  }
+
+  // ── Requests: incoming, sent, connected ──
+  let lastRequests = null;
+  async function loadRequests() {
+    const body = document.getElementById("requests-body");
+    if (!body) return;
+    try {
+      lastRequests = await api("/api/roommates/requests");
+    } catch {
+      body.innerHTML = `<p class="small muted">Couldn't load your requests. Try again in a moment.</p>`;
+      return;
+    }
+    body.innerHTML = requestsHtml(lastRequests);
+    const count = document.getElementById("req-count");
+    if (count) count.textContent = lastRequests.incoming.length || "";
+    const fold = document.getElementById("fold-requests");
+    if (fold && lastRequests.incoming.length) fold.open = true;
+  }
+
+  function requestsHtml(d) {
+    const none = !d.incoming.length && !d.outgoing.length && !d.connected.length && !d.closed.length;
+    if (none) return `<p class="small muted">No requests yet. Tap Connect on a roommate match to introduce yourself.</p>`;
+    const row = (r, extra) => `
+      <li class="req">
+        <div class="req-top"><span class="avatar-pic avatar-sm" aria-hidden="true">${esc(initials(r.firstName))}</span><strong>${esc(r.firstName)}</strong>${requestBadge(r)}</div>
+        ${r.intro ? `<p class="small desc">“${esc(r.intro)}”</p>` : ""}
+        ${extra || ""}
+      </li>`;
+    const commonLine = (r) =>
+      r.shared && r.shared.length ? `<p class="small muted">In common: ${esc(r.shared.slice(0, 3).join(", "))}${r.details ? ` · Budget ${esc(r.details.budget)}, ${esc(r.details.area)}` : ""}</p>` : "";
+    const section = (title, list, extra) => (list.length ? `<h3 class="details-h">${title}</h3><ul class="reqs" role="list">${list.map((r) => row(r, extra(r))).join("")}</ul>` : "");
+    return (
+      section("Wants to connect with you", d.incoming, (r) =>
+        `${commonLine(r)}<div class="actions"><button class="btn btn-small" type="button" data-action="req-accept" data-id="${esc(r.id)}">Accept</button><button class="btn btn-small btn-quiet" type="button" data-action="req-decline" data-id="${esc(r.id)}">Decline</button></div>`
+      ) +
+      section("Connected", d.connected, (r) => `<div class="actions"><button class="btn btn-small" type="button" data-action="messages-open" data-id="${esc(r.id)}" data-name="${esc(r.firstName)}">Message${r.messages ? ` (${r.messages})` : ""}</button></div>`) +
+      section("Waiting for a reply", d.outgoing, (r) => `<div class="actions"><button class="btn btn-small btn-quiet" type="button" data-action="req-withdraw" data-id="${esc(r.id)}">Withdraw</button></div>`) +
+      section("Earlier", d.closed, () => "")
+    );
+  }
+
+  async function decideRequest(id, action) {
+    if (action === "withdraw" && !(await confirmDialog({ title: "Withdraw your request?", text: "They won't see it any more. You can send a new one later.", confirmLabel: "Withdraw" }))) return;
+    if (action === "decline" && !(await confirmDialog({ title: "Decline this request?", text: "They'll see it was declined and can't send you another.", confirmLabel: "Decline" }))) return;
+    try {
+      const d = await api(`/api/roommates/requests/${encodeURIComponent(id)}`, { method: "POST", body: { action } });
+      toast(d.message);
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      toast(e.message);
+    }
+    // Refresh everything that shows this person's status.
+    if (document.getElementById("res-top")) await reloadChat();
+    else if (document.getElementById("roommates")) {
+      lastRoommates = await api("/api/renter/roommates");
+      document.getElementById("roommates").innerHTML = roommatesHtml(lastRoommates);
+    }
+    const dialog = document.getElementById("details");
+    if (dialog.open && dialog.dataset.person) dialog.close();
+    loadRequests();
+  }
+
+  // ── Messages between two connected renters ──
+  async function openMessages(id, name) {
+    const dialog = document.getElementById("messages");
+    document.getElementById("messages-title").textContent = `Messages with ${name || "your match"}`;
+    document.getElementById("msgs-error").textContent = "";
+    dialog.dataset.id = id;
+    document.getElementById("msgs-log").innerHTML = `<li class="small muted">Loading…</li>`;
+    if (!dialog.open) dialog.showModal();
+    try {
+      renderMessages(await api(`/api/roommates/requests/${encodeURIComponent(id)}/messages`));
+    } catch (e) {
+      document.getElementById("msgs-log").innerHTML = `<li class="small muted">${esc(e.message)}</li>`;
+    }
+    document.getElementById("msgs-input").focus();
+  }
+
+  function renderMessages(d) {
+    const log = document.getElementById("msgs-log");
+    log.innerHTML = d.messages.length
+      ? d.messages.map((m) => `<li class="msg ${m.mine ? "msg-user" : "msg-bot"}"><span class="sr-only">${m.mine ? "You:" : `${esc(d.with)}:`}</span><div class="bubble">${richText(m.body)}</div></li>`).join("")
+      : `<li class="small muted">No messages yet. Say hi!</li>`;
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function sendRoommateMessage(form) {
+    const dialog = document.getElementById("messages");
+    const input = document.getElementById("msgs-input");
+    const errorEl = document.getElementById("msgs-error");
+    const body = input.value.trim();
+    if (!body) return;
+    errorEl.textContent = "";
+    const btn = form.querySelector("[type=submit]");
+    btn.disabled = true;
+    try {
+      renderMessages(await api(`/api/roommates/requests/${encodeURIComponent(dialog.dataset.id)}/messages`, { method: "POST", body: { body } }));
+      input.value = "";
+    } catch (e) {
+      if (e.status === 401) return showView(errorView(e));
+      errorEl.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ── "I'm interested" kept in step everywhere it shows: result cards, Details, Saved, Listings ──
+  function setInterest(unitId, sent) {
+    if (sent) myInterests.add(unitId);
+    else myInterests.delete(unitId);
+    document.querySelectorAll(`[data-interest="${CSS.escape(unitId)}"]`).forEach((box) => (box.innerHTML = interestState(unitId)));
+    if (document.getElementById("res-top")) {
+      renderResults();
+      document.getElementById("side-saved").innerHTML = savedHtml();
+    }
+    refreshContacted().catch(() => {});
   }
 
   // ── Admin ────────────────────────────────────────────────────────────────────
@@ -2970,6 +3276,14 @@
       else if (a === "toggle-samples") toggleSampleListings(action.dataset.hide === "true");
       else if (a === "chat-say") sendChat(action.dataset.text);
       else if (a === "chat-details") openChatDetails(action.dataset.key);
+      else if (a === "person-details") openPersonDetails(action.dataset.key);
+      else if (a === "connect-open") openConnect(action.dataset.key);
+      else if (a === "connect-cancel") document.getElementById("connect").close();
+      else if (a === "req-accept") decideRequest(action.dataset.id, "accept");
+      else if (a === "req-decline") decideRequest(action.dataset.id, "decline");
+      else if (a === "req-withdraw") decideRequest(action.dataset.id, "withdraw");
+      else if (a === "messages-open") openMessages(action.dataset.id, action.dataset.name);
+      else if (a === "messages-close") document.getElementById("messages").close();
       else if (a === "details-close") document.getElementById("details").close();
       else if (a === "chat-confirm") decideChatAction(action, "confirm");
       else if (a === "chat-dismiss") decideChatAction(action, "dismiss");
@@ -3043,6 +3357,12 @@
     } else if (e.target.id === "chat-form") {
       e.preventDefault();
       sendChat(e.target.elements.text.value);
+    } else if (e.target.id === "connect-form") {
+      e.preventDefault();
+      sendConnect();
+    } else if (e.target.id === "msgs-form") {
+      e.preventDefault();
+      sendRoommateMessage(e.target);
     } else if (e.target.id === "pref-form") {
       e.preventDefault();
       savePref(false);
@@ -3079,9 +3399,11 @@
   // Email sharing only makes sense once roommate matching is on.
   document.addEventListener("change", (e) => {
     if (e.target.id !== "f-roommate_visible") return;
-    const email = document.getElementById("f-share_email");
-    email.disabled = !e.target.checked;
-    if (!e.target.checked) email.checked = false;
+    for (const id of ["f-share_email", "f-share_profile"]) {
+      const box = document.getElementById(id);
+      box.disabled = !e.target.checked;
+      if (!e.target.checked) box.checked = false;
+    }
   });
 
   // Sorting and searching lists.
@@ -3104,6 +3426,8 @@
   document.addEventListener("input", (e) => {
     if (e.target.id === "chat-input") growInput(e.target);
   });
+
+  document.getElementById("details").addEventListener("close", (e) => delete e.target.dataset.person);
 
   window.addEventListener("popstate", () => render(true));
 

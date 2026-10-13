@@ -30,6 +30,10 @@ function evaluate(memory, u) {
   const v = memory.v;
   const fits = [];
   const misses = [];
+  const fitKeys = [];
+  const missKeys = [];
+  const fit = (k, t) => (fits.push(t), fitKeys.push(k));
+  const miss = (k, t) => (misses.push(t), missKeys.push(k));
   const ok = {};
   let score = 0;
 
@@ -37,7 +41,7 @@ function evaluate(memory, u) {
   ok.rooms = u.rooms_available >= rooms;
   if (ok.rooms) {
     score += 15;
-    fits.push(v.rooms_needed > 1 ? `${u.rooms_available} rooms available (you need ${rooms})` : `${plural(u.rooms_available, "room")} available`);
+    fit("rooms", v.rooms_needed > 1 ? `${u.rooms_available} rooms available (you need ${rooms})` : `${plural(u.rooms_available, "room")} available`);
   }
 
   // What this student would pay. Rent for a whole place is split by the people moving in together (the rooms
@@ -56,10 +60,10 @@ function evaluate(memory, u) {
     ok.budget = isRequired(memory, "budget_max") ? within : slightly;
     if (within) {
       score += 40;
-      fits.push(`${rentText}, within your ${money(v.budget_max)} budget`);
+      fit("budget", `${rentText}, within your ${money(v.budget_max)} budget`);
     } else {
       if (slightly) score += 15;
-      misses.push(`${rentText}, ${money(cost - v.budget_max)} over your ${money(v.budget_max)} budget`);
+      miss("budget", `${rentText}, ${money(cost - v.budget_max)} over your ${money(v.budget_max)} budget`);
     }
   } else ok.budget = true;
 
@@ -71,13 +75,14 @@ function evaluate(memory, u) {
     const date = fmtDate(u.move_in_date);
     if (d === 0) {
       score += 20;
-      fits.push(`Available ${date}, in your move-in month`);
+      fit("month", `Available ${date}, in your move-in month`);
     } else if (d === -1) {
       score += 15;
-      fits.push(`Available from ${date}, a month before you want to move in`);
+      fit("month", `Available from ${date}, a month before you want to move in`);
     } else {
       if (Math.abs(d) === 1) score += 10;
-      misses.push(
+      miss(
+        "month",
         d > 0
           ? `Available ${date}, ${plural(d, "month")} after you want to move in`
           : `Available from ${date}, ${plural(-d, "month")} before you want to move in (ask whether the start can be later)`
@@ -91,8 +96,8 @@ function evaluate(memory, u) {
     ok.area = isRequired(memory, "areas") ? match : true;
     if (match) {
       score += 25;
-      fits.push(`In ${u.area}`);
-    } else misses.push(`In ${u.area}, not one of your areas (${v.areas.join(", ")})`);
+      fit("area", `In ${u.area}`);
+    } else miss("area", `In ${u.area}, not one of your areas (${v.areas.join(", ")})`);
   } else ok.area = true;
 
   // Distance uses the same approximate point renters see, so it is "about" and never reveals more.
@@ -105,9 +110,9 @@ function evaluate(memory, u) {
     ok.distance = isRequired(memory, "max_distance_km") ? within || km == null : true;
     if (within) {
       score += 20;
-      fits.push(`About ${km} km from Brandeis in a straight line, within your ${v.max_distance_km} km`);
-    } else if (km == null) misses.push("No map location, so the distance to Brandeis is unknown. Ask the landlord where it is");
-    else misses.push(`About ${km} km from Brandeis in a straight line, more than your ${v.max_distance_km} km`);
+      fit("distance", `About ${km} km from Brandeis in a straight line, within your ${v.max_distance_km} km`);
+    } else if (km == null) miss("distance", "No map location, so the distance to Brandeis is unknown. Ask the landlord where it is");
+    else miss("distance", `About ${km} km from Brandeis in a straight line, more than your ${v.max_distance_km} km`);
   } else ok.distance = true;
 
   // Only listings that record a lease length or furnishing (the demo listings) are compared on these. Both rank
@@ -115,12 +120,16 @@ function evaluate(memory, u) {
   if (v.lease_months != null && u.lease?.months) {
     if (Math.abs(u.lease.months - v.lease_months) <= 1) {
       score += 5;
-      fits.push(`${u.lease.label}, close to the ${v.lease_months} months you want`);
-    } else misses.push(`${u.lease.label}, not the ${v.lease_months} months you want`);
+      fit("lease", `${u.lease.label}, close to the ${v.lease_months} months you want`);
+    } else miss("lease", `${u.lease.label}, not the ${v.lease_months} months you want`);
   }
-  if ((v.wishes || []).some((w) => /furnish/i.test(w)) && typeof u.furnished === "boolean") (u.furnished ? fits : misses).push(u.furnished ? "Furnished" : "Not furnished");
+  if ((v.wishes || []).some((w) => /furnish/i.test(w)) && typeof u.furnished === "boolean") (u.furnished ? fit("furnished", "Furnished") : miss("furnished", "Not furnished"));
 
-  return { fits, misses, ok, score, km, monthGap, cost };
+  // The two strongest reasons and the most important mismatch, for the short card; Details shows all of them.
+  const pick = (keys, list, order, n) => order.flatMap((k) => keys.flatMap((x, i) => (x === k ? [list[i]] : []))).slice(0, n);
+  const highlights = pick(fitKeys, fits, ["budget", "distance", "area", "month", "lease", "furnished", "rooms"], 2);
+  const mainMiss = pick(missKeys, misses, ["budget", "month", "distance", "area", "lease", "furnished"], 1)[0] || null;
+  return { fits, misses, ok, score, km, monthGap, cost, highlights, mainMiss };
 }
 
 const CONDITIONS = ["rooms", "budget", "month", "area", "distance"];
@@ -189,8 +198,11 @@ export function searchRooms(memory, listings, { limit = MAX_RESULTS } = {}) {
     sample: !!e.u.sample,
     fits: e.fits,
     misses: e.misses,
+    highlights: e.highlights,
+    main_mismatch: e.mainMiss,
+    match: e.misses.length ? "partial" : "exact",
   }));
-  return { results, totalMatching: matching.length, ifRelaxed, samplesHidden };
+  return { results, totalMatching: matching.length, exactMatching: matching.filter((e) => !e.misses.length).length, ifRelaxed, samplesHidden };
 }
 
 // me: the renter's merged answers (memory over saved profile). others: renters who turned on roommate
@@ -212,6 +224,7 @@ export function searchRoommates(memory, me, others, { limit = MAX_RESULTS } = {}
     sample: !!m.o.sample,
     demo: !!m.o.demo,
     about: m.o.about || null,
+    prefs: m.o.prefs, // for the server only (Details and differences); never sent as is
     fits: m.shared,
     // Only what the two have in common is ever shown about the other person, never their answers.
     misses: m.score < 90 ? ["Not every lifestyle answer matches. Talk through sleep, guests and chores before deciding."] : [],

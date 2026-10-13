@@ -413,15 +413,20 @@ p.interest { display: block; }
 .danger-zone .field { max-width: 320px; }
 
 /* ── Assistant: results (about 65%) on the left, guided chat (35%) on the right ── */
-.container:has(.asst) { max-width: 1320px; }
-.asst { display: flex; flex-direction: column; gap: 20px; }
-.asst-top h1 { font-size: 32px; line-height: 40px; }
+/* The headline belongs to the left column; the chat starts at the top beside it and stays in view while
+   the results scroll. */
+.container:has(.asst) { max-width: 1320px; padding-top: 24px; }
+.asst {
+  display: grid; grid-template-columns: minmax(0, 65fr) minmax(320px, 35fr); grid-template-areas: "top chat" "results chat";
+  grid-template-rows: auto 1fr; column-gap: 28px; row-gap: 16px; align-items: start;
+}
+.asst-top { grid-area: top; }
+.asst-top h1 { font-size: 30px; line-height: 38px; }
 .pane-tabs { display: none; }
-.asst-grid { display: grid; grid-template-columns: minmax(0, 65fr) minmax(320px, 35fr); gap: 28px; align-items: start; }
-.asst-results { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.asst-results { grid-area: results; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .asst-chat {
-  position: sticky; top: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0;
-  height: calc(100vh - 190px); min-height: 460px; max-height: 820px; padding: 14px 14px 10px;
+  grid-area: chat; position: sticky; top: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  height: calc(100vh - 110px); min-height: 460px; max-height: 900px; padding: 14px 14px 10px;
   border: 1px solid var(--border); border-radius: 16px; background: var(--subtle);
 }
 .chat-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
@@ -513,11 +518,53 @@ p.interest { display: block; }
 .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 999px; padding: 2px; background: var(--white); }
 .seg button { min-height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--sub); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--navy); color: var(--white); }
-.res-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+/* A grid that fills the width; a lone card keeps a card's width instead of stretching across. */
+.res-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .res-card {
-  display: flex; flex-direction: column; gap: 6px; height: 100%; padding: 14px 16px;
+  display: flex; flex-direction: column; height: 100%; overflow: hidden;
   border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--white); transition: border-color 0.15s, box-shadow 0.15s;
 }
+.res-card.person-card { padding: 14px; gap: 8px; }
+/* Three card buttons (Connect, Details, Save) fit on one line at the narrowest card width. */
+.res-card .mini-actions { gap: 6px; }
+.res-card .btn-small { padding: 0 10px; font-size: 13.5px; }
+.res-body { display: flex; flex-direction: column; gap: 6px; flex: 1; padding: 12px 14px 14px; }
+.res-group { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; margin: 18px 0 8px; }
+#res-list > .res-group:first-child { margin-top: 4px; }
+.res-group-note { margin: -4px 0 10px; }
+.card-pic { position: relative; height: 104px; display: grid; place-items: center; background: linear-gradient(135deg, #dfe9fb, #eef2f9 60%, #e6effd); color: var(--navy); }
+.card-pic img { width: 100%; height: 100%; object-fit: cover; }
+.card-pic.is-demo { background: linear-gradient(135deg, #fff1d6, #fdf6e8 60%, #eef2f9); color: #7a4d00; }
+.pic-label { position: absolute; left: 10px; bottom: 8px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.85); color: var(--sub); }
+.avatar-pic { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--blue), var(--navy)); color: var(--white); font-size: 15px; font-weight: 700; }
+.avatar-pic.is-demo { background: linear-gradient(135deg, #e0a42e, #b4751a); }
+.avatar-pic.avatar-sm { width: 28px; height: 28px; font-size: 11px; }
+.person-head { display: flex; align-items: center; gap: 10px; }
+.person-head.big .avatar-pic { width: 56px; height: 56px; font-size: 18px; }
+.person-name { flex: 1; min-width: 0; }
+.badge-status { font-size: 12px; font-weight: 700; color: var(--green); background: var(--green-bg); border-radius: 999px; padding: 1px 8px; }
+.details-h { font-size: 14px; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: 0.04em; margin: 4px 0 0; }
+.details-actions { margin-top: 4px; }
+.person-actions { justify-content: flex-end; }
+.details-body:has(.person-actions) + .actions { display: none; }
+.dialog-wide .details-h + ul, .dialog-wide .details-h + p, .dialog-wide .details-h + dl { margin-top: -6px; }
+.pdetails { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.pdetails div { background: var(--subtle); border-radius: var(--radius); padding: 8px 10px; }
+.pdetails dt { font-size: 12px; color: var(--sub); }
+.pdetails dd { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.reqs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.req { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-card); }
+.req-top { display: flex; align-items: center; gap: 8px; }
+.msg-event { align-self: center; max-width: 100%; text-align: center; }
+.msg-event span { display: inline-block; font-size: 12px; color: var(--sub); background: var(--white); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; }
+.msgs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.msgs-log { list-style: none; margin: 0 0 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; height: min(50vh, 360px); overflow-y: auto; background: var(--subtle); border-radius: var(--radius-card); }
+/* Messages between connected renters: the same bubbles and reply row as the chat. */
+#messages .bubble p { color: inherit; }
+#messages .chat-form { flex-direction: row; align-items: flex-end; }
+#messages .chat-form textarea { flex: 1; width: auto; }
+#connect-intro { width: 100%; padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius); font: inherit; resize: vertical; }
+#connect-intro:focus { outline: none; border-color: var(--blue); box-shadow: var(--focus); }
 .res-card:hover { border-color: var(--border-strong); }
 .res-card.selected { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(29, 79, 191, 0.25); }
 .res-card-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -589,11 +636,13 @@ p.interest { display: block; }
 
 /* Phones and narrow windows: Chat and Results tabs; both keep their state */
 @media (max-width: 900px) {
-  .asst { gap: 12px; }
+  .asst { grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "tabs" "results" "chat"; grid-template-rows: none; row-gap: 12px; }
   .asst-top h1 { font-size: 24px; line-height: 30px; }
-  .pane-tabs { display: flex; position: sticky; top: 0; z-index: 5; background: var(--white); border-bottom: 1px solid var(--border); }
+  .pane-tabs { grid-area: tabs; display: flex; position: sticky; top: 0; z-index: 5; background: var(--white); border-bottom: 1px solid var(--border); }
   .pane-tabs button { flex: 1; justify-content: center; }
-  .asst-grid { grid-template-columns: 1fr; }
+  .pdetails { grid-template-columns: 1fr; }
+  .dialog-wide { width: calc(100vw - 16px); max-height: calc(100vh - 16px); padding: 18px; }
+  .details-actions .btn { flex: 1; }
   .asst[data-pane="chat"] .asst-results, .asst[data-pane="results"] .asst-chat { display: none; }
   .asst-chat { position: static; height: auto; max-height: none; padding: 0; border: 0; background: none; }
   .chat-log { overflow: visible; min-height: 40vh; }

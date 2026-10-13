@@ -20,7 +20,8 @@ import { firstNameOf } from "../roommates.js";
 import { InvalidInput, isUnitId, parseChatText, parseInterest, parsePreferences } from "../validate.js";
 import { AiUnavailable, MODELS, aiConfigured, allowedNumbers, groundReply, modelFor, runAiTurn } from "./ai.js";
 import { BASIC_INTRO, CONSIDERATIONS, describeAnswer, describeRoommates, describeRooms, nextQuestion, question, understand } from "./basic.js";
-import { LABELS, STRICTNESS_FIELDS, applyUpdates, isRequired, memoryFacts, mergedPreferences, missingBasics, parseMemory, profileChanges } from "./memory.js";
+import { LABELS, STRICTNESS_FIELDS, applyUpdates, displayValue, isRequired, memoryFacts, mergedPreferences, missingBasics, parseMemory, profileChanges } from "./memory.js";
+import { demoPersonView, personView, requestsByPerson } from "../connections.js";
 import { DEMO_LISTINGS, DEMO_PEOPLE, isDemoId } from "./demo-data.js";
 import { BRANDEIS, kmBetween, searchRoommates, searchRooms } from "./search.js";
 
@@ -218,6 +219,7 @@ async function hydrate(db, env, user, messages, savedRows) {
         actions: (c.actions || []).map(action).filter(Boolean),
         quickReplies: c.quick || [],
         notice: c.notice || null,
+        event: !!c.event,
       };
     }),
     saved: savedRows.map((s) => ({ id: s.id, ...card({ kind: s.kind, targetId: s.target_id, ...parseJson(s.note, {}) }), savedId: s.id })),
@@ -299,7 +301,7 @@ async function roommateSearch(db, user, memory, saved, { limit } = {}) {
   const { results } = await db
     .prepare(
       `SELECT p.user_id, p.budget_min, p.budget_max, p.move_in_month, p.area, p.sleep_schedule, p.cleanliness, p.noise, p.guests,
-         p.pets, p.smoking, p.chores, p.share_email, u.name, u.email, (u.id LIKE 'sample-%') AS sample
+         p.pets, p.smoking, p.chores, p.share_email, p.share_profile, u.name, u.email, (u.id LIKE 'sample-%') AS sample
        FROM match_preferences p JOIN "user" u ON u.id = p.user_id
        WHERE p.roommate_visible = 1 AND p.user_id != ?1 AND u.account_type = 'renter'
        ORDER BY p.updated_at DESC LIMIT 500`
@@ -351,6 +353,7 @@ async function liveResults(db, env, user, memory, saved, state) {
         preliminary: missing.length > 0,
         missing: missing.map((f) => NOT_KNOWN[f]),
         total: found.totalMatching,
+        exact: found.exactMatching,
         ifRelaxed: found.ifRelaxed,
         samplesHidden: found.samplesHidden,
         mustHaves: [...(memory.v.rooms_needed > 1 ? ["rooms_needed"] : []), ...strict],
@@ -362,6 +365,9 @@ async function liveResults(db, env, user, memory, saved, state) {
           km: r.km_from_brandeis,
           fits: r.fits,
           misses: r.misses,
+          highlights: r.highlights,
+          mainMiss: r.main_mismatch,
+          match: r.match,
           savedId: savedId.get(`room:${r.unitId}`) || null,
           interestSent: sent.has(r.unitId),
         })),
@@ -371,6 +377,10 @@ async function liveResults(db, env, user, memory, saved, state) {
 
   if (goal !== "room") {
     const r = demo ? demoRoommateSearch(memory, saved, { limit: PANEL_PEOPLE }) : await roommateSearch(db, user, memory, saved, { limit: PANEL_PEOPLE });
+    const merged = mergedPreferences(memory, saved);
+    const mine = merged.prefs ? { ...merged.prefs, share_profile: !!saved?.share_profile } : saved;
+    const requests = demo || r.status !== "ok" ? new Map() : await requestsByPerson(db, user.id);
+    const views = r.status === "ok" ? await Promise.all(r.found.results.map((p) => (p.demo ? demoPersonView(mine, p) : personView(env, user.id, mine, p, requests)))) : [];
     out.people =
       r.status !== "ok"
         ? { status: r.status, missing: r.missing.map((f) => LABELS[f] || f) }
@@ -379,18 +389,14 @@ async function liveResults(db, env, user, memory, saved, state) {
             total: r.found.totalMatching,
             samplesHidden: r.found.samplesHidden,
             // Only what the two have in common, a first name, and an email only if that person chose to share it.
-            items: r.found.results.map((p) => ({
+            exact: r.found.results.filter((p) => !p.misses.length).length,
+            items: r.found.results.map((p, i) => ({
               kind: "person",
               ref: p.ref,
               available: true,
-              firstName: p.firstName,
-              score: p.score,
-              fits: p.fits,
+              ...views[i],
               misses: p.misses,
-              email: p.email,
-              sample: p.sample,
-              demo: p.demo,
-              about: p.demo ? p.about : null,
+              match: p.misses.length ? "partial" : "exact",
               savedId: savedId.get(`person:${p.userId}`) || null,
             })),
           };
@@ -410,7 +416,7 @@ async function proposeAction(ctx, kind, { ref, note } = {}) {
     const optIn = kind === "turn_on_roommate_matching";
     if (optIn) prefs.roommate_visible = true;
     // When turning matching on, email sharing is a separate tick box on the card, so it isn't listed as a change.
-    const changes = profileChanges(saved, prefs).filter((c) => !(optIn && c.field === "share_email"));
+    const changes = profileChanges(saved, prefs).filter((c) => !(optIn && (c.field === "share_email" || c.field === "share_profile")));
     if (!changes.length) throw new ToolRefused(optIn ? "Roommate matching is already on and the profile is up to date." : "The saved profile already matches. Nothing to save.");
     payload = { prefs, changes, roommateOptIn: optIn };
     dbKind = "save_profile";
@@ -670,6 +676,17 @@ async function handleMessage({ request, env, db, user }) {
   };
 }
 
+// A short note in the chat for a change made outside it (a chip, Demo mode). Returns the message for the page.
+async function addEvent(db, userId, text) {
+  if (!text) return null;
+  const m = { id: crypto.randomUUID(), role: "assistant", content: text, cards: JSON.stringify({ items: [], actions: [], quick: [], event: true }), mode: "basic", created_at: Date.now() };
+  await db
+    .prepare(`INSERT INTO assistant_messages (id, user_id, role, content, cards, mode, created_at) VALUES (?1, ?2, 'assistant', ?3, ?4, ?5, ?6)`)
+    .bind(m.id, userId, m.content, m.cards, m.mode, m.created_at)
+    .run();
+  return { id: m.id, role: "assistant", text, mode: "basic", createdAt: m.created_at, cards: [], actions: [], quickReplies: [], notice: null, event: true };
+}
+
 // ── Confirmations and saved options ──────────────────────────────────────────
 
 async function decideAction({ request, db, user }, id) {
@@ -686,6 +703,7 @@ async function decideAction({ request, db, user }, id) {
         ...payload.prefs,
         roommate_visible: payload.roommateOptIn ? true : !!payload.prefs.roommate_visible,
         share_email: payload.roommateOptIn ? body.shareEmail === true : !!payload.prefs.share_email,
+        share_profile: payload.roommateOptIn ? body.shareProfile === true : !!payload.prefs.share_profile,
       });
       result.preferences = await savePreferences(db, user.id, p);
     } else {
@@ -765,8 +783,17 @@ export async function handleAssistant({ request, env, db, user, path, method, re
     const [thread, prefs] = await Promise.all([loadThread(db, user.id), loadPreferences(db, user.id)]);
     const r = applyUpdates(thread.memory, input, today());
     if (r.errors.length) throw new InvalidInput("value", r.errors[0].message);
+    const label = LABELS[field] || field;
+    const strict = STRICTNESS_FIELDS.includes(field) ? (isRequired(r.memory, field) ? "must-have" : "flexible") : "";
+    const shown = displayValue(field, r.memory.v[field]);
+    const text = body.forget
+      ? `You removed “${label}”. Results updated.`
+      : "value" in body
+        ? `${label}: ${shown}${strict ? ` (${strict})` : ""}. Results updated.`
+        : `${label} is now ${strict || "updated"}${shown ? ` (${shown})` : ""}. Results updated.`;
+    const event = await addEvent(db, user.id, r.changed.length ? text : null);
     await saveThread(db, user.id, r.memory, thread.state).run();
-    return reply({ memory: memoryFacts(r.memory), results: await liveResults(db, env, user, r.memory, prefs, thread.state) });
+    return reply({ memory: memoryFacts(r.memory), results: await liveResults(db, env, user, r.memory, prefs, thread.state), event });
   }
 
   if (path === "/api/assistant/clear" && method === "POST") {
@@ -784,7 +811,8 @@ export async function handleAssistant({ request, env, db, user, path, method, re
     const [thread, prefs] = await Promise.all([loadThread(db, user.id), loadPreferences(db, user.id)]);
     const state = { ...thread.state, demo: body.on, rooms: [], people: [] };
     await saveThread(db, user.id, thread.memory, state).run();
-    return reply({ demo: body.on, results: await liveResults(db, env, user, thread.memory, prefs, state) });
+    const event = await addEvent(db, user.id, !!thread.state.demo === body.on ? null : body.on ? "Demo mode on: results are made-up listings and people." : "Demo mode off: results are real again.");
+    return reply({ demo: body.on, results: await liveResults(db, env, user, thread.memory, prefs, state), event });
   }
 
   const action = path.match(/^\/api\/assistant\/actions\/([^/]+)$/);

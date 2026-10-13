@@ -5,8 +5,8 @@ import { HttpError } from "./http.js";
 export const MAX_INTERESTS_PER_RENTER = 20;
 
 export const PREF_FIELDS =
-  "budget_min, budget_max, move_in_month, area, rooms_needed, sleep_schedule, cleanliness, noise, guests, pets, smoking, chores, roommate_visible, share_email, updated_at";
-export const asPrefs = (p) => p && { ...p, roommate_visible: !!p.roommate_visible, share_email: !!p.share_email };
+  "budget_min, budget_max, move_in_month, area, rooms_needed, sleep_schedule, cleanliness, noise, guests, pets, smoking, chores, roommate_visible, share_email, share_profile, updated_at";
+export const asPrefs = (p) => p && { ...p, roommate_visible: !!p.roommate_visible, share_email: !!p.share_email, share_profile: !!p.share_profile };
 
 export const loadPreferences = (db, userId) =>
   db.prepare(`SELECT ${PREF_FIELDS} FROM match_preferences WHERE user_id = ?1`).bind(userId).first();
@@ -17,18 +17,19 @@ export async function savePreferences(db, userId, p) {
   const saved = await db
     .prepare(
       `INSERT INTO match_preferences (user_id, budget_min, budget_max, move_in_month, area, rooms_needed,
-         sleep_schedule, cleanliness, noise, guests, pets, smoking, created_at, updated_at, roommate_visible, share_email, chores)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, ?14, ?15, ?16)
+         sleep_schedule, cleanliness, noise, guests, pets, smoking, created_at, updated_at, roommate_visible, share_email, chores, share_profile)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, ?14, ?15, ?16, ?17)
        ON CONFLICT (user_id) DO UPDATE SET
          budget_min = excluded.budget_min, budget_max = excluded.budget_max, move_in_month = excluded.move_in_month,
          area = excluded.area, rooms_needed = excluded.rooms_needed, sleep_schedule = excluded.sleep_schedule,
          cleanliness = excluded.cleanliness, noise = excluded.noise, guests = excluded.guests, pets = excluded.pets,
          smoking = excluded.smoking, updated_at = excluded.updated_at,
-         roommate_visible = excluded.roommate_visible, share_email = excluded.share_email, chores = excluded.chores
+         roommate_visible = excluded.roommate_visible, share_email = excluded.share_email, chores = excluded.chores,
+         share_profile = excluded.share_profile
        RETURNING ${PREF_FIELDS}`
     )
     .bind(userId, p.budget_min, p.budget_max, p.move_in_month, p.area, p.rooms_needed,
-      p.sleep_schedule, p.cleanliness, p.noise, p.guests, p.pets, p.smoking, now, p.roommate_visible ? 1 : 0, p.share_email ? 1 : 0, p.chores ?? null)
+      p.sleep_schedule, p.cleanliness, p.noise, p.guests, p.pets, p.smoking, now, p.roommate_visible ? 1 : 0, p.share_email ? 1 : 0, p.chores ?? null, p.share_profile ? 1 : 0)
     .first();
   return asPrefs(saved);
 }

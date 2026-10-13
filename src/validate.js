@@ -132,6 +132,8 @@ export function parsePreferences(body) {
   // Roommate matching is opt-in: both are off unless sent as true. Email sharing needs the first switch on.
   p.roommate_visible = flag(body, "roommate_visible");
   p.share_email = flag(body, "share_email") && p.roommate_visible;
+  // Showing budget, move-in month, area and lifestyle answers to matches is a separate opt-in, also off by default.
+  p.share_profile = flag(body, "share_profile") && p.roommate_visible;
   return p;
 }
 
@@ -158,6 +160,22 @@ export function parseInterest(body) {
 }
 
 export const isUnitId = (s) => typeof s === "string" && /^[0-9a-f-]{36}$/.test(s);
+
+// Text one renter writes to another: an introduction (optional) or a message. Phone, ID and card numbers and
+// street addresses are refused, as everywhere on coHabit.
+function personalText(body, field, { min, max }) {
+  if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
+  const v = body[field] == null ? "" : body[field];
+  if (typeof v !== "string") throw new InvalidInput(field, "Must be text.");
+  const s = v.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  if (s.length < min) throw new InvalidInput(field, "Write a message.");
+  if (s.length > max) throw new InvalidInput(field, `Keep it under ${max} characters.`);
+  if (PHONE.test(s) || SSN.test(s)) throw new InvalidInput(field, "Please leave out phone, ID and card numbers.");
+  if (STREET.test(s)) throw new InvalidInput(field, "Please leave out street addresses.");
+  return s;
+}
+export const parseIntro = (body) => personalText(body, "intro", { min: 0, max: 500 });
+export const parseRoommateMessage = (body) => personalText(body, "body", { min: 1, max: 1000 });
 
 // A chat message to the assistant. coHabit doesn't collect contact details, ID or card numbers, or
 // street addresses, so a message containing one is refused before it is saved or sent anywhere.

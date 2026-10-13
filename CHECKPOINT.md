@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-12 (assistant redesign)
+# coHabit project checkpoint: 2026-10-13 (Details and requests, local only)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -16,12 +16,17 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 | "I'm interested" requests | 2 | Live, 2026-10-12 |
 | Saved questionnaires | 4 | Live, 2026-10-12 |
 | Admins | 1 | Live (the owner) |
-| Automated tests | 356 passing | `npm test`, local, 2026-10-12 |
+| Automated tests | 395 passing | `npm test`, local, 2026-10-13 |
 | AI cost so far | $0 | No Anthropic key exists; the assistant has only run in basic mode or against the test stand-in |
 
 No real listings were imported because no authorized data source exists yet (see "Pending work").
 
 ## Deployment status
+
+**Not deployed: the 2026-10-13 work** (Details and requests, below) is committed locally only, and migration 0007 is
+applied to the local databases only. The live site and live database are unchanged. The new code needs migration
+0007, so the order is: restore point, apply 0007 to the live database, deploy (each with the owner's approval).
+
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
 - **Live version:** `e2da146e-2d3b-4c23-9591-63ae1e71a4b8`, deployed 2026-10-12 with the owner's approval: the assistant redesign and Demo mode
@@ -64,6 +69,30 @@ No real listings were imported because no authorized data source exists yet (see
 | Import tool | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | Yes (2026-10-12) |
 | **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
 | **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
+| **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | **No, local only** (migration 0007 pending) |
+
+### Details and requests (2026-10-13, local only)
+
+- **Layout:**
+  - Results and chat start at the same height; the chat stays in view while the results scroll, including the map.
+  - The card grid fills the width without stretching a lone card. Cards show the essentials, two reasons and at most
+    one important mismatch; everything else is in Details.
+  - Room pictures use the listing's photo if it has one, otherwise a drawing labeled "No photo yet" (or "demo
+    picture" in Demo mode). People get initials, since profiles have no photos.
+  - "Matches everything" / "Strong matches" and "Partial matches" are grouped separately, and the chat and the
+    results use the same counts ("3 rooms fit your must-haves: 2 match everything, 1 partly").
+  - Changing a chip adds a short note in the chat ("Budget up to: $1,200 a month (must-have). Results updated.").
+- **Rooms:** Details reuses the existing "I'm interested" form, now with a "Send this request?" confirmation. The
+  status is the same on the card, in Details, on Listings, in Saved and on My matches. Demo, external and sample
+  listings explain why nothing can be sent.
+- **Roommates:** Details (budget, move-in, area, lifestyle tags, shared answers, differences) when both renters chose
+  to share; Connect with an editable introduction; pending, withdraw, accept, decline; messages after acceptance.
+- **Privacy:** no account ids or emails on cards or in the assistant's results; email only in Details and only if
+  shared; encrypted per-viewer handles; demo profiles can't receive real requests.
+- **Database:** migration `0007_roommate_requests.sql` (additive): a `share_profile` column (off by default) and the
+  `roommate_requests` and `roommate_messages` tables.
+- **Fixed on the way:** the assistant's roommate search didn't read `share_profile`, so Details stayed hidden there
+  even with consent on both sides; chat notes said "budget up to to $1,300".
 
 ### Assistant redesign (2026-10-12, live as `e2da146e…`)
 
@@ -115,6 +144,22 @@ Built and tested in three stages, each committed separately:
 
 ## Tests
 
+- `npm test`: **395/395** on 2026-10-13. New checks for this change:
+  - Handles: no ids in responses; a handle made for one renter fails for another; a changed handle fails.
+  - Consent: details only when both share; email only when shared; sharing needs roommate matching on.
+  - Connect: created only on Send; duplicates, self-requests, hidden targets, renters without matching, landlords and
+    other sites refused; a phone number in the introduction refused.
+  - Lifecycle: only the sender withdraws, only the recipient accepts or declines, outsiders get 404, no new request
+    after a decline, a new one after withdrawing; messages only after acceptance, only between the two, no phone
+    numbers.
+  - Demo profiles have no handle; deleting an account deletes its requests and messages.
+  - Room cards: two reasons, one mismatch, exact vs partial, counts that add up; chat notes for changed answers.
+- **Browser walkthrough (local preview, two local test renters):** Connect → incoming request → Accept → Messages;
+  room Details → "I'm interested" → confirmation → "Request sent" on the card, in Details and on Listings; Demo
+  previews; Map with the chat in view while scrolling; phone width 390 px with no sideways scrolling.
+
+Earlier runs:
+
 - `npm test`: **314/314** on 2026-10-12.
   - It runs the real Worker against a throwaway local D1 database.
   - It never touches the live database, Google or Anthropic. The AI service is a local stand-in that records every
@@ -156,6 +201,8 @@ Built and tested in three stages, each committed separately:
 - [x] Push and deploy the import tool and the assistant (2026-10-12, version `d7e38548…`).
 - [x] Deploy the assistant redesign and Demo mode (2026-10-12, version `e2da146e…`, no migration).
 - [ ] Owner tries the redesigned assistant on the live site as a renter (manual test part 9, including Demo mode).
+- [ ] Approve applying migration 0007 to the live database (restore point first), then deploying the 2026-10-13
+      work, then run part 10 of the manual test with two real renter accounts.
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
 
 **Blocked: real listings (0 imported).** Apartments.com refuses automated access, and there is no republication
@@ -189,7 +236,8 @@ one of these is needed:
 | Original static site | Version `a3c0f17b-d52a-47e3-9d71-5049e87a7a34`, git tag `pre-accounts-2026-09-29` |
 | Previous checkpoint | Git tag `checkpoint-2026-10-06` |
 | Earlier checkpoint today | Git tag `checkpoint-2026-10-12` (assistant first built) |
-| This checkpoint | Git tag `checkpoint-2026-10-12-redesign` |
+| Previous checkpoint (live code) | Git tag `checkpoint-2026-10-12-redesign` |
+| This checkpoint (local only) | Git tag `checkpoint-2026-10-13-requests` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 

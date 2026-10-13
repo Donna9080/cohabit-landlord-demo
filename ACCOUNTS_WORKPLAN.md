@@ -207,8 +207,24 @@ by the live test.
   answer (only `/api/*` reaches the Worker first), so the job never ran in tests. Tests now use
   `/cdn-cgi/local/scheduled` and check that the job ran.
 
+## Results, Details and requests (2026-10-13, local only)
+
+- **Reused, not rebuilt.** Room Details and "I'm interested" are the existing listing flow and API; a confirmation
+  box was added before sending, and one function keeps "Request sent" in step on every screen.
+- **Roommate requests are new** (nothing existed): `roommate_requests` and `roommate_messages` (migration 0007),
+  with every rule checked on the server and a unique index for one open request per pair.
+- **Consent before details.** Existing users never agreed to show their budget or answers, so a new switch
+  (`share_profile`, off by default) is needed, and details show only when both renters have it on. Emails moved off
+  cards into Details, and still only when shared.
+- **No ids in the browser.** People are addressed by encrypted handles bound to the viewer, so a handle can't be
+  reused by someone else or turned back into an account id.
+- **Cards stay short.** Two reasons and one important difference (a flexible answer, or "OK with pets" vs "has a
+  pet", isn't one), with exact and partial matches grouped separately and the same counts in the chat and the results.
+- **No notifications.** Email would need a paid service; requests show when the person opens coHabit.
+- **Not deployed, and the live database not changed**, as asked.
+
 ## Next safe step
 
-Tell the landlord when a new request arrives (today they only see it when they open the dashboard), and let
-two matched renters talk without sharing an email address. If admins ever get write actions, add an audit
-table in that change.
+With the owner's approval: take a restore point, apply migration 0007 to the live database, then deploy and
+run part 10 of the manual test with two real renter accounts. After that: a "new request" badge for landlords and
+renters. If admins ever get write actions, add an audit table in that change.

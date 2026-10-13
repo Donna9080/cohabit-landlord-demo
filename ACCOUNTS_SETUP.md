@@ -39,11 +39,13 @@ There is no R2 bucket and no file upload. Matching and search are rule-based cod
 | `verification` | Short-lived OAuth state for sign-in in progress | Nobody |
 | `rateLimit`, `app_rate_limits` | Request counters | Nobody |
 | `units` | A landlord's units: name, general area, monthly rent, rooms available, move-in date, description, status; optionally a Massachusetts street address, pin (lat/lng), approximate/exact choice and the MapTiler attribution | Owner: everything. Everyone: active units' listing fields only (no owner, no status); the location as an approximate 500 m circle with no address, unless the landlord chose exact. Admin: a count per landlord |
-| `match_preferences` | A renter's questionnaire: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets, smoking, chores (optional) | Only that renter. Not landlords, not admin (admin sees "saved yes/no"). Other renters see nothing unless the renter turns on roommate matching (see below) |
+| `match_preferences` | A renter's questionnaire: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets, smoking, chores (optional), and three switches: `roommate_visible`, `share_email`, `share_profile` (migration `0007`) | Only that renter. Not landlords, not admin (admin sees "saved yes/no"). Other renters see nothing unless the renter turns on roommate matching (see below) |
 
 | `assistant_threads`, `assistant_messages`, `assistant_actions` | A renter's chat with the assistant, what it learned, and its confirmation cards (migration `0006`) | Only that renter. Not landlords, not admin |
 | `saved_options` | Rooms and people a renter saved from the chat | Only that renter |
 | `assistant_usage` | AI replies and tokens per day, per renter and for the site | Nobody per renter; admin sees site totals |
+| `roommate_requests` | A renter's request to connect with another renter: who to whom, the introduction (max 500 characters), status (pending, accepted, declined, withdrawn) and dates (migration `0007`) | The two renters involved. Not landlords, not admin |
+| `roommate_messages` | Messages between two renters after a request is accepted (max 1,000 characters each) (migration `0007`) | Only those two renters |
 
 Not collected: street addresses (rejected by validation), phone numbers, IDs,
 dates of birth, financial or health details, profile photos.
@@ -173,6 +175,35 @@ worked example on the sample data are in [docs/SAMPLE_MATCHING.md](docs/SAMPLE_M
   and the email only if that renter turned on `share_email`. Never an id, last name, budget figures or raw answers.
 - Admin still sees none of this. Turning the switch off, or deleting the account, removes the renter from other
   people's results on the next request.
+
+### Details and Connect (roommate requests, migration `0007`, local only so far)
+
+- **A third switch, `share_profile`** ("Share my details with my matches"), off by default and only possible with
+  `roommate_visible` on. Details then shows that person's budget range, move-in month, area, lifestyle tags and where
+  your answers differ, **only when both renters have it on**. Without it, Details shows what you have in common and
+  how many answers differ, never which ones. Email still needs `share_email` and appears only in Details.
+- **No ids in the browser.** Each person comes with a `handle`: their id encrypted (AES-GCM) with a key derived from
+  `BETTER_AUTH_SECRET` and bound to the viewer. A handle only works for the renter it was made for; a changed or
+  borrowed handle gets 404. Demo profiles have no handle, so they can never be sent a real request.
+- **Connect** opens an editable introduction. Nothing is sent until **Send request**. The recipient sees the first
+  name, the introduction and what the two have in common, then **Accept** or **Decline**. The sender can **Withdraw**
+  while it's pending. After acceptance both can **Message** each other on coHabit (no phone numbers or addresses;
+  those are refused). Status shows on the card, in Details, and under "Roommate requests" in the assistant and on
+  My matches.
+- **Server checks** (`src/connections.js`): renters only; the sender must have roommate matching on; the target must
+  be a discoverable renter; no requests to yourself; one open request per pair (also a unique database index); no
+  new request after a decline; at most 10 open outgoing requests; only the sender can withdraw, only the recipient
+  can accept or decline; only the two renters can read or send messages, and only after acceptance; 500 messages per
+  conversation; the usual Origin check and write rate limit.
+- **API:** `GET /api/roommates/requests` (incoming, outgoing, connected, earlier); `POST /api/roommates/requests`
+  `{handle, intro}`; `POST /api/roommates/requests/<id>` `{action: withdraw | accept | decline}`;
+  `GET`/`POST /api/roommates/requests/<id>/messages`.
+- **Deleting an account** deletes its requests and messages. There are no email notifications (that would need a
+  paid email service); people see new requests when they open the assistant or My matches.
+- **Rooms ("I'm interested")** use the existing request flow, now also opened from a room's Details in the
+  assistant, with a "Send this request?" confirmation first. "Request sent" and Withdraw stay in step on the card,
+  in Details, on Listings, in Saved and on My matches. A request doesn't reserve the room. Demo listings show a
+  preview only; external listings say to contact the original site; sample listings have no landlord to contact.
 
 ## AI assistant (chat)
 
@@ -567,6 +598,10 @@ Real Google sign-in locally needs your Google client values in `.dev.vars` and
 
 ## Migrations and deploy (exact commands used)
 
+**Pending: migration `0007_roommate_requests.sql`** (adds the `share_profile` column, `roommate_requests` and
+`roommate_messages`; additive only). Applied to the local databases only. The code from 2026-10-13 needs it, so
+apply it to the live database **before** deploying that code, with a restore point first and the owner's approval.
+
 ```powershell
 npx wrangler d1 migrations apply DB --local     # always first; then npm test
 npx wrangler d1 migrations list DB --remote     # what's pending on production
@@ -726,6 +761,24 @@ These steps describe the redesigned assistant, live since 2026-10-12.
    demo cards have no Save button. Turn Demo mode off: only real results again.
 7. On a phone, switch **Chat** / **Results**: the chat and the map keep their place.
 8. Reload: everything is still there. Then **Clear chat** and confirm: the chat and answers are gone, **Saved** stays.
+
+### 10. Details and requests (8 minutes, renters B and C; needs migration 0007)
+
+1. As B and as C, on **My matches**, tick **Show me to compatible renters** and **Share my details with my matches**,
+   and save. Use similar answers (same area and month) so they match.
+2. As B, open **Assistant**, choose **A roommate** (or **Both**), and open the **Roommates** tab. C's card shows
+   two things in common and at most one important difference. Open **Details**: budget, move-in, area, lifestyle tags
+   and differences. Untick sharing on one side and reload: those details are hidden again.
+3. Click **Connect**, edit the introduction and click **Send request**. The card says **Request sent**; Details offers
+   **Withdraw request**.
+4. As C, open **My matches**: **Roommate requests** shows B's introduction with **Accept** and **Decline**. Click
+   **Accept**, then **Message**, and send a short message. Try one with a phone number: it's refused.
+5. As B, the card now says **Connected**; **Message** shows C's message.
+6. As B, open a real room's **Details** in the assistant, click **I'm interested**, write a note and **Send**. A
+   **Send this request?** box appears first. After sending, the card, Details, Listings and Saved all say
+   **Request sent**; **Withdraw** removes it everywhere.
+7. Turn on **Demo mode**: **Connect (preview)** and **I'm interested (preview)** only say "Demo only, nothing sent."
+8. Clean up: withdraw the room request and decline or withdraw the roommate request.
 
 ### If something fails
 

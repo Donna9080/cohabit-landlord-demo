@@ -216,13 +216,22 @@ export function nextQuestion(memory, { wantsRoommates, skipped = [] } = {}) {
 
 const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
+// "2 match everything, 1 partly": the same words as the results panel.
+export function exactSplit(total, exact) {
+  if (exact >= total) return total === 1 ? "it matches everything" : "all match everything";
+  if (!exact) return total === 1 ? "a partial match" : "all partial matches";
+  return `${exact} ${exact === 1 ? "matches" : "match"} everything, ${total - exact} partly`;
+}
+
 // The Results panel shows every card with what fits and what doesn't; the chat says what was found, in short.
 export function describeRooms(found) {
   const lines = [];
   const n = found.totalMatching;
   if (found.results.length) {
-    const partial = found.results.some((r) => r.misses.length);
-    lines.push(`${n === 1 ? "1 room fits" : `${n} rooms fit`} your must-haves. ${partial ? "Each card says what matches and what doesn't." : "They match everything you've told me."}`);
+    const exact = found.exactMatching;
+    lines.push(
+      `${n === 1 ? "1 room fits" : `${n} rooms fit`} your must-haves: ${exactSplit(n, exact)}.`
+    );
     lines.push(`Top pick: ${found.results[0].ref} · ${found.results[0].name}${found.results[0].sample ? " (sample, fictional)" : ""}, ${money(found.results[0].monthly_rent)} a month.`);
   } else {
     lines.push("No rooms match all your must-haves right now.");

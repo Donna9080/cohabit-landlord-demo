@@ -72,6 +72,35 @@
       </form>
     </dialog>
 
+    <!-- Connect: an editable introduction to another renter; nothing is sent until "Send request". -->
+    <dialog class="dialog dialog-wide" id="connect" aria-labelledby="connect-title">
+      <form id="connect-form" novalidate>
+        <h2 id="connect-title"></h2>
+        <p class="small muted" id="connect-info"></p>
+        <label class="small" for="connect-intro"><strong>Your introduction</strong> (you can edit it)</label>
+        <textarea id="connect-intro" maxlength="500" rows="5"></textarea>
+        <p class="hint">No phone numbers or addresses. They can accept or decline; you can withdraw while it's waiting.</p>
+        <p class="field-error" id="connect-error" role="alert"></p>
+        <div class="actions">
+          <button class="btn btn-quiet" type="button" data-action="connect-cancel">Cancel</button>
+          <button class="btn" type="submit" id="connect-send">Send request</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Messages between two renters, once a request is accepted. -->
+    <dialog class="dialog dialog-wide" id="messages" aria-labelledby="messages-title">
+      <div class="msgs-head"><h2 id="messages-title"></h2><button class="icon-btn" type="button" data-action="messages-close" aria-label="Close messages">×</button></div>
+      <ol class="msgs-log" id="msgs-log" role="log" aria-live="polite"></ol>
+      <form class="chat-form" id="msgs-form" novalidate>
+        <label class="sr-only" for="msgs-input">Message</label>
+        <textarea id="msgs-input" rows="2" maxlength="1000" placeholder="Write a message…"></textarea>
+        <button class="btn" type="submit">Send</button>
+      </form>
+      <p class="field-error" id="msgs-error" role="alert"></p>
+      <p class="hint">Only you two can see these messages. Please don't share phone numbers or addresses.</p>
+    </dialog>
+
     <!-- Short messages such as "Request removed" appear here. -->
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 

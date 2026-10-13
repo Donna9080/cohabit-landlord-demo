@@ -14,6 +14,8 @@ import { BRANDEIS, kmBetween, searchRooms } from "../src/assistant/search.js";
 import { PHONE, hasAddress } from "../src/validate.js";
 import { rankUnits } from "../src/match.js";
 import { rankRoommates, scoreRoommate } from "../src/roommates.js";
+import { makeHandle } from "../src/connections.js";
+import { majorDifferences, roommateDifferences } from "../src/roommates.js";
 import { startFakeAnthropic } from "./fake-anthropic.mjs";
 
 const PORT = 8788;
@@ -37,6 +39,8 @@ const people = {
   chatMate: { id: "t_chat_mate", name: "Mia Chatmate", email: "chat-mate@example.test", type: "renter" },
   chatBasic: { id: "t_chat_basic", name: "Basil Basictester", email: "chat-basic@example.test", type: "renter" },
   chatFresh: { id: "t_chat_fresh", name: "Frankie Freshtester", email: "chat-fresh@example.test", type: "renter" },
+  chatPal: { id: "t_chat_pal", name: "Pat Paltester", email: "chat-pal@example.test", type: "renter" },
+  outsider: { id: "t_outsider", name: "Oscar Outsider", email: "outsider@example.test", type: "renter" },
 };
 const future = new Date(Date.now() + 86400_000).toISOString();
 const past = new Date(Date.now() - 60_000).toISOString();
@@ -150,7 +154,7 @@ for (let i = 0; i < 60; i++) {
   await sleep(500);
 }
 
-const { landlordA, landlordB, renterA, renterB, newbie, admin, rater, chatAi, chatMate, chatBasic, chatFresh } = people;
+const { landlordA, landlordB, renterA, renterB, newbie, admin, rater, chatAi, chatMate, chatBasic, chatFresh, chatPal, outsider } = people;
 
 try {
   // ── Matching rules (pure function, no server) ─────────────────────────────
@@ -447,7 +451,7 @@ try {
   check("B's email is shown because B chose to share it", seenB.email === renterB.email);
   const mateText = JSON.stringify(r.data);
   const mateLeaks = ["Renter B", "t_renter", "budget_", "sleep_schedule", "cleanliness", "user_id", "999", "\"id\""].filter((k) => mateText.includes(k));
-  check("Roommate result has no last name, ids, budget figures or raw answers", mateLeaks.length === 0 && Object.keys(seenB).sort().join() === "email,firstName,sample,score,shared", mateLeaks.join(","));
+  check("Roommate result has no last name, ids, budget figures or raw answers (B didn't choose to share details)", mateLeaks.length === 0 && seenB.details === null && seenB.differences === null && /^h_[A-Za-z0-9_-]+$/.test(seenB.handle) && Object.keys(seenB).sort().join() === "details,differenceCount,differences,email,firstName,fits,handle,highlights,mainMiss,request,sample,score,theyShare,youShare", mateLeaks.join(",") + " " + Object.keys(seenB).sort().join());
   r = await api("/api/renter/roommates", { as: renterB });
   check("Renter B sees Renter A without an email (A did not share it)", r.data.roommates.length === 1 && r.data.roommates[0].email === null);
   r = await api("/api/renter/roommates?user_id=t_renter_b&share_email=1", { as: rater });
@@ -705,6 +709,7 @@ try {
     let res = r.data.results;
     check("Results panel: goal is a room; rooms worked out from the answers, all real, active and within budget", res.goal === "room" && res.rooms.status === "ok" && res.rooms.preliminary === false && res.people === null && res.rooms.items.length >= 1 && res.rooms.items.length <= 12 && res.rooms.items.every((c) => !c.unit.sample && c.unit.monthly_rent <= 1300 && c.fits.length));
     check("Results panel: the first results match the cards the AI was shown", res.rooms.items.slice(0, 3).map((c) => c.unit.id).join() === rooms.map((c) => c.unit.id).join());
+    check("Room cards: at most two reasons and one mismatch, labeled exact or partial, with counts that add up", res.rooms.items.every((c) => c.highlights.length <= 2 && c.highlights.every((h) => c.fits.includes(h)) && (c.mainMiss === null || c.misses.includes(c.mainMiss)) && c.match === (c.misses.length ? "partial" : "exact")) && res.rooms.exact === res.rooms.items.filter((c) => c.match === "exact").length);
     r = await api("/api/assistant", { as: chatAi });
     check("Results panel: the same results come back when the page is opened again", r.data.results.rooms.items.map((c) => c.unit.id).join() === res.rooms.items.map((c) => c.unit.id).join());
     r = await api("/api/assistant/memory", { method: "POST", as: chatAi, body: { field: "budget_max", value: 1200, mustHave: true } });
@@ -734,7 +739,8 @@ try {
     check("Assistant (AI): a reply with nothing true left is rewritten from the search results", !replyOf(r).text.includes("8,888") && /rooms? fits? your must-haves/.test(replyOf(r).text) && replyOf(r).text.includes("Top pick: R1 · "), replyOf(r).text);
 
     r = await api("/api/assistant", { as: chatAi.cookie2 });
-    check("Assistant: after signing in again the chat continues, in order", r.data.messages.length === 6 && r.data.messages[0].role === "user" && r.data.messages[1].text === "Here are the best fits. R1 looks strongest." && r.data.memory.some((f) => f.field === "budget_max"));
+    const chatOnly = r.data.messages.filter((m) => !m.event);
+    check("Assistant: after signing in again the chat continues, in order (plus notes for answers changed outside the chat)", chatOnly.length === 6 && chatOnly[0].role === "user" && chatOnly[1].text === "Here are the best fits. R1 looks strongest." && r.data.messages.some((m) => m.event && /^Budget up to: \$1,\d00 a month \(must-have\)\. Results updated\.$/.test(m.text)) && r.data.memory.some((f) => f.field === "budget_max"), r.data.messages.filter((m) => m.event).map((m) => m.text).join(" | ") + " / " + chatOnly.length);
     check("Assistant: earlier result cards come back with current listing details", r.data.messages[1].cards.length === rooms.length && r.data.messages[1].cards.every((c) => c.available && c.unit?.name));
 
     r = await say(chatAi, `Actually I can do $1,500. [[update_memory {"budget_max":1500}]] [[reply Updated.]]`);
@@ -811,6 +817,106 @@ try {
     const gone = r.data.saved.find((s) => s.kind === "person");
     check("Assistant: someone who turns matching off disappears from saved options and old replies", gone?.available === false && !("firstName" in gone) && !JSON.stringify(r.data).includes("Alexandra"));
 
+    {
+      const me = { sleep_schedule: "late", cleanliness: "tidy", pets: "ok_with_pets", smoking: "no_smoking", chores: "rotating_schedule" };
+      const them = { sleep_schedule: "flexible", cleanliness: "relaxed", pets: "have_pets", smoking: "no_smoking", chores: "split_by_task" };
+      check("Cards name only important differences; Details lists them all", roommateDifferences(me, them).length === 4 && JSON.stringify(majorDifferences(me, them)) === JSON.stringify(["Tidiness: you said very tidy, they said relaxed"]));
+    }
+    // Connect (roommate requests). chatMate has roommate matching on; renterB is discoverable; chatPal joins below.
+    const handleFor = (list, name) => list.find((p) => p.firstName === name)?.handle;
+    const reqCount = (where) => count(`SELECT COUNT(*) AS n FROM roommate_requests WHERE ${where}`);
+    r = await api("/api/renter/roommates", { as: chatMate });
+    let mm = r.data.roommates;
+    const bart = mm.find((p) => p.firstName === "Bartholomew");
+    check("My matches: each person has a private handle, two highlights, and no ids, raw answers or unshared email", mm.length >= 2 && mm.every((p) => /^h_/.test(p.handle) && p.highlights.length <= 2 && p.details === null) && bart.email === null && !/t_mate_|t_renter_|"user_?id"|sleep_schedule|budget_max/.test(JSON.stringify(r.data)));
+    d1(`UPDATE match_preferences SET share_profile = 1 WHERE user_id = 't_mate_b'`);
+    r = await api("/api/renter/roommates", { as: chatMate });
+    check("Profile details stay hidden until both sides share them (Bart shares, the viewer doesn't)", r.data.roommates.find((p) => p.firstName === "Bartholomew").details === null && r.data.youShare === false);
+    r = await api("/api/renter/preferences", { method: "PUT", as: chatMate, body: prefsBody({ budget_max: 1300, roommate_visible: true, share_profile: true, chores: "rotating_schedule" }) });
+    check("A renter can choose to share their details (needs roommate matching on)", r.status === 200 && r.data.preferences.share_profile === true);
+    r = await api("/api/renter/preferences", { method: "PUT", as: renterB, body: prefsBody({ budget_max: 999, share_profile: true }) });
+    check("Sharing details can't be on without roommate matching", r.data.preferences.share_profile === false);
+    await api("/api/renter/preferences", { method: "PUT", as: renterB, body: prefsBody({ budget_max: 999, roommate_visible: true, share_email: true }) });
+    r = await api("/api/renter/roommates", { as: chatMate });
+    mm = r.data.roommates;
+    const bartNow = mm.find((p) => p.firstName === "Bartholomew");
+    check("With both sharing: budget, move-in, area, lifestyle tags and differences in Details", bartNow.details?.budget === "$900–$1,400 a month" && bartNow.details.moveIn === "Jun 2027" && bartNow.details.area === "Waltham" && bartNow.details.lifestyle.includes("Night owl") && bartNow.differences.some((d) => d.startsWith("Sleep: you said early bird, they said night owl")));
+    r = await api("/api/assistant", { as: chatMate });
+    const bartInChat = r.data.results.people?.items?.find((p) => p.firstName === "Bartholomew");
+    check("Assistant results show the same Details once both share (and no ids)", r.data.results.people?.status === "ok" && bartInChat?.details?.area === "Waltham" && bartInChat.differences.length > 0 && !/t_mate_|"userId"/.test(JSON.stringify(r.data.results.people)), r.data.results.people?.status);
+    check("An email shows only for someone who chose to share it", mm.find((p) => p.firstName === "Test")?.email === renterB.email && bartNow.email === null);
+
+    r = await api("/api/roommates/requests", { method: "POST", as: chatMate, body: { handle: handleFor(mm, "Test"), intro: "Hi! TEST intro. Call me at (617) 555-0142" } });
+    check("Connect: a phone number in the introduction is refused (400)", r.status === 400 && r.data.field === "intro");
+    r = await api("/api/roommates/requests", { method: "POST", as: chatMate, body: { handle: handleFor(mm, "Test").slice(0, -4) + "AAAA", intro: "Hi" } });
+    check("Connect: a tampered handle is refused (404)", r.status === 404);
+    const env = { BETTER_AUTH_SECRET: SECRET };
+    r = await api("/api/roommates/requests", { method: "POST", as: chatMate, body: { handle: await makeHandle(env, "t_chat_mate", "t_chat_mate"), intro: "Hi me" } });
+    check("Connect: nobody can send a request to themself (400)", r.status === 400 && reqCount("1=1") === 0);
+    r = await api("/api/roommates/requests", { method: "POST", as: chatMate, body: { handle: await makeHandle(env, "t_chat_mate", "t_mate_hidden"), intro: "Hi" } });
+    check("Connect: only people who chose to be found can be asked (404)", r.status === 404);
+    r = await api("/api/roommates/requests", { method: "POST", as: outsider, body: { handle: await makeHandle(env, "t_outsider", "t_renter_b"), intro: "Hi" } });
+    check("Connect: you need roommate matching on yourself (409)", r.status === 409 && r.data.error === "opt_in_required");
+    await api("/api/renter/preferences", { method: "PUT", as: outsider, body: prefsBody({ budget_max: 1300, roommate_visible: true }) });
+    r = await api("/api/roommates/requests", { method: "POST", as: outsider, body: { handle: handleFor(mm, "Test"), intro: "Hi" } });
+    check("Connect: a handle made for one renter doesn't work for another (404, nothing created)", r.status === 404 && reqCount("1=1") === 0);
+    r = await api("/api/roommates/requests", { as: landlordA });
+    check("Connect: landlords can't use it (403)", r.status === 403);
+    r = await api("/api/roommates/requests", { method: "POST", as: chatMate, body: { handle: handleFor(mm, "Test"), intro: "Hi! TEST intro from Mia." }, origin: "https://evil.example" });
+    check("Connect: requests from another site are blocked (403)", r.status === 403);
+
+    r = await api("/api/roommates/requests", { method: "POST", as: chatMate, body: { handle: handleFor(mm, "Test"), intro: "Hi! TEST intro from Mia." } });
+    const toB = r.data.request?.id;
+    check("Connect: a request is created, pending, only after Send", r.status === 201 && r.data.request.status === "pending" && reqCount("from_user_id='t_chat_mate' AND to_user_id='t_renter_b' AND status='pending'") === 1);
+    r = await api("/api/roommates/requests", { method: "POST", as: chatMate, body: { handle: (await api("/api/renter/roommates", { as: chatMate })).data.roommates.find((p) => p.firstName === "Test").handle, intro: "Again" } });
+    check("Connect: no duplicate requests (409)", r.status === 409 && r.data.error === "already_requested");
+    r = await api("/api/renter/roommates", { as: chatMate });
+    check("The sender sees the request as pending on that person's card", r.data.roommates.find((p) => p.firstName === "Test").request?.status === "pending" && r.data.roommates.find((p) => p.firstName === "Test").request.direction === "out");
+    r = await api("/api/roommates/requests", { as: renterB });
+    const inB = r.data.incoming[0];
+    check("The recipient sees the first name, the introduction and what they share; no email or ids", inB?.firstName === "Mia" && inB.intro === "Hi! TEST intro from Mia." && inB.shared.length > 0 && !/@example\.test|t_chat_|t_renter_/.test(JSON.stringify(r.data)));
+    r = await api(`/api/roommates/requests/${toB}/messages`, { as: chatMate });
+    check("No messages before the request is accepted (409)", r.status === 409);
+    r = await api(`/api/roommates/requests/${toB}`, { method: "POST", as: renterB, body: { action: "withdraw" } });
+    check("Only the sender can withdraw (403)", r.status === 403);
+    r = await api(`/api/roommates/requests/${toB}`, { method: "POST", as: chatMate, body: { action: "accept" } });
+    check("Only the recipient can accept (403)", r.status === 403);
+    r = await api(`/api/roommates/requests/${toB}`, { method: "POST", as: outsider, body: { action: "decline" } });
+    check("Someone else can't touch the request (404)", r.status === 404);
+    r = await api(`/api/roommates/requests/${toB}`, { method: "POST", as: renterB, body: { action: "decline" } });
+    check("The recipient declines", r.status === 200 && r.data.status === "declined");
+    r = await api(`/api/roommates/requests/${toB}`, { method: "POST", as: renterB, body: { action: "accept" } });
+    check("A declined request can't be accepted later (409)", r.status === 409);
+    r = await api("/api/roommates/requests", { method: "POST", as: chatMate, body: { handle: (await api("/api/renter/roommates", { as: chatMate })).data.roommates.find((p) => p.firstName === "Test").handle, intro: "Please?" } });
+    check("After a decline, the sender can't ask again (409)", r.status === 409 && r.data.error === "declined");
+
+    // Accept and message: Pat joins roommate matching
+    await api("/api/renter/preferences", { method: "PUT", as: chatPal, body: prefsBody({ budget_max: 1300, roommate_visible: true }) });
+    r = await api("/api/roommates/requests", { method: "POST", as: chatMate, body: { handle: (await api("/api/renter/roommates", { as: chatMate })).data.roommates.find((p) => p.firstName === "Pat").handle, intro: "Hi Pat! TEST" } });
+    const toF = r.data.request?.id;
+    r = await api(`/api/roommates/requests/${toF}`, { method: "POST", as: chatMate, body: { action: "withdraw" } });
+    check("The sender can withdraw while it's pending", r.status === 200 && r.data.status === "withdrawn");
+    r = await api("/api/roommates/requests", { method: "POST", as: chatMate, body: { handle: (await api("/api/renter/roommates", { as: chatMate })).data.roommates.find((p) => p.firstName === "Pat").handle, intro: "Hi again Pat! TEST" } });
+    const toF2 = r.data.request?.id;
+    check("After withdrawing, a new request can be sent", r.status === 201);
+    r = await api(`/api/roommates/requests/${toF2}`, { method: "POST", as: chatPal, body: { action: "accept" } });
+    check("The recipient accepts", r.status === 200 && r.data.status === "accepted");
+    r = await api(`/api/roommates/requests/${toF2}/messages`, { method: "POST", as: chatMate, body: { body: "Hi Pat, TEST message. When do you want to tour places?" } });
+    check("Connected renters can message each other", r.status === 201 && r.data.messages.length === 1 && r.data.messages[0].mine === true && r.data.with === "Pat");
+    r = await api(`/api/roommates/requests/${toF2}/messages`, { as: chatPal });
+    check("The other person sees the message as theirs to read", r.status === 200 && r.data.messages[0].mine === false && r.data.with === "Mia");
+    r = await api(`/api/roommates/requests/${toF2}/messages`, { method: "POST", as: chatPal, body: { body: "My number is 617 555 0142" } });
+    check("Messages with phone numbers are refused (400)", r.status === 400);
+    r = await api(`/api/roommates/requests/${toF2}/messages`, { as: renterB });
+    check("Nobody else can read the conversation (404)", r.status === 404);
+    r = await api("/api/roommates/requests", { as: chatMate });
+    check("Requests list: connected, earlier (declined/withdrawn), none waiting", r.data.connected.length === 1 && r.data.connected[0].firstName === "Pat" && r.data.connected[0].messages === 1 && r.data.closed.length >= 2 && r.data.outgoing.length === 0);
+    r = await api("/api/assistant/demo", { method: "POST", as: chatMate, body: { on: true } });
+    check("Demo profiles have no handle, so no real request can be made to them", r.data.results.people?.status !== "ok" || r.data.results.people.items.every((p) => p.handle === null && p.demo === true));
+    r = await api("/api/roommates/requests", { method: "POST", as: chatMate, body: { handle: null, intro: "Hi demo" } });
+    check("A request without a valid handle is refused (404)", r.status === 404);
+    await api("/api/assistant/demo", { method: "POST", as: chatMate, body: { on: false } });
+
     // Fallbacks: the AI service down, or the model declining, still gets an answer.
     // This renter has made many writes in the last minute; start a fresh rate-limit window so the next checks test the fallback.
     d1(`DELETE FROM app_rate_limits WHERE key = 'w:u:t_chat_ai'`);
@@ -845,7 +951,7 @@ try {
     basicTexts.push(replyOf(r).text);
     reply = replyOf(r);
     check("Basic mode: with the basics, it shows real rooms within budget", reply.cards.length >= 1 && reply.cards.every((c) => c.available && !c.unit.sample && c.unit.monthly_rent <= 1300), reply.text);
-    check("Guided chat: results summed up in short, pointing to the Results panel", /^\d+ rooms? fits? your must-haves\./.test(reply.text) && /Top pick: R1 · .+, \$[\d,]+ a month\./.test(reply.text), reply.text);
+    check("Guided chat: results summed up in short, exact and partial matches counted separately", /^\d+ rooms? fits? your must-haves: (it matches everything|all match everything|a partial match|all partial matches|\d+ match(es)? everything, \d+ partly)\./.test(reply.text) && /Top pick: R1 · .+, \$[\d,]+ a month\./.test(reply.text), reply.text);
     check("Basic mode: matching sample listings are mentioned, not shown", /sample \(fictional\) listing/.test(reply.text));
     r = await api("/api/assistant/saved", { method: "POST", as: chatBasic, body: { messageId: reply.id, ref: "R1" } });
     const keptSaved = r.status === 201;
@@ -905,6 +1011,8 @@ try {
 
     r = await api("/api/me/delete", { method: "POST", as: chatBasic, body: { confirm: "DELETE" } });
     check("Deleting an account deletes its chat, memory, cards, saved options and usage", r.status === 200 && count(`SELECT (SELECT COUNT(*) FROM assistant_messages WHERE user_id='t_chat_basic') + (SELECT COUNT(*) FROM assistant_threads WHERE user_id='t_chat_basic') + (SELECT COUNT(*) FROM assistant_actions WHERE user_id='t_chat_basic') + (SELECT COUNT(*) FROM saved_options WHERE user_id='t_chat_basic') + (SELECT COUNT(*) FROM assistant_usage WHERE user_id='t_chat_basic') AS n`) === 0);
+    r = await api("/api/me/delete", { method: "POST", as: chatPal, body: { confirm: "DELETE" } });
+    check("Deleting an account deletes its roommate requests and messages", r.status === 200 && count(`SELECT COUNT(*) AS n FROM roommate_requests WHERE from_user_id = 't_chat_pal' OR to_user_id = 't_chat_pal'`) === 0 && count(`SELECT COUNT(*) AS n FROM roommate_messages`) === 0);
   }
 
   // ── CSRF / origin ─────────────────────────────────────────────────────────

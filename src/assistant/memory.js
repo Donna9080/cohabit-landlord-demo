@@ -228,6 +228,7 @@ export function mergedPreferences(memory, saved) {
     chores: v.chores ?? s.chores ?? null,
     roommate_visible: !!s.roommate_visible,
     share_email: !!s.share_email,
+    share_profile: !!s.share_profile,
   };
   const missing = [];
   if (body.budget_max == null) missing.push("budget_max");
@@ -248,13 +249,14 @@ const PROFILE_LABELS = {
   ...Object.fromEntries([...ROOMMATE_FIELDS, "chores"].map((f) => [f, [LABELS[f], (v) => CHOICE_LABELS[f][v] || "Not set"]])),
   roommate_visible: ["Roommate matching", (v) => (v ? "On" : "Off")],
   share_email: ["Share my email with roommate matches", (v) => (v ? "Yes" : "No")],
+  share_profile: ["Share my budget, area, move-in month and lifestyle with matches", (v) => (v ? "Yes" : "No")],
 };
 
 // Rows for the confirmation card: what would change in the saved profile.
 export function profileChanges(saved, next) {
   const same = (f) => {
     if (!saved) return false;
-    if (f === "roommate_visible" || f === "share_email") return !!saved[f] === !!next[f];
+    if (f === "roommate_visible" || f === "share_email" || f === "share_profile") return !!saved[f] === !!next[f];
     return (saved[f] ?? null) === (next[f] ?? null);
   };
   return Object.entries(PROFILE_LABELS)

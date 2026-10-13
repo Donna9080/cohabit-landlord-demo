@@ -10,6 +10,7 @@
 //   /api/renter/preferences      a renter's own questionnaire answers
 //   /api/renter/matches          active units ranked against those answers
 //   /api/renter/roommates        other opted-in renters ranked by lifestyle fit (opt-in, limited fields)
+//   /api/roommates/requests[...]  connect with another renter, accept or decline, message once accepted (src/connections.js)
 //   /api/admin/users             read-only user list (admin only)
 //   /api/admin/imports[...]      import external listings from an authorized source; roll back (admin only)
 //   /api/admin/settings          hide or show sample listings in public search (admin only)
@@ -17,12 +18,13 @@
 //   /api/admin/assistant         assistant usage totals and estimated cost (admin only)
 import { assistantCleanup, assistantDeleteStatements, assistantUsageReport, handleAssistant } from "./assistant/routes.js";
 import { getAuth } from "./auth.js";
+import { connectionDeleteStatements, handleConnections, personView, requestsByPerson } from "./connections.js";
 import { HttpError, MAX_BODY, assertSameOrigin, json, rateLimit, readJson, withSecurityHeaders } from "./http.js";
 import { IMPORT_LIMIT, previewImport } from "./imports.js";
 import { activeListings, listingMapper, LISTING_FIELDS, noSamples, sampleListingsHidden } from "./listings.js";
 import { rankUnits } from "./match.js";
 import { asPrefs, createInterest, loadPreferences, MAX_INTERESTS_PER_RENTER, savePreferences } from "./profile.js";
-import { firstNameOf, rankRoommates } from "./roommates.js";
+import { firstNameOf, rankedMatches } from "./roommates.js";
 import { InvalidInput, isUnitId, parseAccountType, parseInterest, parsePreferences, parseUnit } from "./validate.js";
 
 const MAX_IMPORT_BODY = 600 * 1024; // admin CSV imports only
@@ -175,6 +177,7 @@ async function handleApi(request, env, url) {
     // One batch = one transaction in D1. Children first, then the user row.
     await db.batch([
       ...assistantDeleteStatements(db, user.id),
+      ...connectionDeleteStatements(db, user.id),
       db.prepare(`DELETE FROM unit_interests WHERE renter_user_id = ?1 OR unit_id IN (SELECT id FROM units WHERE landlord_user_id = ?1)`).bind(user.id),
       db.prepare(`DELETE FROM units WHERE landlord_user_id = ?1`).bind(user.id),
       db.prepare(`DELETE FROM match_preferences WHERE user_id = ?1`).bind(user.id),
@@ -362,16 +365,22 @@ async function handleApi(request, env, url) {
     if (!mine.roommate_visible) return reply({ roommates: [], optedIn: false });
     const { results } = await db
       .prepare(
-        `SELECT p.budget_min, p.budget_max, p.move_in_month, p.area, p.sleep_schedule, p.cleanliness, p.noise, p.guests,
-           p.pets, p.smoking, p.chores, p.share_email, u.name, u.email, (u.id LIKE 'sample-%') AS sample
+        `SELECT p.user_id, p.budget_min, p.budget_max, p.move_in_month, p.area, p.sleep_schedule, p.cleanliness, p.noise, p.guests,
+           p.pets, p.smoking, p.chores, p.share_email, p.share_profile, u.name, u.email, (u.id LIKE 'sample-%') AS sample
          FROM match_preferences p JOIN "user" u ON u.id = p.user_id
          WHERE p.roommate_visible = 1 AND p.user_id != ?1 AND u.account_type = 'renter'
          ORDER BY p.updated_at DESC LIMIT 500`
       )
       .bind(user.id)
       .all();
-    const others = results.map((r) => ({ prefs: r, firstName: firstNameOf(r.name), email: r.share_email ? r.email : null, sample: !!r.sample }));
-    return reply({ roommates: rankRoommates(mine, others), optedIn: true });
+    const others = results.map((r) => ({ userId: r.user_id, prefs: r, firstName: firstNameOf(r.name), email: r.share_email ? r.email : null, sample: !!r.sample }));
+    const requests = await requestsByPerson(db, user.id);
+    const roommates = await Promise.all(
+      rankedMatches(mine, others).map(({ o, score, shared }) =>
+        personView(env, user.id, mine, { ...o, score, fits: shared, misses: score < 90 ? ["Not every lifestyle answer matches. Talk through sleep, guests and chores before deciding."] : [] }, requests)
+      )
+    );
+    return reply({ roommates, optedIn: true, youShare: !!mine.share_profile });
   }
 
   // Admin: import external listings from an authorized source, roll an import back, and hide or show
@@ -496,6 +505,12 @@ async function handleApi(request, env, url) {
       return reply({ sampleHidden: body.hideSampleListings });
     }
     throw new HttpError(404, "not_found", "Not found.");
+  }
+
+  // Renter: connect with another renter (src/connections.js). Renters only.
+  if (path.startsWith("/api/roommates/")) {
+    const user = requireType(viewer, "renter");
+    return handleConnections({ request, env, db, user, path, method, reply });
   }
 
   // Renter: the chat assistant (src/assistant/). Renters only; every write is checked like the forms.

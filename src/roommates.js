@@ -87,13 +87,52 @@ export function scoreRoommate(me, other) {
 }
 
 // others: [{ prefs, firstName, email (already null unless they chose to share it), sample }]
-export function rankRoommates(me, others, limit = 20) {
+// Server side: the ranked matches with the other person's record (id and answers) still attached.
+export function rankedMatches(me, others, limit = 20) {
   return others
     .map((o) => ({ o, ...scoreRoommate(me, o.prefs) }))
     .filter((m) => m.eligible)
     .sort((a, b) => b.score - a.score || b.shared.length - a.shared.length || a.o.firstName.localeCompare(b.o.firstName))
-    .slice(0, limit)
-    .map(({ o, score, shared }) => ({ firstName: o.firstName, score, shared, email: o.email ?? null, sample: !!o.sample }));
+    .slice(0, limit);
 }
+
+export function rankRoommates(me, others, limit = 20) {
+  return rankedMatches(me, others, limit).map(({ o, score, shared }) => ({ firstName: o.firstName, score, shared, email: o.email ?? null, sample: !!o.sample }));
+}
+
+// Each lifestyle answer as a short answer ("you said …") and as a profile tag.
+const LIFE = {
+  sleep_schedule: ["Sleep", { early: ["early bird", "Early bird"], flexible: ["flexible", "Flexible sleeper"], late: ["night owl", "Night owl"] }],
+  cleanliness: ["Tidiness", { relaxed: ["relaxed", "Relaxed about tidiness"], average: ["average", "Average tidiness"], tidy: ["very tidy", "Very tidy"] }],
+  noise: ["Noise", { quiet: ["quiet", "Likes it quiet"], moderate: ["some noise is fine", "Some noise is fine"], lively: ["lively", "Likes a lively home"] }],
+  guests: ["Guests", { rarely: ["rarely", "Rarely has guests"], sometimes: ["sometimes", "Has guests sometimes"], often: ["often", "Often has guests"] }],
+  pets: ["Pets", { no_pets: ["no pets", "No pets, please"], ok_with_pets: ["OK with pets", "OK with pets"], have_pets: ["has a pet", "Has a pet"] }],
+  smoking: ["Smoking", { no_smoking: ["no smoking", "No smoking"], outside_ok: ["outside is OK", "Smoking outside is OK"], smoker: ["smokes", "Smokes"] }],
+  chores: ["Chores", { rotating_schedule: ["a chore schedule", "Likes a chore schedule"], split_by_task: ["split by task", "Splits chores by task"], as_needed: ["as needed", "Chores as needed"] }],
+};
+
+// Their lifestyle answers as tags (only shown when they chose to share their profile).
+export const lifestyleTags = (p) => Object.entries(LIFE).filter(([f]) => p[f] && LIFE[f][1][p[f]]).map(([f, [, v]]) => v[p[f]][1]);
+
+// Where two renters' answers differ (only shown when the other person chose to share their profile).
+// "Major" ones are worth a line on the card: early bird vs night owl, opposite ends of a scale, smoking, a pet vs no pets.
+function differenceList(me, other) {
+  return Object.entries(LIFE)
+    .filter(([f]) => me[f] && other[f] && me[f] !== other[f])
+    .map(([f, [label, v]]) => {
+      const major =
+        f === "sleep_schedule"
+          ? me[f] !== "flexible" && other[f] !== "flexible"
+          : SCALES[f]
+            ? Math.abs(SCALES[f].order.indexOf(me[f]) - SCALES[f].order.indexOf(other[f])) > 1
+            : f === "smoking" || (f === "pets" && [me[f], other[f]].includes("no_pets") && [me[f], other[f]].includes("have_pets"));
+      return { text: `${label}: you said ${v[me[f]][0]}, they said ${v[other[f]][0]}`, major };
+    });
+}
+export const roommateDifferences = (me, other) => differenceList(me, other).map((d) => d.text);
+export const majorDifferences = (me, other) => differenceList(me, other).filter((d) => d.major).map((d) => d.text);
+
+// The two strongest things in common, lifestyle first (where and when they're looking is true of most matches).
+export const topShared = (shared) => [...shared.filter((s) => !/^Both (looking in|moving in)|^Moving within|^Budgets overlap/.test(s)), ...shared.filter((s) => /^Both (looking in|moving in)|^Moving within|^Budgets overlap/.test(s))].slice(0, 2);
 
 export const firstNameOf = (name) => String(name || "").replace(/\(sample\)/i, "").trim().split(/\s+/)[0] || "Renter";
