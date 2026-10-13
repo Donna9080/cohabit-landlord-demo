@@ -86,7 +86,9 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       phone Chat/Results tabs), wording (same questions and answers, shorter copy, "Find your room. Find your people."),
       and Demo mode (15 fictional listings and 20 fictional profiles in code, labeled, never saved, never in real data).
       356/356 tests (41 new).
-- [ ] Owner decision: deploy the redesign (no migration needed)
+- [x] Redesign deployed 2026-10-12 with the owner's approval as `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (no migration). Live checks: pages 200,
+      `/assistant` shows the new headline, signed-out assistant/Demo/admin APIs 401, cross-site Demo request 403, no demo
+      ids in public listings.
 - [ ] Owner adds addresses to the 3 active live units without one
 - [ ] Owner tries the live assistant as a renter (manual test part 9)
 - [ ] Owner checks live: dragging the pin (1 km limit), the real Use my location permission prompt, a real unit with an address

@@ -181,7 +181,7 @@ chose to stay on basic mode for now, so there is no AI key and it costs $0.
 Renters get one chat at `/assistant`, now their first stop after sign-in. The questionnaire and matches
 (`/renter`) and Listings are unchanged and linked from the chat.
 
-**Redesign (2026-10-12, local only, not deployed yet; no database change needed).**
+**Redesign (2026-10-12, live as `e2da146e-2d3b-4c23-9591-63ae1e71a4b8`; no database change was needed).**
 - **Layout.** Results take the left two thirds and the guided chat the right third. On phones, Chat and Results tabs
   switch between them and keep their state.
 - **Results follow the goal:**
@@ -708,7 +708,7 @@ above the list, cards stack in one column, and the admin list becomes one card p
 
 ### 9. The assistant (5 minutes, renter B)
 
-These steps describe the redesigned assistant (local now; on the live site once it's deployed).
+These steps describe the redesigned assistant, live since 2026-10-12.
 
 1. As B, click **Assistant**. The page says **Find your room. Find your people.** The chat on the right asks **Hey! What
    are you looking for?** with **A room**, **A roommate** and **Both**. The results area on the left says your matches

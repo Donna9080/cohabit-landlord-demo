@@ -24,12 +24,14 @@ No real listings were imported because no authorized data source exists yet (see
 ## Deployment status
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `bdc3fd32-43b6-4d4b-957a-5ae097605f44`, deployed 2026-10-12 with the owner's approval: rooms with no map
-  location are no longer hidden by a distance must-have (commit `27df59b`). The version before it, `d7e38548-66c4-4eab-890c-ac0c692a1bcd`,
+- **Live version:** `e2da146e-2d3b-4c23-9591-63ae1e71a4b8`, deployed 2026-10-12 with the owner's approval: the assistant redesign and Demo mode
+  (commit `2c7a980`, tag `checkpoint-2026-10-12-redesign`). No database change was needed. Checked live after deploy:
+  - Pages return 200, and `/assistant` shows the new headline.
+  - Signed out, the assistant, Demo and admin APIs return 401, and a cross-site Demo request returns 403.
+  - Public listings contain no demo ids.
+
+  Before it: `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (rooms with no map location shown, commit `27df59b`). The version before it, `d7e38548-66c4-4eab-890c-ac0c692a1bcd`,
   brought the chat assistant (basic mode) and the external listing import tool (commit `a5f8e92`).
-- **Not deployed (local only):** the assistant redesign and Demo mode (commits after `9ce40a7`; tag
-  `checkpoint-2026-10-12-redesign`). They need no database change, so deploying is a single `npx wrangler deploy`
-  once approved.
 - **Live database (`cohabit-db`):** migrations 0001 to 0006 applied. 0005 and 0006 were applied on 2026-10-12 with
   the owner's approval, after a restore point (bookmark `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90`). Both only added tables and one empty column;
   existing data was checked afterwards (11 users, 5 units, 2 requests, 4 questionnaires).
@@ -61,8 +63,9 @@ No real listings were imported because no authorized data source exists yet (see
 | Maps | Massachusetts-only place search, Use my location (browser only), always-on map, landlord address + draggable pin, approximate (500 m) or exact | Yes |
 | Import tool | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | Yes (2026-10-12) |
 | **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
+| **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
 
-### Assistant redesign (2026-10-12, local only)
+### Assistant redesign (2026-10-12, live as `e2da146e…`)
 
 Built and tested in three stages, each committed separately:
 
@@ -151,7 +154,8 @@ Built and tested in three stages, each committed separately:
       about 0.1¢.
 - [x] Apply migrations 0005 and 0006 to the live database (2026-10-12, restore point taken first).
 - [x] Push and deploy the import tool and the assistant (2026-10-12, version `d7e38548…`).
-- [ ] Deploy the assistant redesign and Demo mode (no migration needed; needs the owner's approval).
+- [x] Deploy the assistant redesign and Demo mode (2026-10-12, version `e2da146e…`, no migration).
+- [ ] Owner tries the redesigned assistant on the live site as a renter (manual test part 9, including Demo mode).
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
 
 **Blocked: real listings (0 imported).** Apartments.com refuses automated access, and there is no republication
@@ -179,7 +183,7 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
 | Database before migrations 0005 and 0006 | Time Travel bookmark `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0004 | Time Travel bookmark `00000032-00000000-000050f9-cded0b9a637a3ca8de724dfb34fae1b6` |
 | Original static site | Version `a3c0f17b-d52a-47e3-9d71-5049e87a7a34`, git tag `pre-accounts-2026-09-29` |
