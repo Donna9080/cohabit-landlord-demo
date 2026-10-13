@@ -73,8 +73,8 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
       when the AI is off/over a limit/down, confirmation cards for saving the profile or contacting a landlord, saved
       options, Clear chat, usage limits and admin cost totals. Migration `0006_assistant.sql` (additive) applied
       locally only. SDK `@anthropic-ai/sdk` 0.129.0. 314/314 tests (84 new), checked in the browser on desktop and phone.
-- [ ] **Owner decision:** turn on AI mode (Anthropic Console account, spend limit, API key entered by the owner; model
-      choice and expected cost in ACCOUNTS_SETUP.md, "AI assistant"). Until then the assistant runs in basic mode at $0.
+- [x] **Owner decision (2026-10-12): stay on basic mode for now.** No Anthropic account or key; the assistant runs
+      rule-based at $0. Turning AI on later: steps, model choice and expected cost in ACCOUNTS_SETUP.md, "AI assistant".
 - [ ] Production for the assistant: migrations 0005 and 0006, then deploy (each needs the owner's approval)
 - [ ] Owner checks live: dragging the pin (1 km limit), the real Use my location permission prompt, a real unit with an address
 - [ ] A person who was never on the Google test-user list signs in (database still shows only the owner's 2 accounts)

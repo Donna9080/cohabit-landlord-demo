@@ -176,7 +176,7 @@ worked example on the sample data are in [docs/SAMPLE_MATCHING.md](docs/SAMPLE_M
 
 ## AI assistant (chat)
 
-**Status (2026-10-12): built and tested locally only. Not deployed; the live database was not changed.**
+**Status (2026-10-12): built and tested locally only. Not deployed; the live database was not changed. The owner chose to stay on basic mode for now (no AI key).**
 Renters get one chat at `/assistant`, now their first stop after sign-in. The questionnaire and matches
 (`/renter`) and Listings are unchanged and linked from the chat.
 

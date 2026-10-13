@@ -113,9 +113,10 @@ No real listings were imported because no authorized data source exists yet (see
 
 **Owner decisions (each separately):**
 
-- [ ] Turn on AI mode. Create an Anthropic Console account, set a spend limit (for example $5 a month), create a key
-      and enter it yourself, and choose the model. Default Opus 5.5 is about 2–6¢ per reply, Sonnet 5.5 about 1–3¢,
-      Haiku 5.5 about 0.1¢.
+- [x] AI mode: **decided 2026-10-12 to stay on basic mode for now** ($0, no Anthropic account or key). To turn it on
+      later: create an Anthropic Console account, set a spend limit (for example $5 a month), create a key and enter it
+      yourself, and choose the model. Default Opus 5.5 is about 2–6¢ per reply, Sonnet 5.5 about 1–3¢, Haiku 5.5
+      about 0.1¢.
 - [ ] Apply migrations 0005 and 0006 to the live database (additive; take a restore point first).
 - [ ] Push and deploy the import tool and the assistant.
 
