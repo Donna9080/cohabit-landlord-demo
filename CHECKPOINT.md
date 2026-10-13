@@ -210,7 +210,7 @@ Earlier runs:
 - [ ] Owner tries the redesigned assistant on the live site as a renter (manual test part 9, including Demo mode).
 - [x] Apply migration 0007 to the live database and deploy the 2026-10-13 work (restore point first; version `d4ea27c7…`).
 - [ ] Run part 10 of the manual test with two real renter accounts (Details, Connect, Accept, Messages, room request).
-- [ ] Push commits `d3d9734` and the deploy record to GitHub (not pushed yet).
+- [x] Push commits `d3d9734` and the deploy record to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-requests`).
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
 
 **Blocked: real listings (0 imported).** Apartments.com refuses automated access, and there is no republication
