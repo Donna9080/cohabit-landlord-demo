@@ -46,6 +46,8 @@ There is no R2 bucket and no file upload. Matching and search are rule-based cod
 | `assistant_usage` | AI replies and tokens per day, per renter and for the site | Nobody per renter; admin sees site totals |
 | `roommate_requests` | A renter's request to connect with another renter: who to whom, the introduction (max 500 characters), status (pending, accepted, declined, withdrawn) and dates (migration `0007`) | The two renters involved. Not landlords, not admin |
 | `roommate_messages` | Messages between two renters after a request is accepted (max 1,000 characters each) (migration `0007`) | Only those two renters |
+| `survey_responses` | Quick check-in answers: the answers, an optional comment (max 500), renter / landlord / guest, whether Demo mode was on, the first part of the page it was sent from, the time, and the points it earned (migration `0008`) | Admin sees answers and who answered (renter, landlord, guest), never names, emails or account ids. Not used for matching |
+| `points_awards` | coHabit Points: one row per award (who, why, how many, which response earned it); a balance is the sum (migration `0008`) | The person themself (balance on Account and in the check-in). Admin sees how many awards were made |
 
 Not collected: street addresses (rejected by validation), phone numbers, IDs,
 dates of birth, financial or health details, profile photos.
@@ -204,6 +206,37 @@ worked example on the sample data are in [docs/SAMPLE_MATCHING.md](docs/SAMPLE_M
   assistant, with a "Send this request?" confirmation first. "Request sent" and Withdraw stay in step on the card,
   in Details, on Listings, in Saved and on My matches. A request doesn't reserve the room. Demo listings show a
   preview only; external listings say to contact the original site; sample listings have no landlord to contact.
+
+## Quick check-in survey and coHabit Points (migration `0008`, local only so far)
+
+An optional survey that helps shape coHabit. It never opens by itself: a small feedback icon sits beside the profile
+menu (or beside **Sign in**) and opens a drawer from the right, full width on phones. It's a dialog on top of the
+page, so the chat, results, tabs and any search stay exactly as they were. The code is in `src/survey.js`.
+
+- **Questions** (all optional, tap to answer): where people look for rooms or roommates (several; "I haven't looked
+  yet" can't be combined), how well their options work (one), whether they'd create a roommate profile (one), and
+  what they'd use coHabit for (several; "None of these" can't be combined), plus a comment of up to 500 characters.
+  A choose-one answer clears when tapped again. **Send feedback** stays off until there is at least one answer or a
+  comment; **Not now** closes the drawer and keeps the draft until the page is reloaded.
+- **Anyone can send it**, signed in or not. Guests get a plain thank-you. Comments with emails, phone, ID or card
+  numbers, or street addresses are refused, as everywhere on coHabit. At most 5 submissions a minute per person (or
+  per network address for guests). Writes need the usual same-site Origin.
+- **Saving:** success is shown only after the server saved it. If sending fails, the answers stay and **Send
+  feedback** tries again with the same submission id, so a retry never saves twice.
+- **coHabit Points:** a signed-in person's first saved check-in earns 100 points, once. The award is made on the
+  server in the same transaction as the response, and the database allows only one award per person for this
+  check-in (`UNIQUE (user_id, reason)`), so retries, repeat submissions and two sends at once can't award twice.
+  Only then does the drawer say "You earned 100 coHabit Points 🎉". Points are pilot participation points with no
+  cash value and nothing to redeem yet; the balance shows on **Account**.
+- **Demo mode:** submissions sent while a renter's assistant Demo mode is on are labeled, and the admin can show
+  them alone or leave them out.
+- **Separate from matching:** the answers are in their own table and never read by matching or the assistant.
+- **Admin:** **Admin → Check-in survey** (`/admin/survey`) shows totals, answers per question (count and share of
+  those who answered), the newest 200 responses, and **Download CSV** (all responses, formulas neutralized), each
+  for all responses, without Demo mode, or Demo mode only. No names, emails or account ids.
+- **API:** `GET /api/survey` (questions, and whether the points were earned); `POST /api/survey`
+  `{id, answers, comment, page}`; `GET /api/admin/survey?demo=all|real|demo`; `GET /api/admin/survey.csv`.
+- **Deleting an account** deletes its check-in answers and points.
 
 ## AI assistant (chat)
 
@@ -598,6 +631,10 @@ Real Google sign-in locally needs your Google client values in `.dev.vars` and
 
 ## Migrations and deploy (exact commands used)
 
+**Pending: migration `0008_survey_points.sql`** (adds `survey_responses` and `points_awards`; additive only).
+Applied to the local databases only. The Quick check-in code needs it (`/api/me` reads the points balance), so apply
+it to the live database **before** deploying that code, with a restore point first and the owner's approval.
+
 **Migration `0007_roommate_requests.sql`** (adds the `share_profile` column, `roommate_requests` and
 `roommate_messages`; additive only) was applied to the live database on 2026-10-13 with the owner's approval, after
 a restore point (bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c`), and before deploying version `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9`,
@@ -780,6 +817,20 @@ These steps describe the redesigned assistant, live since 2026-10-12.
    **Request sent**; **Withdraw** removes it everywhere.
 7. Turn on **Demo mode**: **Connect (preview)** and **I'm interested (preview)** only say "Demo only, nothing sent."
 8. Clean up: withdraw the room request and decline or withdraw the roommate request.
+
+### 11. Quick check-in (5 minutes, renter B, then signed out, then the owner)
+
+1. As B, click the speech-bubble icon beside your name. A drawer slides in from the right with **Quick check-in**
+   and "Your first check-in earns 100 coHabit Points". The page behind it doesn't change.
+2. **Send feedback** is off until you answer something. Tap **Friends or classmates**, then **I haven't looked
+   yet**: only the second stays selected. Tap **Not now**, open it again: your answer is still there.
+3. Answer one more question, type a comment and click **Send feedback**: "Thanks for helping shape coHabit! You
+   earned 100 coHabit Points 🎉". **Account** shows 100 points.
+4. Open it again and send one answer: only "Thanks for helping shape coHabit!" (no more points).
+5. Sign out, open the icon beside **Sign in**, answer one question and send: a plain thank-you, no account needed.
+6. As the owner, **Admin → Check-in survey**: the totals and answers include these, without names or emails.
+   **Download CSV** opens in a spreadsheet. Try **Without Demo mode** and **Demo mode only**.
+7. On a phone, the drawer fills the screen, and **Not now** and **Send feedback** stay at the bottom.
 
 ### If something fails
 

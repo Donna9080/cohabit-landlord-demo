@@ -16,6 +16,8 @@
 //   /api/admin/settings          hide or show sample listings in public search (admin only)
 //   /api/assistant[...]          the renter's chat assistant (src/assistant/)
 //   /api/admin/assistant         assistant usage totals and estimated cost (admin only)
+//   /api/survey                  Quick check-in: optional survey for anyone, coHabit Points once per person (src/survey.js)
+//   /api/admin/survey[.csv]      check-in summary, recent responses and spreadsheet export (admin only)
 import { assistantCleanup, assistantDeleteStatements, assistantUsageReport, handleAssistant } from "./assistant/routes.js";
 import { getAuth } from "./auth.js";
 import { connectionDeleteStatements, handleConnections, personView, requestsByPerson } from "./connections.js";
@@ -25,6 +27,7 @@ import { activeListings, listingMapper, LISTING_FIELDS, noSamples, sampleListing
 import { rankUnits } from "./match.js";
 import { asPrefs, createInterest, loadPreferences, MAX_INTERESTS_PER_RENTER, savePreferences } from "./profile.js";
 import { firstNameOf, rankedMatches } from "./roommates.js";
+import { handleSurvey, pointsBalance, surveyCsv, surveyDeleteStatements, surveySummary } from "./survey.js";
 import { InvalidInput, isUnitId, parseAccountType, parseInterest, parsePreferences, parseUnit } from "./validate.js";
 
 const MAX_IMPORT_BODY = 600 * 1024; // admin CSV imports only
@@ -148,7 +151,7 @@ async function handleApi(request, env, url) {
   if (path === "/api/me" && method === "GET") {
     const u = viewer.user;
     return reply({
-      user: u && { name: u.name, email: u.email, accountType: u.accountType, isAdmin: u.role === "admin" },
+      user: u && { name: u.name, email: u.email, accountType: u.accountType, isAdmin: u.role === "admin", points: await pointsBalance(db, u.id) },
       sessionExpired: !!viewer.expired,
     });
   }
@@ -165,6 +168,11 @@ async function handleApi(request, env, url) {
     return reply({ accountType });
   }
 
+  // Quick check-in: anyone may answer, signed in or not. Points are awarded on the server, once per person.
+  if (path === "/api/survey") {
+    return handleSurvey({ request, env, db, user: viewer.user, path, method, ip, reply });
+  }
+
   // Delete my own account and everything saved with it. Only ever the signed-in user's own row.
   if (path === "/api/me/delete" && method === "POST") {
     const user = requireUser(viewer);
@@ -178,6 +186,7 @@ async function handleApi(request, env, url) {
     await db.batch([
       ...assistantDeleteStatements(db, user.id),
       ...connectionDeleteStatements(db, user.id),
+      ...surveyDeleteStatements(db, user.id),
       db.prepare(`DELETE FROM unit_interests WHERE renter_user_id = ?1 OR unit_id IN (SELECT id FROM units WHERE landlord_user_id = ?1)`).bind(user.id),
       db.prepare(`DELETE FROM units WHERE landlord_user_id = ?1`).bind(user.id),
       db.prepare(`DELETE FROM match_preferences WHERE user_id = ?1`).bind(user.id),
@@ -524,6 +533,14 @@ async function handleApi(request, env, url) {
     const user = requireUser(viewer);
     if (user.role !== "admin") throw new HttpError(403, "forbidden", "You don't have access to this page.");
     return reply(await assistantUsageReport(env, db));
+  }
+
+  // Admin: Quick check-in summary and export. Answers only, never names, emails or account ids.
+  if (path === "/api/admin/survey" || path === "/api/admin/survey.csv") {
+    const user = requireUser(viewer);
+    if (user.role !== "admin") throw new HttpError(403, "forbidden", "You don't have access to this page.");
+    if (method !== "GET") throw new HttpError(405, "method_not_allowed", "Not allowed.");
+    return path.endsWith(".csv") ? surveyCsv(db, url) : reply(await surveySummary(db, url));
   }
 
   // Admin: read-only user list. No questionnaire answers, unit details, sessions or tokens.

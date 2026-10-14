@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-13 (Details and requests)
+# coHabit project checkpoint: 2026-10-13 (Quick check-in, local only)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -17,12 +17,16 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 | Roommate requests | 0 | Live, 2026-10-13 (table created that day) |
 | Saved questionnaires | 4 | Live, 2026-10-13 |
 | Admins | 1 | Live (the owner) |
-| Automated tests | 395 passing | `npm test`, local, 2026-10-13 |
+| Automated tests | 433 passing | `npm test`, local, 2026-10-13 |
 | AI cost so far | $0 | No Anthropic key exists; the assistant has only run in basic mode or against the test stand-in |
 
 No real listings were imported because no authorized data source exists yet (see "Pending work").
 
 ## Deployment status
+
+**Not deployed: the Quick check-in** (below) is committed locally only, and migration 0008 is applied to the local
+databases only. The live site and live database are unchanged by it. The new code needs migration 0008, so the
+order is: restore point, apply 0008 to the live database, deploy (each with the owner's approval).
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
 - **Live version:** `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9`, deployed 2026-10-13 with the owner's approval: Details and requests
@@ -77,6 +81,21 @@ No real listings were imported because no authorized data source exists yet (see
 | **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
 | **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
 | **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | Yes (2026-10-13) |
+
+### Quick check-in and coHabit Points (2026-10-13, local only)
+
+- **What people see:** a feedback icon beside the profile menu (or beside Sign in) opens a drawer from the right
+  (full width on phones) with "Quick check-in", four tap-to-answer questions and an optional comment. Every question
+  is optional; Send feedback needs at least one answer or a comment, otherwise Not now. Nothing opens by itself, and
+  the chat, results and search behind it stay as they were.
+- **Points:** a signed-in person's first saved check-in earns 100 coHabit Points, once, enforced on the server and
+  by the database. The drawer says "You earned 100 coHabit Points 🎉" only when they were awarded; repeat
+  submissions and guests get a plain thank-you. Pilot participation points with no cash value; the balance shows
+  on Account.
+- **Admin:** `/admin/survey`: totals, answers per question, newest responses, CSV export, with Demo mode
+  responses labeled and filterable. No names or emails.
+- **Database:** migration `0008_survey_points.sql` (additive): `survey_responses` and `points_awards`.
+- **Also updated:** privacy page (what's collected, who sees it, points) and terms (points have no cash value).
 
 ### Details and requests (2026-10-13, live as `d4ea27c7…`)
 
@@ -151,6 +170,22 @@ Built and tested in three stages, each committed separately:
 
 ## Tests
 
+- `npm test`: **433/433** on 2026-10-13. New Quick check-in checks (38):
+  - Optional answers: one answer alone, a comment alone; a blank send is refused and stores nothing.
+  - Exclusive answers, choose-one questions, unknown questions or answers, 500-character comments, emails and phone
+    numbers in comments, other sites, a missing submission id: all refused.
+  - Points: 100 on the first signed-in send; a retry with the same id saves nothing new; a repeat earns nothing;
+    two sends at once award once; someone else's id is refused; balance on `/api/me`; landlords too.
+  - Demo mode label; only the first part of the page path kept; matching preferences unchanged.
+  - Admin only (guest 401, renter and landlord 403); totals, per-answer counts, Demo filters; CSV rows, readable
+    answers, neutralized formulas, no names, emails or ids; 5 a minute; account deletion removes answers and points.
+- **Browser walkthrough (local preview):** renter (first send with points, repeat without), a send that fails and
+  keeps the answers then succeeds on retry, guest, phone (390 px, full-width drawer, no sideways scrolling), admin
+  results on desktop and phone, the CSV file, and the chat, results tab and a Listings search unchanged after
+  opening and closing the drawer.
+
+Earlier:
+
 - `npm test`: **395/395** on 2026-10-13. New checks for this change:
   - Handles: no ids in responses; a handle made for one renter fails for another; a changed handle fails.
   - Consent: details only when both share; email only when shared; sharing needs roommate matching on.
@@ -210,6 +245,8 @@ Earlier runs:
 - [ ] Owner tries the redesigned assistant on the live site as a renter (manual test part 9, including Demo mode).
 - [x] Apply migration 0007 to the live database and deploy the 2026-10-13 work (restore point first; version `d4ea27c7…`).
 - [ ] Run part 10 of the manual test with two real renter accounts (Details, Connect, Accept, Messages, room request).
+- [ ] Approve the Quick check-in going live: restore point, migration 0008 on the live database, deploy; then part 11
+      of the manual test.
 - [x] Push commits `d3d9734` and the deploy record to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-requests`).
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
 
@@ -246,7 +283,8 @@ one of these is needed:
 | Previous checkpoint | Git tag `checkpoint-2026-10-06` |
 | Earlier checkpoint today | Git tag `checkpoint-2026-10-12` (assistant first built) |
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-12-redesign` |
-| This checkpoint (live) | Git tag `checkpoint-2026-10-13-requests` |
+| Previous checkpoint (live code) | Git tag `checkpoint-2026-10-13-requests` |
+| This checkpoint (local only) | Git tag `checkpoint-2026-10-13-checkin` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 

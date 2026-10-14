@@ -101,6 +101,29 @@
       <p class="hint">Only you two can see these messages. Please don't share phone numbers or addresses.</p>
     </dialog>
 
+    <!-- Quick check-in: an optional survey, opened only from the feedback icon in the top bar. -->
+    <dialog class="drawer" id="survey" aria-labelledby="survey-title" aria-describedby="survey-sub">
+      <div class="drawer-head">
+        <div>
+          <h2 id="survey-title">Quick check-in</h2>
+          <p id="survey-sub">Help shape coHabit. Every question is optional.</p>
+        </div>
+        <button class="icon-btn drawer-x" type="button" data-action="survey-close" aria-label="Close">×</button>
+      </div>
+      <form class="drawer-form" id="survey-form" novalidate>
+        <div class="drawer-body" id="survey-body"></div>
+        <div class="drawer-foot">
+          <p class="field-error" id="survey-error" role="alert"></p>
+          <p class="small muted" id="survey-hint"></p>
+          <div class="actions">
+            <button class="btn btn-quiet" type="button" data-action="survey-close">Not now</button>
+            <button class="btn" type="submit" id="survey-send">Send feedback</button>
+          </div>
+        </div>
+      </form>
+      <div class="drawer-done" id="survey-done" role="status" hidden></div>
+    </dialog>
+
     <!-- Short messages such as "Request removed" appear here. -->
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -122,6 +145,9 @@
       <symbol id="i-building" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" /><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
         <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" /><path d="M10 6h4" /><path d="M10 10h4" /><path d="M10 14h4" /><path d="M10 18h4" />
+      </symbol>
+      <symbol id="i-feedback" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M8 9h8" /><path d="M8 13h5" />
       </symbol>
       <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />

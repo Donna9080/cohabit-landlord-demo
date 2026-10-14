@@ -39,13 +39,15 @@ Landlords list rooms. Renters (Brandeis students) chat with an assistant that le
 | Current listings (active units) | `/listings` | Anyone |
 | Sample dashboard (fictional data) | `/sample`, `/properties/<id>` | Anyone |
 | Choose landlord or renter (once) | `/welcome` | Signed in |
-| Your account, delete my account | `/account` | Signed in |
+| Your account, coHabit Points, delete my account | `/account` | Signed in |
+| Quick check-in (optional survey, from the feedback icon in the top bar) | any page | Anyone |
 | Dashboard: your units and recent requests | `/landlord` | Landlords |
 | One unit: details and its interested renters | `/landlord/units/<id>` | Landlords |
 | Add or edit a unit | `/landlord/units/new`, `/landlord/units/<id>/edit` | Landlords |
 | Assistant: guided chat beside results (list, map, roommates), Details, "I'm interested", Connect and messages, editable answers, Demo mode | `/assistant` | Renters |
 | Questionnaire, matching rooms, "I'm interested", possible roommates (opt-in), roommate requests and messages | `/renter` | Renters |
 | User list (read only) | `/admin` | Admin |
+| Quick check-in results and CSV export | `/admin/survey` | Admin |
 
 This is separate from the other coHabit app in `Documents\cohabit`. It runs on Cloudflare's free plan as its own Worker (`cohabit-landlord-demo`) with its own database (`cohabit-db`).
 
@@ -100,6 +102,7 @@ src/validate.js     checks every field sent by the browser
 src/match.js        renter-to-unit matching rules
 src/roommates.js    renter-to-renter (roommate) matching rules, opt-in
 src/connections.js  roommate Details, requests (Connect, accept, decline, withdraw) and messages
+src/survey.js       Quick check-in survey, coHabit Points (once per person), admin summary and CSV
 src/imports.js      checks CSV files of external listings before an admin imports them
 src/assistant/      the renter's chat assistant: routes, memory checks, search, basic mode, Claude (AI) calls,
                     demo-data.js (Demo mode's 15 fictional listings and 20 fictional profiles)

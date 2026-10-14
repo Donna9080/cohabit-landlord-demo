@@ -917,6 +917,96 @@ try {
     check("A request without a valid handle is refused (404)", r.status === 404);
     await api("/api/assistant/demo", { method: "POST", as: chatMate, body: { on: false } });
 
+    // ── Quick check-in survey and coHabit Points ──
+    const sid = () => randomBytes(16).toString("hex");
+    const surveyRows = (where = "1=1") => count(`SELECT COUNT(*) AS n FROM survey_responses WHERE ${where}`);
+    const resetSurveyLimits = () => d1(`DELETE FROM app_rate_limits WHERE key LIKE 's:%'`);
+    const prefsBefore = JSON.stringify(d1rows(`SELECT * FROM match_preferences ORDER BY user_id`));
+    r = await api("/api/survey");
+    check("Check-in: anyone can load the questions (4 questions, a 500-character comment)", r.status === 200 && r.data.survey.questions.length === 4 && r.data.survey.commentMax === 500 && r.data.survey.title === "Quick check-in" && r.data.points.signedIn === false);
+    check("Check-in: exclusive answers are marked (I haven't looked yet, None of these)", r.data.survey.questions[0].exclusive === "not_yet" && r.data.survey.questions[3].exclusive === "none" && !r.data.survey.questions[1].multi && !r.data.survey.questions[2].multi);
+    r = await api("/api/survey", { method: "POST", body: { id: sid(), answers: { look_where: [], options_work: null }, comment: "   " } });
+    check("Check-in: a blank submission is refused and nothing is stored", r.status === 400 && r.data.error === "empty" && surveyRows() === 0);
+    r = await api("/api/survey", { method: "POST", body: { id: sid(), answers: { options_work: "difficult" }, page: "/listings" } });
+    check("Check-in: a guest can send a single answer without an account, with no points claimed", r.status === 201 && r.data.saved === true && r.data.awarded === false && r.data.points === 0 && r.data.balance === null && surveyRows("respondent = 'guest' AND user_id IS NULL") === 1);
+    r = await api("/api/survey", { method: "POST", body: { id: sid(), comment: "=HYPERLINK(\"http://x\") A shared grocery list would help." } });
+    check("Check-in: a comment alone is enough", r.status === 201 && surveyRows("comment LIKE '%grocery%'") === 1);
+    r = await api("/api/survey", { method: "POST", body: { id: sid(), answers: { look_where: ["not_yet", "friends"] } } });
+    check("Check-in: “I haven't looked yet” can't be combined with other answers (400)", r.status === 400 && r.data.field === "look_where");
+    r = await api("/api/survey", { method: "POST", body: { id: sid(), answers: { use_for: ["room", "none"] } } });
+    check("Check-in: “None of these” can't be combined with other answers (400)", r.status === 400 && r.data.field === "use_for");
+    resetSurveyLimits();
+    r = await api("/api/survey", { method: "POST", body: { id: sid(), answers: { options_work: ["enough", "missing"] } } });
+    check("Check-in: a choose-one question takes one answer (400)", r.status === 400 && r.data.field === "options_work");
+    r = await api("/api/survey", { method: "POST", body: { id: sid(), answers: { roommate_profile: "absolutely" } } });
+    check("Check-in: only the listed answers are accepted (400)", r.status === 400 && r.data.field === "roommate_profile");
+    r = await api("/api/survey", { method: "POST", body: { id: sid(), answers: { budget_max: 900 } } });
+    check("Check-in: questions that aren't in the survey are refused (no matching answers here)", r.status === 400 && r.data.field === "answers");
+    r = await api("/api/survey", { method: "POST", body: { id: sid(), comment: "x".repeat(501) } });
+    check("Check-in: comments are limited to 500 characters (400)", r.status === 400 && r.data.field === "comment");
+    r = await api("/api/survey", { method: "POST", body: { id: sid(), comment: "Text me at (617) 555-0142 or me@example.com" } });
+    check("Check-in: comments with phone numbers or emails are refused (400)", r.status === 400 && r.data.field === "comment");
+    resetSurveyLimits();
+    r = await api("/api/survey", { method: "POST", body: { id: sid(), answers: { options_work: "enough" } }, origin: "https://evil.example" });
+    check("Check-in: sends from another site are blocked (403)", r.status === 403);
+    r = await api("/api/survey", { method: "POST", body: { answers: { options_work: "enough" } } });
+    check("Check-in: a submission needs its id (so a retry can't save twice)", r.status === 400 && r.data.field === "id");
+    check("Check-in: refused submissions stored nothing", surveyRows() === 2);
+
+    r = await api("/api/survey", { as: chatMate });
+    check("Check-in: a signed-in renter sees they haven't earned the points yet", r.data.points.signedIn === true && r.data.points.earned === false && r.data.points.balance === 0);
+    const firstSurvey = sid();
+    r = await api("/api/survey", { method: "POST", as: chatMate, body: { id: firstSurvey, answers: { look_where: ["facebook", "group_chats"], use_for: ["roommate", "chores", "room"] }, comment: "TEST: love the roommate details.", page: "/assistant" } });
+    check("Check-in: a signed-in renter's first submission earns 100 coHabit Points", r.status === 201 && r.data.awarded === true && r.data.points === 100 && r.data.balance === 100);
+    check("Check-in: answers are stored in the listed order, apart from matching preferences", JSON.parse(d1rows(`SELECT answers FROM survey_responses WHERE id = '${firstSurvey}'`)[0].answers).use_for.join() === "room,roommate,chores");
+    r = await api("/api/survey", { method: "POST", as: chatMate, body: { id: firstSurvey, answers: { look_where: ["facebook", "group_chats"] } } });
+    check("Check-in: retrying the same submission saves nothing new and awards nothing new", r.status === 200 && r.data.awarded === true && r.data.balance === 100 && surveyRows(`id = '${firstSurvey}'`) === 1 && count(`SELECT COUNT(*) AS n FROM points_awards WHERE user_id = 't_chat_mate'`) === 1);
+    r = await api("/api/survey", { method: "POST", as: chatMate, body: { id: sid(), answers: { options_work: "missing" } } });
+    check("Check-in: a later submission is saved but earns no more points", r.status === 201 && r.data.awarded === false && r.data.points === 0 && r.data.balance === 100 && surveyRows("user_id = 't_chat_mate'") === 2);
+    r = await api("/api/me", { as: chatMate });
+    check("Check-in: the balance shows on the account (100)", r.data.user.points === 100);
+    r = await api("/api/survey", { as: chatMate });
+    check("Check-in: next time the drawer says the points were already earned", r.data.points.earned === true && r.data.points.balance === 100);
+    r = await api("/api/survey", { method: "POST", as: outsider, body: { id: firstSurvey, answers: { options_work: "enough" } } });
+    check("Check-in: someone else's submission id can't be reused (409, no points)", r.status === 409 && count(`SELECT COUNT(*) AS n FROM points_awards WHERE user_id = 't_outsider'`) === 0);
+    const twin = await Promise.all([1, 2].map(() => api("/api/survey", { method: "POST", as: renterB, body: { id: sid(), answers: { roommate_profile: "maybe" } } })));
+    check("Check-in: two submissions at once award the points only once", twin.every((x) => x.status === 201) && twin.filter((x) => x.data.awarded).length === 1 && count(`SELECT COALESCE(SUM(points), 0) AS n FROM points_awards WHERE user_id = 't_renter_b'`) === 100);
+    r = await api("/api/survey", { method: "POST", as: landlordA, body: { id: sid(), answers: { use_for: ["none"] }, page: "/landlord/units/abc-123" } });
+    check("Check-in: landlords can answer too, and only the first part of the page is kept (no ids)", r.status === 201 && r.data.awarded === true && d1rows(`SELECT respondent, page FROM survey_responses WHERE user_id = 't_landlord_a'`)[0].page === "/landlord");
+    await api("/api/assistant/demo", { method: "POST", as: chatMate, body: { on: true } });
+    r = await api("/api/survey", { method: "POST", as: chatMate, body: { id: sid(), answers: { roommate_profile: "yes" } } });
+    await api("/api/assistant/demo", { method: "POST", as: chatMate, body: { on: false } });
+    check("Check-in: submissions made in Demo mode are labeled", r.status === 201 && surveyRows("demo = 1 AND user_id = 't_chat_mate'") === 1 && surveyRows("demo = 1") === 1);
+    r = await api("/api/survey", { method: "POST", as: chatPal, body: { id: sid(), answers: { options_work: "enough" } } });
+    check("Check-in: another renter's first submission earns their own points", r.data.awarded === true && r.data.balance === 100);
+    check("Check-in: matching preferences are untouched by the survey", JSON.stringify(d1rows(`SELECT * FROM match_preferences ORDER BY user_id`)) === prefsBefore);
+
+    r = await api("/api/admin/survey");
+    const r2 = await api("/api/admin/survey", { as: chatMate });
+    const r3 = await api("/api/admin/survey.csv", { as: landlordA });
+    check("Check-in results: admin only (guest 401, renter 403, landlord 403 for the CSV)", r.status === 401 && r2.status === 403 && r3.status === 403);
+    d1(`UPDATE "user" SET role='admin' WHERE id='t_admin'`);
+    r = await api("/api/admin/survey", { as: admin });
+    const total = surveyRows();
+    check("Check-in results: totals, who answered, Demo mode and points", r.status === 200 && r.data.total === total && r.data.respondents.guest === 2 && r.data.respondents.landlord === 1 && r.data.demo === 1 && r.data.pointsAwarded === 4 && r.data.withComment === 2);
+    const useFor = r.data.questions.find((x) => x.key === "use_for");
+    check("Check-in results: counts per answer", useFor.answered === 2 && useFor.counts.room === 1 && useFor.counts.none === 1 && r.data.questions.find((x) => x.key === "options_work").counts.enough === 1);
+    check("Check-in results: no names, emails or account ids", !/t_chat_|t_renter_|t_landlord_|user_id|@example\.test|Mia|Chatmate/.test(JSON.stringify(r.data)));
+    r = await api("/api/admin/survey?demo=real", { as: admin });
+    const rDemo = await api("/api/admin/survey?demo=demo", { as: admin });
+    check("Check-in results: Demo mode responses can be left out or shown alone", r.data.total === total - 1 && r.data.demo === 0 && rDemo.data.total === 1 && rDemo.data.responses[0].demo === true);
+    r = await api("/api/admin/survey.csv", { as: admin });
+    const csvLines = String(r.data).trim().split("\r\n");
+    check("Check-in results: CSV export with one row per response and readable answers", r.status === 200 && /^text\/csv/.test(r.headers.get("content-type")) && /attachment; filename="cohabit-check-in-/.test(r.headers.get("content-disposition")) && csvLines.length === total + 1 && csvLines[0].includes("Where do you currently look for rooms or roommates?") && String(r.data).includes("Finding a room; Finding a compatible roommate; Organizing shared chores"));
+    check("Check-in results: CSV cells can't run as spreadsheet formulas", String(r.data).includes("\"'=HYPERLINK(") && !/(^|,)"=/m.test(String(r.data)));
+    d1(`UPDATE "user" SET role='user' WHERE id='t_admin'`);
+    check("Check-in results: the CSV has no names, emails or account ids", !/t_chat_|t_renter_|t_landlord_|@example\.test/.test(String(r.data)));
+    resetSurveyLimits();
+    const burst = [];
+    for (let i = 0; i < 6; i++) burst.push((await api("/api/survey", { method: "POST", as: outsider, body: { id: sid(), answers: { options_work: "enough" } } })).status);
+    check("Check-in: at most 5 submissions a minute per person (then 429)", burst.slice(0, 5).every((x) => x === 201) && burst[5] === 429, burst.join(","));
+    resetSurveyLimits();
+
     // Fallbacks: the AI service down, or the model declining, still gets an answer.
     // This renter has made many writes in the last minute; start a fresh rate-limit window so the next checks test the fallback.
     d1(`DELETE FROM app_rate_limits WHERE key = 'w:u:t_chat_ai'`);
@@ -1013,6 +1103,7 @@ try {
     check("Deleting an account deletes its chat, memory, cards, saved options and usage", r.status === 200 && count(`SELECT (SELECT COUNT(*) FROM assistant_messages WHERE user_id='t_chat_basic') + (SELECT COUNT(*) FROM assistant_threads WHERE user_id='t_chat_basic') + (SELECT COUNT(*) FROM assistant_actions WHERE user_id='t_chat_basic') + (SELECT COUNT(*) FROM saved_options WHERE user_id='t_chat_basic') + (SELECT COUNT(*) FROM assistant_usage WHERE user_id='t_chat_basic') AS n`) === 0);
     r = await api("/api/me/delete", { method: "POST", as: chatPal, body: { confirm: "DELETE" } });
     check("Deleting an account deletes its roommate requests and messages", r.status === 200 && count(`SELECT COUNT(*) AS n FROM roommate_requests WHERE from_user_id = 't_chat_pal' OR to_user_id = 't_chat_pal'`) === 0 && count(`SELECT COUNT(*) AS n FROM roommate_messages`) === 0);
+    check("Deleting an account deletes its check-in answers and coHabit Points", count(`SELECT COUNT(*) AS n FROM survey_responses WHERE user_id = 't_chat_pal'`) === 0 && count(`SELECT COUNT(*) AS n FROM points_awards WHERE user_id = 't_chat_pal'`) === 0);
   }
 
   // ── CSRF / origin ─────────────────────────────────────────────────────────

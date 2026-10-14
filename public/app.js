@@ -123,10 +123,11 @@
     navEl.innerHTML = navItems()
       .map(([href, label]) => `<a class="nav-item" href="${href}"${current(href)}>${label}</a>`)
       .join("");
+    const feedback = `<button class="icon-top" type="button" data-action="survey-open" aria-haspopup="dialog" aria-label="Quick check-in: share feedback" title="Quick check-in"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><use href="#i-feedback" /></svg></button>`;
     accountEl.innerHTML = u
-      ? `<a class="nav-item who" href="/account"${current("/account")} title="Your account: ${esc(u.email)}"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(u.name || u.email))}</span><span class="who-name">${esc(u.name)}</span><span class="sr-only">Your account</span></a>
+      ? `${feedback}<a class="nav-item who" href="/account"${current("/account")} title="Your account: ${esc(u.email)}"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(u.name || u.email))}</span><span class="who-name">${esc(u.name)}</span><span class="sr-only">Your account</span></a>
          <button class="btn btn-small btn-quiet" type="button" data-action="sign-out">Sign out</button>`
-      : `<button class="btn btn-small" type="button" data-action="sign-in">Sign in</button>`;
+      : `${feedback}<button class="btn btn-small" type="button" data-action="sign-in">Sign in</button>`;
   }
 
   // ── Messages: success banner on the next screen, and short pop-up notes ──────
@@ -140,6 +141,161 @@
     el.classList.add("show");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove("show"), 5000);
+  }
+
+  // ── Quick check-in: an optional survey in a drawer, opened only from the feedback icon in the top bar ──
+  // It sits on top of the page, so the chat, results and any search stay exactly as they were. The draft stays
+  // while the drawer is closed (and after a failed send) until it's sent. A retry reuses the draft's id, so the
+  // server never saves it twice.
+  const survey = { def: null, points: null, id: null, answers: {}, done: false };
+  const newSurveyId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
+  const POINTS_NOTE = "coHabit Points are pilot participation points. They have no cash value and can't be redeemed for anything yet.";
+
+  async function openSurvey() {
+    const dialog = document.getElementById("survey");
+    if (!dialog || dialog.open) return;
+    try {
+      const d = await api("/api/survey");
+      survey.def = d.survey;
+      survey.points = d.points;
+    } catch (e) {
+      if (!survey.def) return toast(e.message);
+    }
+    if (!survey.id) {
+      survey.id = newSurveyId();
+      renderSurveyForm();
+    }
+    surveyPointsNote();
+    dialog.showModal();
+    dialog.querySelector(".drawer-x").focus();
+  }
+
+  function surveyPointsNote() {
+    const el = document.getElementById("survey-points");
+    if (!el || !survey.def) return;
+    const p = survey.points || { signedIn: false };
+    el.innerHTML = !p.signedIn
+      ? `No account needed. Signed-in members earn ${survey.def.points} coHabit Points for their first check-in.`
+      : p.earned
+        ? `You've already earned your ${survey.def.points} coHabit Points for this check-in. You can still send more ideas. <span class="muted">${POINTS_NOTE}</span>`
+        : `Your first check-in earns <strong>${survey.def.points} coHabit Points</strong>. <span class="muted">${POINTS_NOTE}</span>`;
+  }
+
+  function renderSurveyForm() {
+    const s = survey.def;
+    document.getElementById("survey-done").hidden = true;
+    document.getElementById("survey-form").hidden = false;
+    document.getElementById("survey-body").innerHTML = `
+      <p class="survey-points small" id="survey-points"></p>
+      ${s.questions
+        .map((q, i) => {
+          const ex = q.exclusive && q.options.find((o) => o.value === q.exclusive);
+          const hint = q.multi ? `Select all that apply${ex ? `. “${esc(ex.label)}” can't be combined with others.` : "."}` : "Choose one. Tap it again to clear.";
+          return `
+        <fieldset class="sq" aria-describedby="sq-hint-${q.key}">
+          <legend><span class="sq-n">${i + 1}.</span> ${esc(q.text)}</legend>
+          <p class="small muted sq-hint" id="sq-hint-${q.key}">${hint}</p>
+          <div class="sq-options">
+            ${q.options.map((o) => `<button type="button" class="sq-chip" data-action="survey-pick" data-q="${q.key}" data-v="${o.value}" aria-pressed="false">${esc(o.label)}</button>`).join("")}
+          </div>
+          <p class="field-error" id="sq-error-${q.key}" role="alert"></p>
+        </fieldset>`;
+        })
+        .join("")}
+      <div class="sq">
+        <label class="sq-label" for="survey-comment">${esc(s.commentLabel)}</label>
+        <textarea id="survey-comment" rows="4" maxlength="${s.commentMax}" aria-describedby="survey-count"></textarea>
+        <p class="small muted sq-count" id="survey-count">0 / ${s.commentMax}</p>
+        <p class="field-error" id="sq-error-comment" role="alert"></p>
+      </div>`;
+    document.getElementById("survey-error").textContent = "";
+    syncSurvey();
+  }
+
+  function surveyAnswers() {
+    const out = {};
+    for (const [k, v] of Object.entries(survey.answers)) if (v != null && !(Array.isArray(v) && !v.length)) out[k] = v;
+    return out;
+  }
+  const surveyComment = () => (document.getElementById("survey-comment")?.value || "").trim();
+  const surveyEmpty = () => !Object.keys(surveyAnswers()).length && !surveyComment();
+
+  function surveyPick(key, value) {
+    const q = survey.def.questions.find((x) => x.key === key);
+    const cur = survey.answers[key];
+    if (q.multi) {
+      let list = Array.isArray(cur) ? [...cur] : [];
+      if (list.includes(value)) list = list.filter((v) => v !== value);
+      else if (value === q.exclusive) list = [value]; // "I haven't looked yet" / "None of these" clears the rest
+      else list = list.filter((v) => v !== q.exclusive).concat(value);
+      survey.answers[key] = list;
+    } else survey.answers[key] = cur === value ? null : value;
+    document.getElementById(`sq-error-${key}`).textContent = "";
+    syncSurvey();
+  }
+
+  function syncSurvey() {
+    for (const b of document.querySelectorAll("#survey .sq-chip")) {
+      const v = survey.answers[b.dataset.q];
+      b.setAttribute("aria-pressed", String(Array.isArray(v) ? v.includes(b.dataset.v) : v === b.dataset.v));
+    }
+    const comment = document.getElementById("survey-comment");
+    if (comment) document.getElementById("survey-count").textContent = `${comment.value.length} / ${survey.def.commentMax}`;
+    const empty = surveyEmpty();
+    document.getElementById("survey-send").disabled = empty;
+    document.getElementById("survey-hint").textContent = empty ? "Answer any question or add a comment to send, or choose Not now." : "";
+  }
+
+  async function sendSurvey() {
+    if (surveyEmpty()) return syncSurvey();
+    const btn = document.getElementById("survey-send");
+    const errorEl = document.getElementById("survey-error");
+    for (const el of document.querySelectorAll("#survey .field-error")) el.textContent = "";
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+    try {
+      const d = await api("/api/survey", { method: "POST", body: { id: survey.id, answers: surveyAnswers(), comment: surveyComment(), page: location.pathname } });
+      if (survey.points && survey.points.signedIn) {
+        survey.points.earned = survey.points.earned || d.awarded;
+        survey.points.balance = d.balance;
+      }
+      if (me.user && d.balance != null) me.user.points = d.balance;
+      showSurveyDone(d);
+    } catch (e) {
+      // Nothing is lost: the answers stay, and sending again reuses the same id.
+      const fieldEl = e.field && document.getElementById(`sq-error-${e.field}`);
+      if (fieldEl) {
+        fieldEl.textContent = e.message;
+        fieldEl.closest(".sq").scrollIntoView({ block: "nearest" });
+      } else errorEl.textContent = e.status === 0 ? "Couldn't send your feedback. Your answers are still here, so try again." : `${e.message} Your answers are still here.`;
+    } finally {
+      btn.textContent = "Send feedback";
+      if (!survey.done) syncSurvey();
+    }
+  }
+
+  function showSurveyDone(d) {
+    survey.done = true;
+    document.getElementById("survey-form").hidden = true;
+    const done = document.getElementById("survey-done");
+    done.innerHTML = d.awarded
+      ? `<p class="done-mark" aria-hidden="true">🎉</p>
+         <h3 tabindex="-1">Thanks for helping shape coHabit! You earned ${d.points} coHabit Points 🎉</h3>
+         <p class="small muted">Your balance: ${d.balance} points. ${POINTS_NOTE}</p>
+         <div class="actions"><button class="btn" type="button" data-action="survey-close">Close</button></div>`
+      : `<p class="done-mark" aria-hidden="true">✓</p>
+         <h3 tabindex="-1">Thanks for helping shape coHabit!</h3>
+         <div class="actions"><button class="btn" type="button" data-action="survey-close">Close</button></div>`;
+    done.hidden = false;
+    done.querySelector("h3").focus();
+  }
+
+  // After a successful send, the next opening starts a fresh draft.
+  function surveyClosed() {
+    if (!survey.done) return;
+    survey.done = false;
+    survey.answers = {};
+    survey.id = null;
   }
 
   // ── Shared view pieces ───────────────────────────────────────────────────────
@@ -318,6 +474,8 @@
           <li><strong>If you are a landlord:</strong> the units you add: name, general area, monthly rent, rooms available, move-in date, description and status. If you choose to add one, the unit's street address and map pin (Massachusetts only), and whether renters see an approximate area or the exact location.</li>
           <li><strong>If you are a renter:</strong> your questionnaire answers: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets and smoking. Also any “I'm interested” requests you send, with your note, and any roommate requests you send or receive, with the introduction and the messages you exchange after one is accepted.</li>
           <li><strong>If you use the assistant:</strong> your chat messages, the answers it learns from them (budget, move-in month, areas, distance from campus, rooms, lease length, lifestyle and chores), the results and confirmation cards it showed you, options you save, and a daily count of AI replies.</li>
+          <li><strong>If you send a Quick check-in</strong> (the optional survey behind the feedback icon): your answers and comment, whether you were signed in and as a landlord or renter, whether the assistant's Demo mode was on, the page you opened it from, and the time. Guests can send it without an account. Signed in, it's linked to your account so coHabit Points are awarded only once. It's kept apart from your matching answers and never used for matching.</li>
+          <li><strong>coHabit Points:</strong> a record of points awarded to your account and why. They are pilot participation points with no cash value, and they can't be redeemed or exchanged for anything yet.</li>
           <li><strong>To keep you signed in:</strong> one cookie that holds your session. It can't be read by scripts and expires after 7 days without use.</li>
           <li><strong>To limit abuse:</strong> short-lived request counters that include your IP address. They are deleted within about a day.</li>
         </ul>
@@ -333,6 +491,7 @@
           <li><strong>A renter you send a roommate request to:</strong> sees your first name, your introduction and what you have in common. They can accept or decline; you can withdraw while it's waiting. Once accepted, you can message each other on coHabit; only the two of you can read those messages. A request doesn't share your email.</li>
           <li><strong>A landlord, only when you click “I'm interested” on their unit:</strong> that landlord sees your name, your email address and the note you wrote, so they can reply. You can withdraw the request at any time and it disappears from their list. Landlords never see your questionnaire answers.</li>
           <li><strong>Renters never see a landlord's name or email</strong> through coHabit. A renter only learns it if the landlord chooses to reply.</li>
+          <li><strong>Quick check-in answers:</strong> the coHabit admin sees the answers and comments, whether each came from a renter, a landlord or a guest, and whether Demo mode was on, but not your name or email. The admin can download them as a spreadsheet.</li>
           <li><strong>The coHabit admin:</strong> a list of users with name, email, account type, join date, and either a count of units or whether preferences are saved, plus daily totals of AI replies for the whole site. Not your questionnaire answers or your chat.</li>
         </ul>
 
@@ -367,6 +526,7 @@
           <li><strong>Be accurate and lawful.</strong> Only list units you have the right to offer. Only put a street address in the address field (it is hidden from renters unless you choose exact location). Don't post phone numbers, other people's personal information, or anything discriminatory, misleading or illegal.</li>
           <li><strong>The assistant gives suggestions, not decisions.</strong> It can make mistakes, so check details with the landlord. A suggested room or roommate is not an approval by a landlord or by coHabit. coHabit doesn't match people on personal characteristics such as race, religion, national origin, sex, gender identity, sexual orientation, disability, age, family status or source of income.</li>
           <li><strong>Roommate requests and messages.</strong> Be respectful and honest in introductions and messages, and don't send phone numbers or addresses through coHabit. A request is an introduction only, and an “I'm interested” request doesn't reserve a room.</li>
+          <li><strong>coHabit Points</strong> are pilot participation points. They have no cash value, can't be sold, transferred, exchanged or redeemed, and may change or end at any time.</li>
           <li><strong>Matches are suggestions.</strong> They are based on the budget, area, timing and rooms you entered, and are not a recommendation or guarantee.</li>
           <li><strong>No guarantees.</strong> The service is provided as is. It may change, be unavailable, or be shut down, and saved information may be removed.</li>
           <li><strong>Accounts.</strong> We may remove content or accounts that break these terms.</li>
@@ -2859,7 +3019,7 @@
           <h1 tabindex="-1">Users</h1>
           <p class="muted">Everyone who has signed in. Read only.</p>
         </div>
-        <a class="btn btn-quiet" href="/admin/import">Import listings</a>
+        <div class="actions"><a class="btn btn-quiet" href="/admin/survey">Check-in survey</a><a class="btn btn-quiet" href="/admin/import">Import listings</a></div>
       </div>
       <dl class="tiles">
         ${tile("People", real.length)}
@@ -2872,6 +3032,87 @@
         <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Account type</th><th scope="col">Joined</th><th scope="col">Activity</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`,
+    };
+  }
+
+  // Admin: Quick check-in results. Answers and who answered (renter, landlord, guest), never names or emails.
+  const RESPONDENT = { renter: "Renter", landlord: "Landlord", member: "Signed in", guest: "Guest" };
+  async function adminSurveyPage() {
+    if (!me.user) return signInView("/admin/survey");
+    const want = new URLSearchParams(location.search).get("demo");
+    const filter = ["real", "demo"].includes(want) ? want : "all";
+    const d = await api(`/api/admin/survey?demo=${filter}`);
+    const s = d.survey;
+    const pct = (n, of) => (of ? Math.round((n / of) * 100) : 0);
+    const label = (q, v) => (q.options.find((o) => o.value === v) || { label: v }).label;
+    const filterLink = (value, text) =>
+      `<a class="seg-link" href="/admin/survey${value === "all" ? "" : `?demo=${value}`}"${filter === value ? ' aria-current="true"' : ""}>${text}</a>`;
+    const questions = s.questions
+      .map((q, i) => {
+        const r = d.questions.find((x) => x.key === q.key);
+        return `
+        <section class="survey-q" aria-labelledby="sq-h-${q.key}">
+          <h3 id="sq-h-${q.key}">${i + 1}. ${esc(q.text)}</h3>
+          <p class="small muted">${plural(r.answered, "person answered", "people answered")}${q.multi ? " · more than one answer allowed, so shares can add up to over 100%" : ""}</p>
+          <table class="survey-table">
+            <thead><tr><th scope="col">Answer</th><th scope="col">People</th><th scope="col">Share of those who answered</th></tr></thead>
+            <tbody>${q.options
+              .map((o) => {
+                const n = r.counts[o.value];
+                const p = pct(n, r.answered);
+                return `<tr><th scope="row">${esc(o.label)}</th><td>${n}</td><td><span class="bar" aria-hidden="true"><span style="width:${p}%"></span></span> ${p}%</td></tr>`;
+              })
+              .join("")}</tbody>
+          </table>
+        </section>`;
+      })
+      .join("");
+    const rows = d.responses
+      .map((r) => {
+        const answers = s.questions
+          .filter((q) => r.answers[q.key] != null)
+          .map((q) => `<li><span class="muted">${s.questions.indexOf(q) + 1}.</span> ${esc([].concat(r.answers[q.key]).map((v) => label(q, v)).join("; "))}</li>`)
+          .join("");
+        return `
+        <tr>
+          <td data-label="Sent">${esc(new Date(r.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }))}</td>
+          <td data-label="From">${esc(RESPONDENT[r.respondent] || r.respondent)}${r.demo ? ` <span class="badge badge-sample">Demo mode</span>` : ""}${r.points ? ` <span class="badge">+${r.points} pts</span>` : ""}${r.page ? `<br><span class="small muted">from ${esc(r.page)}</span>` : ""}</td>
+          <td data-label="Answers">${answers ? `<ul class="plain-list small">${answers}</ul>` : `<span class="muted small">No answers</span>`}</td>
+          <td data-label="Comment">${r.comment ? `<p class="small desc">${esc(r.comment)}</p>` : `<span class="muted small">None</span>`}</td>
+        </tr>`;
+      })
+      .join("");
+    return {
+      title: "Check-in survey",
+      html: `
+      <p class="back"><a href="/admin">← Users</a></p>
+      <div class="heading-row">
+        <div class="heading">
+          <h1 tabindex="-1">Quick check-in results</h1>
+          <p class="muted">Every question is optional. Shown without names or emails. Responses sent while Demo mode was on are labeled.</p>
+        </div>
+        <a class="btn btn-quiet" href="/api/admin/survey.csv${filter === "all" ? "" : `?demo=${filter}`}" download>Download CSV</a>
+      </div>
+      <nav class="seg-links" aria-label="Which responses">${filterLink("all", "All responses")}${filterLink("real", "Without Demo mode")}${filterLink("demo", "Demo mode only")}</nav>
+      <dl class="tiles">
+        ${tile("Responses", d.total, d.withComment ? plural(d.withComment, "with a comment", "with a comment") : "")}
+        ${tile("Signed in", d.respondents.renter + d.respondents.landlord + d.respondents.member, `${d.respondents.renter} renters, ${d.respondents.landlord} landlords`)}
+        ${tile("Guests", d.respondents.guest)}
+        ${tile("Sent in Demo mode", d.demo)}
+        ${tile("Points awarded", d.pointsAwarded, `${s.points} each, once per person`)}
+      </dl>
+      ${d.total ? questions : emptyState("No responses yet", "Answers appear here as people send the Quick check-in from the feedback icon in the top bar.")}
+      ${
+        d.total
+          ? `<section aria-labelledby="sr-h">
+        <div class="section-heading"><h2 id="sr-h">Responses</h2><span class="muted small">${d.responses.length < d.total ? `newest ${d.responses.length} of ${d.total}; the CSV has all` : "newest first"}</span></div>
+        <table class="tenants survey-responses">
+          <thead><tr><th scope="col">Sent</th><th scope="col">From</th><th scope="col">Answers</th><th scope="col">Comment</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </section>`
+          : ""
+      }`,
     };
   }
 
@@ -3115,13 +3356,15 @@
         <div class="fact"><dt>Name</dt><dd>${esc(u.name)}</dd></div>
         <div class="fact"><dt>Email</dt><dd class="wrap">${esc(u.email)}</dd></div>
         <div class="fact"><dt>Account type</dt><dd>${u.accountType ? esc(u.accountType[0].toUpperCase() + u.accountType.slice(1)) : "Not chosen yet"}${u.isAdmin ? ` <span class="badge">Admin</span>` : ""}</dd></div>
+        <div class="fact"><dt>coHabit Points</dt><dd>${u.points || 0}</dd></div>
       </dl>
+      <p class="muted small">${POINTS_NOTE} ${u.points ? "Thanks for your check-in." : `Earn 100 for your first <button class="link-button" type="button" data-action="survey-open">Quick check-in</button>.`}</p>
       ${u.accountType ? `<p class="links"><a href="${u.accountType === "landlord" ? "/landlord" : "/renter"}">${u.accountType === "landlord" ? "Go to your units" : "Go to your matches"}</a></p>` : ""}
       <p class="muted small">Your name and email come from Google. See the <a href="/privacy">privacy policy</a> for what coHabit keeps.</p>
       <form class="form danger-zone" id="delete-account-form" novalidate>
         <fieldset>
           <legend>Delete my account</legend>
-          <p>This permanently deletes your coHabit account, ${saved}, and signs you out. It can't be undone. Your Google account is not affected.</p>
+          <p>This permanently deletes your coHabit account, ${saved}, any check-in answers and coHabit Points, and signs you out. It can't be undone. Your Google account is not affected.</p>
           ${field("confirm", "Type DELETE to confirm", input("confirm", 'type="text" autocomplete="off" autocapitalize="characters" spellcheck="false"', ""))}
           <p class="form-error" id="form-error" role="alert"></p>
           <div class="actions"><button class="btn btn-danger" type="submit">Delete my account</button></div>
@@ -3175,6 +3418,7 @@
     if (clean === "/renter") return renterPage();
     if (clean === "/admin") return adminPage();
     if (clean === "/admin/import") return adminImportPage();
+    if (clean === "/admin/survey") return adminSurveyPage();
     m = clean.match(/^\/properties\/([^/]+)$/);
     if (m) {
       const p = sample.find((x) => x.id === safeDecode(m[1]));
@@ -3274,6 +3518,9 @@
       else if (a === "import-commit") commitImport(action);
       else if (a === "import-rollback") rollbackImport(action.dataset.id);
       else if (a === "toggle-samples") toggleSampleListings(action.dataset.hide === "true");
+      else if (a === "survey-open") openSurvey();
+      else if (a === "survey-close") document.getElementById("survey").close();
+      else if (a === "survey-pick") surveyPick(action.dataset.q, action.dataset.v);
       else if (a === "chat-say") sendChat(action.dataset.text);
       else if (a === "chat-details") openChatDetails(action.dataset.key);
       else if (a === "person-details") openPersonDetails(action.dataset.key);
@@ -3366,6 +3613,9 @@
     } else if (e.target.id === "pref-form") {
       e.preventDefault();
       savePref(false);
+    } else if (e.target.id === "survey-form") {
+      e.preventDefault();
+      sendSurvey();
     } else if (e.target.id === "delete-account-form") {
       e.preventDefault();
       submitDeleteAccount(e.target);
@@ -3425,9 +3675,11 @@
   });
   document.addEventListener("input", (e) => {
     if (e.target.id === "chat-input") growInput(e.target);
+    else if (e.target.id === "survey-comment") syncSurvey();
   });
 
   document.getElementById("details").addEventListener("close", (e) => delete e.target.dataset.person);
+  document.getElementById("survey").addEventListener("close", surveyClosed);
 
   window.addEventListener("popstate", () => render(true));
 

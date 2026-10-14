@@ -54,7 +54,7 @@ function month(body, field) {
 
 // Streets look like "14 Elm Street" or "225 South St": a house number, up to three words, then a street word.
 // The number must not be a count ("3 bedroom on Elm Street", "10 min to Main St" are fine).
-const STREET =
+export const STREET =
   /\b\d{1,6}[a-z]?\s+(?!(?:bed|beds|bedroom|bedrooms|br|bath|baths|bathroom|room|rooms|min|mins|minute|minutes|mi|mile|miles|block|blocks|person|people|story|floor)\b)(?:[a-z.'-]+\s+){1,3}(?:st|street|ave|avenue|rd|road|blvd|boulevard|ln|lane|dr|drive|ct|court|ter|terrace|hwy|highway|pkwy|parkway|cir|circle)\b/i;
 const ZIP = /\b\d{5}(?:-\d{4})?\b/;
 export const hasAddress = (s) => STREET.test(s) || ZIP.test(s);
@@ -179,8 +179,8 @@ export const parseRoommateMessage = (body) => personalText(body, "body", { min: 
 
 // A chat message to the assistant. coHabit doesn't collect contact details, ID or card numbers, or
 // street addresses, so a message containing one is refused before it is saved or sent anywhere.
-const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
-const SSN = /\b\d{3}-\d{2}-\d{4}\b/;
+export const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
+export const SSN = /\b\d{3}-\d{2}-\d{4}\b/;
 export const MAX_CHAT_TEXT = 800;
 export function parseChatText(body) {
   if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
