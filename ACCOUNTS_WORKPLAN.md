@@ -241,6 +241,21 @@ by the live test.
   `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16`), migration 0008 on the live database (data unchanged), and deploy as
   `e2e17667-50ba-4f0d-94ef-b2ed994b1d96`.
 
+## Demo data refresh (2026-10-14, local only)
+
+- **Audit first:** the demo data was already in code (15 listings, 20 profiles, no images, 8 listings outside
+  Waltham, no laundry, profiles without program, introduction or interests). The assistant retrieved it in Demo mode.
+  So the same 35 records were improved in place (same ids), not recreated.
+- **Waltham only**, in named neighborhoods, still as approximate made-up points.
+- **Photos:** free Unsplash photos (Unsplash License), checked one by one: ordinary rooms, no people, no 3D renders
+  or Unsplash+ images. Loaded from Unsplash rather than downloaded into the project, credited, labeled as
+  illustrative, with a drawing as fallback.
+- **Avatars:** drawn by coHabit's own code instead of synthetic portraits, so there's no licensing or likeness
+  question; labeled as fictional. No gender field.
+- **Matching rules unchanged.** The overlaps were chosen so common searches give strong, partial and no-match
+  results without relaxing any must-have.
+- **Not deployed, and the live database not changed**, as asked.
+
 ## Next safe step
 
 Run part 10 of the manual test on the live site with two real renter accounts. After that: a "new request" badge

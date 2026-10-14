@@ -112,5 +112,6 @@ tests/run-local.mjs automated local tests (npm test)
 tests/fake-anthropic.mjs  stand-in for the AI service, used only by the tests
 scripts/sample-data.mjs  fictional sample landlords, units and renters (see ACCOUNTS_SETUP.md)
 docs/SAMPLE_MATCHING.md  how matching works, shown with the sample data
+docs/DEMO_DATA.md   Demo mode's listings, profiles, photo credits and licenses, and example searches
 wrangler.jsonc      Cloudflare settings
 ```

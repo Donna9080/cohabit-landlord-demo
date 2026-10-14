@@ -183,7 +183,7 @@ async function hydrate(db, env, user, messages, savedRows) {
         return u ? { ...base, available: true, unit: u, km: Math.round(kmBetween(u.location, BRANDEIS) * 10) / 10, interestSent: false } : { ...base, available: false };
       }
       const p = DEMO_PEOPLE.find((x) => x.id === it.targetId && x.discoverable);
-      return p ? { ...base, available: true, firstName: p.firstName, about: p.about, score: it.score ?? null, email: null, sample: false, demo: true } : { ...base, available: false };
+      return p ? { ...base, available: true, firstName: p.firstName, about: p.about, avatar: p.avatar, score: it.score ?? null, email: null, sample: false, demo: true } : { ...base, available: false };
     }
     if (it.kind === "room") {
       const u = unitById.get(it.targetId);

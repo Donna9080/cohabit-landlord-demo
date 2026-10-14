@@ -358,21 +358,22 @@ sees daily totals and an estimated cost, never chats (Admin page, "AI assistant"
 
 ### Demo mode (fictional listings and people)
 
-A switch at the top of `/assistant` swaps the results for 15 made-up listings and 20 made-up roommate profiles around
-Waltham. They let anyone try coHabit, given how few real listings there are.
+A switch at the top of `/assistant` swaps the results for 15 made-up listings and 20 made-up roommate profiles in
+Waltham. They let anyone try coHabit, given how few real listings there are. Every record, its photo source and
+license, and example searches are listed in [docs/DEMO_DATA.md](docs/DEMO_DATA.md) (generated from the data).
 
 - **The data lives in code** (`src/assistant/demo-data.js`), never in the database:
   - There is nothing to seed, so nothing can be seeded twice.
   - Real data is never touched.
   - Demo records never appear in Listings, real matches, the admin user list or any count.
   - Every id starts with `demo-`.
-- **Scenarios covered:**
-  - Rooms in shared houses, a shared bedroom, studios, a spring sublet and a lease takeover.
-  - Whole places for two or three friends, a group replacing a graduating roommate, and a room for an incoming grad
-    student.
-  - Furnished and unfurnished places, a range of utilities, lease lengths and ways to get to campus, and
-    budgets from $700 to $3,450.
-  - Searches that match strongly, partly, or not at all.
+- **Scenarios covered** (all in Waltham neighborhoods: near Brandeis, Moody Street, the South Side, Downtown, the
+  Highlands, Prospect Hill, Warrendale and Lakeview):
+  - Private rooms in shared houses, a shared bedroom, furnished and unfurnished studios, spring and summer sublets,
+    a lease takeover, whole apartments for one, two or three people, and a group replacing a graduating roommate.
+  - Each says per-room or whole-place rent, utilities, availability, lease length, furnishing, laundry and how to
+    get to campus. Budgets run from $700 to $3,450.
+  - Searches that match strongly, partly, or not at all (see the examples in docs/DEMO_DATA.md).
 - **Rent.**
   - Each listing says whether its rent is per room or for the whole place.
   - Whole-place rent is split between the people moving in together (the rooms they need, up to the number of
@@ -380,14 +381,20 @@ Waltham. They let anyone try coHabit, given how few real listings there are.
   - Lease length and "furnished" are compared only for listings that record them. Real listings are matched exactly
     as before.
 - **Roommate profiles.**
-  - Each has a first name, a town and a short line, never a location or contact details.
+  - Fictional seniors and grad students, each with a first name, program and year, a short introduction, three
+    interests, a budget, a move-in month, a preferred Waltham area and lifestyle answers. Never a location, contact
+    details, references or testimonials.
+  - Pictures are illustrated avatars drawn by the page from a few settings (colors, hair style, glasses), labeled as
+    fictional; no photos of people. There is no gender field, so gender can't affect a score.
   - Three chose not to be found and are never shown.
   - Scores and shared traits come from the normal matching code. Seeing demo profiles doesn't need the student's own
     opt-in, because nobody real is involved; their lifestyle answers are still needed.
 - **Labels and limits.**
   - Every demo card says "Demo", demo pins are dashed, and a banner stays on while Demo mode is on.
   - Demo cards can't be saved (409), and demo listings have no landlord to contact.
-  - The pictures are simple drawings made in the page; no images are loaded.
+  - Listing photos are free Unsplash stock photos (Unsplash License), labeled "Illustrative demo photo" and credited
+    in Details; they never show the listing itself. They load from `images.unsplash.com` (named on the privacy
+    page); if one can't load, a drawing shows instead.
 
 ### Turning the AI on (the owner's decision: it can cost money)
 

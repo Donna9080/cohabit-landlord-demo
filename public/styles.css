@@ -533,7 +533,8 @@ p.interest { display: block; }
 #res-list > .res-group:first-child { margin-top: 4px; }
 .res-group-note { margin: -4px 0 10px; }
 .card-pic { position: relative; height: 104px; display: grid; place-items: center; background: linear-gradient(135deg, #dfe9fb, #eef2f9 60%, #e6effd); color: var(--navy); }
-.card-pic img { width: 100%; height: 100%; object-fit: cover; }
+/* The photo fills a fixed frame; it never grows the card or covers the text below. */
+.card-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .card-pic.is-demo { background: linear-gradient(135deg, #fff1d6, #fdf6e8 60%, #eef2f9); color: #7a4d00; }
 .pic-label { position: absolute; left: 10px; bottom: 8px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.85); color: var(--sub); }
 .avatar-pic { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--blue), var(--navy)); color: var(--white); font-size: 15px; font-weight: 700; }
@@ -787,4 +788,24 @@ p.interest { display: block; }
   .heading-row .actions .btn { flex: 1; }
   .survey-table tbody th { width: auto; }
   .bar { width: 72px; }
+}
+
+/* ── Demo listings and profiles: illustrative photos, illustrated avatars, fact list ── */
+.card-pic.has-photo { background: var(--tint); }
+.res-card .card-pic.has-photo { height: 132px; }
+.card-pic { flex: none; overflow: hidden; }
+.card-pic .pic-label { z-index: 1; }
+.card-pic.has-photo .pic-label { background: rgba(255, 255, 255, 0.92); color: var(--text); }
+.details-body .card-pic { border-radius: var(--radius); overflow: hidden; }
+.details-body .card-pic.has-photo { height: 240px; }
+.pic-credit { margin-top: -6px; }
+.pic-credit a { color: inherit; }
+.avatar-pic.has-art { background: var(--tint); overflow: hidden; }
+.avatar-pic.has-art svg { display: block; width: 100%; height: 100%; }
+.facts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin: 0; font-size: 14px; }
+.facts-grid dt { font-size: 12px; color: var(--sub); }
+.facts-grid dd { margin: 0; }
+@media (max-width: 720px) {
+  .details-body .card-pic.has-photo { height: 180px; }
+  .facts-grid { grid-template-columns: 1fr; }
 }

@@ -109,6 +109,10 @@ export function demoPersonView(mine, p) {
     demo: true,
     firstName: p.firstName,
     about: p.about || null,
+    // Fictional, so the whole profile is shown: a short introduction, interests and an illustrated avatar.
+    intro: p.prefs.intro || null,
+    interests: p.prefs.interests || [],
+    avatar: p.prefs.avatar || null,
     score: p.score,
     fits: p.fits,
     highlights: topShared(p.fits),

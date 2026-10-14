@@ -192,7 +192,7 @@ export function searchRooms(memory, listings, { limit = MAX_RESULTS } = {}) {
     rent_basis: e.u.rent_basis === "unit" ? "whole place" : "per room",
     you_would_pay: e.cost,
     ...(e.u.lease || e.u.utilities || e.u.transit || e.u.kind
-      ? { details: { kind: e.u.kind, lease: e.u.lease?.label, utilities: e.u.utilities, furnished: e.u.furnished, transport: e.u.transit } }
+      ? { details: { kind: e.u.kind, lease: e.u.lease?.label, utilities: e.u.utilities, furnished: e.u.furnished, laundry: e.u.laundry, transport: e.u.transit } }
       : {}),
     demo: !!e.u.demo,
     sample: !!e.u.sample,

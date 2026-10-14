@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-13 (Quick check-in)
+# coHabit project checkpoint: 2026-10-14 (demo data refresh, local only)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -18,12 +18,15 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 | Roommate requests | 0 | Live, 2026-10-13 (table created that day) |
 | Saved questionnaires | 4 | Live, 2026-10-13 |
 | Admins | 1 | Live (the owner) |
-| Automated tests | 433 passing | `npm test`, local, 2026-10-13 |
+| Automated tests | 437 passing | `npm test`, local, 2026-10-14 |
 | AI cost so far | $0 | No Anthropic key exists; the assistant has only run in basic mode or against the test stand-in |
 
 No real listings were imported because no authorized data source exists yet (see "Pending work").
 
 ## Deployment status
+
+**Not deployed: the demo data refresh** (below) is committed locally only. It needs no database change. The live
+site still shows the earlier demo data until a deploy is approved.
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
 - **Live version:** `e2e17667-50ba-4f0d-94ef-b2ed994b1d96`, deployed 2026-10-13 with the owner's approval: the Quick check-in and
@@ -90,6 +93,19 @@ No real listings were imported because no authorized data source exists yet (see
 | **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
 | **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
 | **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | Yes (2026-10-13) |
+
+### Demo data refresh (2026-10-14, local only)
+
+- **Audit:** 15 listings and 20 profiles already existed, in code (`src/assistant/demo-data.js`), not the database;
+  no images; 8 listings outside Waltham. The assistant retrieved them in Demo mode. Improved in place, same ids.
+- **Listings:** all 15 in Waltham neighborhoods; private rooms, a shared room, studios, spring and summer sublets, a
+  lease takeover, whole apartments; per-room vs whole-place rent, utilities, lease, furnishing, laundry, transport.
+  Each has an illustrative Unsplash photo (labeled, credited, Unsplash License).
+- **Profiles:** 20 fictional seniors and grad students (17 shown, 3 hidden) with program/year, introduction,
+  interests, budget, move-in, Waltham area and lifestyle; illustrated avatars drawn in the page.
+- **Also fixed:** card photos could cover the first line of the card; group headings counted only the cards shown
+  before "Show more"; demo Details said "the landlord shares" an area.
+- **Records, sources, licenses and example searches:** [docs/DEMO_DATA.md](docs/DEMO_DATA.md).
 
 ### Quick check-in and coHabit Points (2026-10-13, live as `e2e17667…`)
 
@@ -179,6 +195,16 @@ Built and tested in three stages, each committed separately:
 
 ## Tests
 
+- `npm test`: **437/437** on 2026-10-14. New demo-data checks: Waltham neighborhoods within 4 km; every listing has
+  rent basis, utilities, lease, furnishing, laundry and transport; a unique labeled Unsplash photo with credit and
+  license; every profile is a senior or grad student with program, intro, 3 interests and an avatar; no gender field,
+  and names or avatars never change a score. Earlier demo checks (strong/partial/no-match, split rent, spring
+  sublet, hidden profiles, never in Listings) still pass.
+- **Local walkthrough (Demo mode):** five searches through the real API (see docs/DEMO_DATA.md), all 15 photos
+  loading on cards and in Details, map pins, avatars on cards and in Details, phone 390 px with no sideways scroll.
+
+Earlier:
+
 - `npm test`: **433/433** on 2026-10-13. New Quick check-in checks (38):
   - Optional answers: one answer alone, a comment alone; a blank send is refused and stores nothing.
   - Exclusive answers, choose-one questions, unknown questions or answers, 500-character comments, emails and phone
@@ -256,6 +282,7 @@ Earlier runs:
 - [ ] Run part 10 of the manual test with two real renter accounts (Details, Connect, Accept, Messages, room request).
 - [x] Quick check-in live: restore point, migration 0008 on the live database, deploy (version `e2e17667…`).
 - [ ] Run part 11 of the manual test (Quick check-in) on the live site. It adds real responses; that's expected.
+- [ ] Approve deploying the demo data refresh (no database change needed).
 - [x] Push the Quick check-in commits to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-checkin`).
 - [x] Push commits `d3d9734` and the deploy record to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-requests`).
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
@@ -295,7 +322,8 @@ one of these is needed:
 | Earlier checkpoint today | Git tag `checkpoint-2026-10-12` (assistant first built) |
 | Earlier checkpoint | Git tag `checkpoint-2026-10-12-redesign` |
 | Previous checkpoint | Git tag `checkpoint-2026-10-13-requests` |
-| This checkpoint (live) | Git tag `checkpoint-2026-10-13-checkin` |
+| Previous checkpoint (live code) | Git tag `checkpoint-2026-10-13-checkin` |
+| This checkpoint (local only) | Git tag `checkpoint-2026-10-14-demo-data` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 

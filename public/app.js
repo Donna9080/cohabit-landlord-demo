@@ -480,6 +480,7 @@
           <li><strong>To limit abuse:</strong> short-lived request counters that include your IP address. They are deleted within about a day.</li>
         </ul>
         <p>Apart from a unit's optional address, we do not ask for street addresses, phone numbers, government IDs, dates of birth, payment details or health information. Please don't put them in names or descriptions.</p>
+        <p><strong>Demo mode photos:</strong> the illustrative photos on demo listings load from Unsplash's image servers, which see your IP address and browser like any website. Nothing about you is sent with them. Real listings and everything else load from coHabit.</p>
         <p><strong>“Use my location”:</strong> when a renter clicks it, the browser asks for permission. The position is used only in that browser to show nearby listings. It is never sent to coHabit or saved.</p>
 
         <h2>Who can see it</h2>
@@ -1979,7 +1980,54 @@
     studio: '<path d="M3 21V8l9-5 9 5v13"/><rect x="8" y="12" width="8" height="9"/>',
   };
   const ART_FOR = { Studio: "studio", "Private room": "bed", "Shared room": "people", "Whole apartment": "building", Sublet: "calendar", "Lease takeover": "key", "Replacing a roommate": "people" };
-  function roomPicture(u) {
+  // Illustrated avatars for the fictional demo profiles, drawn from a few settings in demo-data.js. Not photos of anyone.
+  const SWEEP = "M20.5 28C20 17 25.5 13.5 32 13.5C38.5 13.5 44 17 43.5 28C41 21 36 19.5 33 19C30 21.5 25 23 20.5 28Z";
+  const SHORT = "M20.6 27C20 17 25 13.5 32 13.5C39 13.5 44.5 17.5 43.4 27C42 22 38 19.5 32 19.5C26 19.5 22 22 20.6 27Z";
+  const HAIR = {
+    short: { front: SHORT },
+    side: { front: "M20.6 27C19.5 16.5 26 13 33 13.5C40 14 45 18.5 43.4 27C42 21 37 18.8 30 20.5C27 21.3 23 23.5 20.6 27Z" },
+    buzz: { front: "M21.2 25.5C21.5 17.5 26 14.8 32 14.8C38 14.8 42.5 17.5 42.8 25.5C41 21 37 19 32 19C27 19 23 21 21.2 25.5Z", opacity: 0.8 },
+    wavy: { front: "M20.5 28C19 18 24.5 13 32 13C40 13 45.5 18 43.5 28C42.5 24 41 22 38.5 21C36 23 33 22 31 20.5C28.5 22.5 25 23 22.5 22.5C21.5 24 21 26 20.5 28Z" },
+    long: { back: "M19 28C18 15 25 11.5 32 11.5C39 11.5 46 15 45 28L46.5 47C42 49.5 22 49.5 17.5 47Z", front: SWEEP },
+    bob: { back: "M19.5 28C19 16 25 12.5 32 12.5C39 12.5 45 16 44.5 28L45 38.5C43 40.5 21 40.5 19 38.5Z", front: SWEEP },
+    bun: { bun: true, front: SHORT },
+    curly: { curls: [[21.5, 23, 5], [25.5, 17, 5.5], [32, 14.5, 6], [38.5, 17, 5.5], [42.5, 23, 5], [20.8, 28.5, 3.2], [43.2, 28.5, 3.2]] },
+    scarf: { scarf: true },
+  };
+  function avatarSvg(a) {
+    const h = HAIR[a.hair] || HAIR.short;
+    const brow = h.scarf ? "#2b1d16" : a.hairColor;
+    return `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+      <rect width="64" height="64" fill="${a.bg}"/>
+      <path d="M10 64C11 52 20 46.5 32 46.5C44 46.5 53 52 54 64Z" fill="${a.shirt}"/>
+      ${h.back ? `<path d="${h.back}" fill="${a.hairColor}"/>` : ""}
+      ${h.bun ? `<circle cx="32" cy="10.5" r="4.8" fill="${a.hairColor}"/>` : ""}
+      ${h.scarf ? `<path d="M18.5 30C17.5 15 24.5 11 32 11C39.5 11 46.5 15 45.5 30C45.5 39 41 45 32 48C23 45 18.5 39 18.5 30Z" fill="${a.hairColor}"/>` : `<rect x="27" y="36" width="10" height="11" rx="3" fill="${a.skin}"/><rect x="27" y="36" width="10" height="11" rx="3" fill="#000" opacity=".08"/><circle cx="21.2" cy="28" r="2.4" fill="${a.skin}"/><circle cx="42.8" cy="28" r="2.4" fill="${a.skin}"/>`}
+      <ellipse cx="32" cy="${h.scarf ? 28 : 27}" rx="${h.scarf ? 9.8 : 11}" ry="${h.scarf ? 11.2 : 12.5}" fill="${a.skin}"/>
+      ${a.beard ? `<path d="M21.6 29C22 37.5 26.8 41.3 32 41.3C37.2 41.3 42 37.5 42.4 29C41 34 37.5 36.6 32 36.6C26.5 36.6 23 34 21.6 29Z" fill="${a.hairColor}" opacity=".9"/>` : ""}
+      ${h.front ? `<path d="${h.front}" fill="${a.hairColor}"${h.opacity ? ` opacity="${h.opacity}"` : ""}/>` : ""}
+      ${h.curls ? h.curls.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${a.hairColor}"/>`).join("") : ""}
+      ${h.scarf ? `<path d="M21.6 25.5C22.4 18 26.8 15.4 32 15.4C37.2 15.4 41.6 18 42.4 25.5C40 20.8 36.4 19.2 32 19.2C27.6 19.2 24 20.8 21.6 25.5Z" fill="#000" opacity=".15"/>` : ""}
+      <circle cx="25" cy="31.5" r="1.8" fill="#e06666" opacity=".14"/><circle cx="39" cy="31.5" r="1.8" fill="#e06666" opacity=".14"/>
+      <circle cx="27.8" cy="28" r="1.15" fill="#1f2430"/><circle cx="36.2" cy="28" r="1.15" fill="#1f2430"/>
+      <path d="M25.6 24.6Q27.8 23.6 30 24.5M34 24.5Q36.2 23.6 38.4 24.6" stroke="${brow}" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+      <path d="M29 33.2Q32 35.6 35 33.2" stroke="#8a3b2e" stroke-width="1.15" stroke-linecap="round" fill="none"/>
+      ${a.glasses ? `<g fill="none" stroke="#2d3748" stroke-width=".9"><rect x="24.2" y="25.4" width="7" height="5.2" rx="2"/><rect x="32.8" y="25.4" width="7" height="5.2" rx="2"/><path d="M31.2 27.6h1.6"/></g>` : ""}
+    </svg>`;
+  }
+  const personAvatar = (c) =>
+    c.avatar
+      ? `<span class="avatar-pic has-art" role="img" aria-label="Illustrated avatar of ${esc(c.firstName)}, a fictional person" title="Illustrated avatar: a fictional person">${avatarSvg(c.avatar)}</span>`
+      : `<span class="avatar-pic${c.demo ? " is-demo" : ""}" aria-hidden="true">${esc(initials(c.firstName))}</span>`;
+
+  // Demo listings: an illustrative stock photo (never the place itself), labeled on the picture. If it can't load,
+  // the drawing below shows instead.
+  const demoPhotoUrl = (p, w) => `${p.src}?auto=format&fit=crop&w=${w}&h=${Math.round((w * 2) / 3)}&q=70`;
+  function roomPicture(u, { large = false } = {}) {
+    if (u.demo && u.photo && u.photo.src) {
+      const w = large ? 960 : 480;
+      return `<div class="card-pic has-photo"><img src="${esc(demoPhotoUrl(u.photo, w))}" srcset="${esc(demoPhotoUrl(u.photo, w))} 1x, ${esc(demoPhotoUrl(u.photo, w * 2))} 2x" alt="${esc(u.photo.alt)}, not this listing" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-fallback="${esc(u.kind || "Room")}" /><span class="pic-label">Illustrative demo photo</span></div>`;
+    }
     if (u.photo && u.photo.url && u.photo.license)
       return `<div class="card-pic"><img src="${esc(u.photo.url)}" alt="Photo of ${esc(u.name)}" loading="lazy" /><span class="pic-label">${esc(u.photo.license)}</span></div>`;
     return `<div class="card-pic is-art${u.demo ? " is-demo" : ""}"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ART[ART_FOR[u.kind] || "house"]}</svg><span class="pic-label">${u.demo ? `${esc(u.kind || "Room")} · demo picture` : "No photo yet"}</span></div>`;
@@ -1990,7 +2038,21 @@
   const rentLine = (u) => (u.rent_basis === "unit" ? `${money(u.monthly_rent)}/mo for the whole place · ${plural(u.bedrooms || u.rooms_available, "bedroom", "bedrooms")}` : `${money(u.monthly_rent)}/mo${u.demo ? " per room" : ""} · ${plural(u.rooms_available, "room", "rooms")}`);
   const demoFacts = (u) =>
     u.demo
-      ? `<p class="facts-line">${[u.lease && u.lease.label, u.utilities, u.furnished === true ? "Furnished" : u.furnished === false ? "Unfurnished" : "", u.transit].filter(Boolean).map(esc).join(" · ")}</p>`
+      ? `<dl class="facts-grid">${[
+          ["Rent", u.rent_basis === "unit" ? `${money(u.monthly_rent)} a month for the whole place, split by whoever moves in` : `${money(u.monthly_rent)} a month per ${u.kind === "Shared room" ? "bed" : "room"}`],
+          ["Lease", u.lease && u.lease.label],
+          ["Utilities", u.utilities],
+          ["Furnishing", u.furnished === true ? "Furnished" : u.furnished === false ? "Unfurnished" : ""],
+          ["Laundry", u.laundry],
+          ["Getting around", u.transit],
+        ]
+          .filter(([, v]) => v)
+          .map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`)
+          .join("")}</dl>`
+      : "";
+  const photoCredit = (u) =>
+    u.demo && u.photo && u.photo.src
+      ? `<p class="small muted pic-credit">Illustrative demo photo by <a href="${esc(u.photo.creditUrl)}" target="_blank" rel="noopener">${esc(u.photo.credit)}</a> on <a href="${esc(u.photo.sourceUrl)}" target="_blank" rel="noopener">${esc(u.photo.source)}</a> (<a href="${esc(u.photo.licenseUrl)}" target="_blank" rel="noopener">${esc(u.photo.license)}</a>). It shows a similar kind of room, not this listing.</p>`
       : "";
   const matchPill = (m, person) => (m === "exact" ? `<span class="pill pill-ok">${person ? "Strong match" : "Matches everything"}</span>` : `<span class="pill pill-warn">Partial match</span>`);
   // The card: the two strongest reasons and the most important mismatch. Everything else is in Details.
@@ -2056,7 +2118,7 @@
       <li>
         <article class="res-card person-card${c.demo ? " is-demo" : ""}" data-ref="${esc(c.ref || "")}" tabindex="-1" aria-label="${esc(c.firstName)}">
           <div class="person-head">
-            <span class="avatar-pic${c.demo ? " is-demo" : ""}" aria-hidden="true">${esc(initials(c.firstName))}</span>
+            ${personAvatar(c)}
             <div class="person-name"><h3 class="mini-title">${esc(c.firstName)}</h3><span class="small muted" title="Compatibility score out of 100, worked out by coHabit">${c.score}% compatible</span></div>
           </div>
           ${c.about ? `<p class="small muted">${esc(c.about)}</p>` : ""}
@@ -2123,13 +2185,16 @@
   }
 
   // Cards grouped as "Matches everything" and "Partial matches", in the order the search ranked them.
-  function groupedCards(items, toHtml, { exactLabel, partialLabel, partialNote }) {
+  // The headings count the whole group, even while "Show more" hides part of it, so they agree with the summary.
+  function groupedCards(items, toHtml, { exactLabel, partialLabel, partialNote }, all = items) {
     const exact = items.filter((c) => c.match === "exact");
     const partial = items.filter((c) => c.match !== "exact");
+    const exactAll = all.filter((c) => c.match === "exact").length;
+    const partialAll = all.length - exactAll;
     return (
-      (exact.length ? `<h3 class="res-group">${exactLabel} <span class="count">${exact.length}</span></h3><ul class="res-grid" role="list">${exact.map(toHtml).join("")}</ul>` : "") +
+      (exact.length ? `<h3 class="res-group">${exactLabel} <span class="count">${exactAll}</span></h3><ul class="res-grid" role="list">${exact.map(toHtml).join("")}</ul>` : "") +
       (partial.length
-        ? `<h3 class="res-group">${partialLabel} <span class="count">${partial.length}</span></h3><p class="small muted res-group-note">${partialNote}</p><ul class="res-grid" role="list">${partial.map(toHtml).join("")}</ul>`
+        ? `<h3 class="res-group">${partialLabel} <span class="count">${partialAll}</span></h3><p class="small muted res-group-note">${partialNote}</p><ul class="res-grid" role="list">${partial.map(toHtml).join("")}</ul>`
         : "")
     );
   }
@@ -2164,7 +2229,7 @@
     const more = !showMap && !resShowAll && rooms.items.length > VISIBLE ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${rooms.items.length - VISIBLE} more</button>` : "";
     return {
       head,
-      list: groupedCards(items, roomCard, { exactLabel: "Matches everything", partialLabel: "Partial matches", partialNote: "These meet your must-haves but miss something flexible; each card says what." }) + more,
+      list: groupedCards(items, roomCard, { exactLabel: "Matches everything", partialLabel: "Partial matches", partialNote: "These meet your must-haves but miss something flexible; each card says what." }, rooms.items) + more,
       map: showMap,
     };
   }
@@ -2190,7 +2255,7 @@
           exactLabel: "Strong matches",
           partialLabel: "Partial matches",
           partialNote: "Not every lifestyle answer matches; Details says where.",
-        }) + more,
+        }, people.items) + more,
     };
   }
 
@@ -2733,11 +2798,14 @@
     const where =
       u.location && u.location.precision === "exact" && u.location.address
         ? `<p class="small">${esc(u.location.address)}</p>`
-        : u.location
+        : u.location && u.demo
+          ? `<p class="small muted">A made-up spot in this neighborhood, shown as an approximate area (about 500 m wide). There is no real address.</p>`
+          : u.location
           ? `<p class="small muted">The landlord shares an approximate area only (about 500 m wide), not the street address.</p>`
           : `<p class="small muted">No map location given.</p>`;
     dialog.querySelector(".details-body").innerHTML = `
-      ${roomPicture(u)}
+      ${roomPicture(u, { large: true })}
+      ${photoCredit(u)}
       <div class="card-top"><h2 id="details-title" class="card-title">${esc(u.name)}</h2><span class="card-tags">${c.match ? matchPill(c.match) : ""}${u.demo ? demoTag : u.sample ? `<span class="tag">Sample (fictional)</span>` : ""}</span></div>
       <p class="muted small">${esc(u.area)}${c.km != null ? ` · about ${c.km} km from Brandeis in a straight line` : ""}</p>
       ${where}
@@ -2778,12 +2846,14 @@
     else if (r.status === "accepted") actions = `<button class="btn" type="button" data-action="messages-open" data-id="${esc(r.id)}" data-name="${esc(c.firstName)}">Message</button>`;
     return `
       <div class="person-head big">
-        <span class="avatar-pic${c.demo ? " is-demo" : ""}" aria-hidden="true">${esc(initials(c.firstName))}</span>
+        ${personAvatar(c)}
         <div class="person-name"><h2 id="details-title" class="card-title">${esc(c.firstName)}</h2>${c.about ? `<p class="small muted">${esc(c.about)}</p>` : ""}</div>
         <span class="pill pill-ok">${c.score}% compatible</span>
       </div>
       <div class="res-card-top">${matchPill(c.match || (c.mainMiss ? "partial" : "exact"), true)}${c.demo ? demoTag : ""}${c.sample ? sampleTagSmall : ""}${requestBadge(r)}</div>
+      ${c.intro ? `<p class="desc">${esc(c.intro)}</p>` : ""}
       ${profile}
+      ${c.interests && c.interests.length ? `<h3 class="details-h">Interests</h3><ul class="reasons" aria-label="Interests">${c.interests.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
       <h3 class="details-h">What you have in common</h3>
       <ul class="fit-list">${c.fits.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
       <h3 class="details-h">Differences</h3>
@@ -2791,7 +2861,7 @@
       ${c.email ? `<p class="small">Email they chose to share: <a href="mailto:${esc(c.email)}">${esc(c.email)}</a></p>` : ""}
       <p class="hint">${
         c.demo
-          ? "Demo profile: made up. Connecting is a preview only; nothing is sent."
+          ? `Demo profile: a fictional person${c.avatar ? " with an illustrated avatar" : ""}, not a real student. Connecting is a preview only; nothing is sent.`
           : r && r.status === "pending" && r.direction === "in"
             ? `${esc(c.firstName)} sent you a request. Accepting lets you message each other here; your email stays private.`
             : r && r.status === "accepted"
@@ -3678,6 +3748,19 @@
     else if (e.target.id === "survey-comment") syncSurvey();
   });
 
+  // A demo photo that can't load (offline, blocked) is swapped for the drawing, so no broken image shows.
+  document.addEventListener(
+    "error",
+    (e) => {
+      const img = e.target;
+      if (!(img instanceof HTMLImageElement) || !img.dataset.fallback) return;
+      const pic = img.closest(".card-pic");
+      if (!pic) return;
+      pic.className = "card-pic is-art is-demo";
+      pic.innerHTML = `<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ART[ART_FOR[img.dataset.fallback] || "house"]}</svg><span class="pic-label">${esc(img.dataset.fallback)} · demo picture</span>`;
+    },
+    true
+  );
   document.getElementById("details").addEventListener("close", (e) => delete e.target.dataset.person);
   document.getElementById("survey").addEventListener("close", surveyClosed);
 
