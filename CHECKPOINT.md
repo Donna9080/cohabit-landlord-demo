@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-13 (Quick check-in, local only)
+# coHabit project checkpoint: 2026-10-13 (Quick check-in)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -13,7 +13,8 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 | Sample (fictional) accounts | 0 | Live: all 36 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
 | Real landlord units | 5 | Live, 2026-10-12 |
 | Sample units | 0 | Live: all 20 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
-| "I'm interested" requests | 3 | Live, 2026-10-13 |
+| "I'm interested" requests | 4 | Live, 2026-10-13 |
+| Quick check-in responses | 0 | Live, 2026-10-13 (table created that day) |
 | Roommate requests | 0 | Live, 2026-10-13 (table created that day) |
 | Saved questionnaires | 4 | Live, 2026-10-13 |
 | Admins | 1 | Live (the owner) |
@@ -24,14 +25,19 @@ No real listings were imported because no authorized data source exists yet (see
 
 ## Deployment status
 
-**Not deployed: the Quick check-in** (below) is committed locally only, and migration 0008 is applied to the local
-databases only. The live site and live database are unchanged by it. The new code needs migration 0008, so the
-order is: restore point, apply 0008 to the live database, deploy (each with the owner's approval).
-
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9`, deployed 2026-10-13 with the owner's approval: Details and requests
-  (commit `d3d9734`, tag `checkpoint-2026-10-13-requests`). Order used: restore point, migration 0007, deploy. Checked
-  live after deploy:
+- **Live version:** `e2e17667-50ba-4f0d-94ef-b2ed994b1d96`, deployed 2026-10-13 with the owner's approval: the Quick check-in and
+  coHabit Points (commit `3afb592`, tag `checkpoint-2026-10-13-checkin`). Order used: restore point, migration 0008,
+  deploy. Checked live after deploy:
+  - Pages return 200 (home, assistant, listings, account, admin survey, privacy, terms), and the drawer, survey
+    code and points wording are served.
+  - Signed out: `/api/me` and `/api/survey` work (4 questions, no points state); a blank send and an "exclusive plus
+    another answer" send are refused (400); a send from another site is refused (403); the admin results and CSV
+    return 401. Only refused sends were tried, so the live tables stayed empty (0 responses, 0 awards).
+  - Not checked: a real signed-in or guest send (part 11 of the manual test; it will add real rows).
+
+  Before it: `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (Details and requests, commit `d3d9734`, tag
+  `checkpoint-2026-10-13-requests`). Order used: restore point, migration 0007, deploy. Checked live after that deploy:
   - Pages return 200 (home, assistant, listings, My matches, privacy, terms), and the new code and privacy text are served.
   - Signed out, the requests, assistant and roommate APIs return 401, and a cross-site request returns 403.
   - Public listings contain no demo ids and no emails.
@@ -45,7 +51,10 @@ order is: restore point, apply 0008 to the live database, deploy (each with the 
 
   Before it: `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (rooms with no map location shown, commit `27df59b`). The version before it, `d7e38548-66c4-4eab-890c-ac0c692a1bcd`,
   brought the chat assistant (basic mode) and the external listing import tool (commit `a5f8e92`).
-- **Live database (`cohabit-db`):** migrations 0001 to 0007 applied. 0007 was applied on 2026-10-13 with the owner's
+- **Live database (`cohabit-db`):** migrations 0001 to 0008 applied. 0008 was applied on 2026-10-13 with the owner's
+  approval, after a restore point (bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16`). It only added two empty tables
+  (`survey_responses`, `points_awards`) and their indexes; existing data was checked before and after (12 users,
+  5 units, 4 "I'm interested" requests, 4 questionnaires, 3 chats, 1 saved option: unchanged). 0007 was applied on 2026-10-13 with the owner's
   approval, after a restore point (bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c`). It only added a column (off for
   everyone) and two empty tables with four indexes; existing data was checked before and after (12 users, 5 units,
   3 "I'm interested" requests, 4 questionnaires, 2 chats, 1 saved option: unchanged). 0005 and 0006 were applied on 2026-10-12 with
@@ -82,7 +91,7 @@ order is: restore point, apply 0008 to the live database, deploy (each with the 
 | **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
 | **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | Yes (2026-10-13) |
 
-### Quick check-in and coHabit Points (2026-10-13, local only)
+### Quick check-in and coHabit Points (2026-10-13, live as `e2e17667…`)
 
 - **What people see:** a feedback icon beside the profile menu (or beside Sign in) opens a drawer from the right
   (full width on phones) with "Quick check-in", four tap-to-answer questions and an optional comment. Every question
@@ -245,8 +254,9 @@ Earlier runs:
 - [ ] Owner tries the redesigned assistant on the live site as a renter (manual test part 9, including Demo mode).
 - [x] Apply migration 0007 to the live database and deploy the 2026-10-13 work (restore point first; version `d4ea27c7…`).
 - [ ] Run part 10 of the manual test with two real renter accounts (Details, Connect, Accept, Messages, room request).
-- [ ] Approve the Quick check-in going live: restore point, migration 0008 on the live database, deploy; then part 11
-      of the manual test.
+- [x] Quick check-in live: restore point, migration 0008 on the live database, deploy (version `e2e17667…`).
+- [ ] Run part 11 of the manual test (Quick check-in) on the live site. It adds real responses; that's expected.
+- [ ] Push the Quick check-in commits to GitHub (not pushed yet).
 - [x] Push commits `d3d9734` and the deploy record to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-requests`).
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
 
@@ -275,16 +285,17 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Database before migration 0008 | Time Travel bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0007 | Time Travel bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c` (only added a column and tables, so rolling back the code alone is usually enough) |
 | Database before migrations 0005 and 0006 | Time Travel bookmark `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0004 | Time Travel bookmark `00000032-00000000-000050f9-cded0b9a637a3ca8de724dfb34fae1b6` |
 | Original static site | Version `a3c0f17b-d52a-47e3-9d71-5049e87a7a34`, git tag `pre-accounts-2026-09-29` |
 | Previous checkpoint | Git tag `checkpoint-2026-10-06` |
 | Earlier checkpoint today | Git tag `checkpoint-2026-10-12` (assistant first built) |
-| Previous checkpoint (live code) | Git tag `checkpoint-2026-10-12-redesign` |
-| Previous checkpoint (live code) | Git tag `checkpoint-2026-10-13-requests` |
-| This checkpoint (local only) | Git tag `checkpoint-2026-10-13-checkin` |
+| Earlier checkpoint | Git tag `checkpoint-2026-10-12-redesign` |
+| Previous checkpoint | Git tag `checkpoint-2026-10-13-requests` |
+| This checkpoint (live) | Git tag `checkpoint-2026-10-13-checkin` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 

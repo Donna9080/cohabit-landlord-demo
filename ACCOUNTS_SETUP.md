@@ -207,7 +207,7 @@ worked example on the sample data are in [docs/SAMPLE_MATCHING.md](docs/SAMPLE_M
   in Details, on Listings, in Saved and on My matches. A request doesn't reserve the room. Demo listings show a
   preview only; external listings say to contact the original site; sample listings have no landlord to contact.
 
-## Quick check-in survey and coHabit Points (migration `0008`, local only so far)
+## Quick check-in survey and coHabit Points (migration `0008`, live since 2026-10-13)
 
 An optional survey that helps shape coHabit. It never opens by itself: a small feedback icon sits beside the profile
 menu (or beside **Sign in**) and opens a drawer from the right, full width on phones. It's a dialog on top of the
@@ -631,9 +631,10 @@ Real Google sign-in locally needs your Google client values in `.dev.vars` and
 
 ## Migrations and deploy (exact commands used)
 
-**Pending: migration `0008_survey_points.sql`** (adds `survey_responses` and `points_awards`; additive only).
-Applied to the local databases only. The Quick check-in code needs it (`/api/me` reads the points balance), so apply
-it to the live database **before** deploying that code, with a restore point first and the owner's approval.
+**Migration `0008_survey_points.sql`** (adds `survey_responses` and `points_awards`; additive only) was applied to the
+live database on 2026-10-13 with the owner's approval, after a restore point (bookmark
+`0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16`), and before deploying version `e2e17667-50ba-4f0d-94ef-b2ed994b1d96`, which needs it
+(`/api/me` reads the points balance). Existing data was unchanged.
 
 **Migration `0007_roommate_requests.sql`** (adds the `share_profile` column, `roommate_requests` and
 `roommate_messages`; additive only) was applied to the live database on 2026-10-13 with the owner's approval, after

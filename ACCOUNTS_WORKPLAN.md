@@ -225,7 +225,7 @@ by the live test.
   approval: restore point (bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c`), migration 0007 on the live database
   (data unchanged), and deploy as `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9`.
 
-## Quick check-in and coHabit Points (2026-10-13, local only)
+## Quick check-in and coHabit Points (2026-10-13)
 
 - **No existing points system**, so a minimal one: an award ledger (`points_awards`) with one row per award and a
   unique (person, reason) pair; a balance is the sum. No separate balance column that could drift.
@@ -237,7 +237,9 @@ by the live test.
   (no ids), and the admin never sees names or emails, including in the CSV.
 - **Never interrupts.** The drawer only opens from its icon. No pop-ups, badges or reminders.
 - **Demo mode is read on the server** from the renter's assistant setting, not trusted from the browser.
-- **Not deployed, and the live database not changed**, as asked.
+- **Built and tested locally first.** Then, with the owner's approval: restore point (bookmark
+  `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16`), migration 0008 on the live database (data unchanged), and deploy as
+  `e2e17667-50ba-4f0d-94ef-b2ed994b1d96`.
 
 ## Next safe step
 
