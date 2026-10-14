@@ -241,7 +241,7 @@ by the live test.
   `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16`), migration 0008 on the live database (data unchanged), and deploy as
   `e2e17667-50ba-4f0d-94ef-b2ed994b1d96`.
 
-## Demo data refresh (2026-10-14, local only)
+## Demo data refresh (2026-10-14)
 
 - **Audit first:** the demo data was already in code (15 listings, 20 profiles, no images, 8 listings outside
   Waltham, no laundry, profiles without program, introduction or interests). The assistant retrieved it in Demo mode.
@@ -254,7 +254,8 @@ by the live test.
   question; labeled as fictional. No gender field.
 - **Matching rules unchanged.** The overlaps were chosen so common searches give strong, partial and no-match
   results without relaxing any must-have.
-- **Not deployed, and the live database not changed**, as asked.
+- **Built and checked locally first**, then deployed with the owner's approval as `c35940b7-6b05-4156-9cf5-c274a3386f0e` (no database
+  change) and pushed.
 
 ## Next safe step
 

@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-14 (demo data refresh, local only)
+# coHabit project checkpoint: 2026-10-14 (demo data refresh)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -25,11 +25,17 @@ No real listings were imported because no authorized data source exists yet (see
 
 ## Deployment status
 
-**Not deployed: the demo data refresh** (below) is committed locally only. It needs no database change. The live
-site still shows the earlier demo data until a deploy is approved.
-
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `e2e17667-50ba-4f0d-94ef-b2ed994b1d96`, deployed 2026-10-13 with the owner's approval: the Quick check-in and
+- **Live version:** `c35940b7-6b05-4156-9cf5-c274a3386f0e`, deployed 2026-10-14 with the owner's approval: the demo data refresh
+  (commit `419c826`, tag `checkpoint-2026-10-14-demo-data`). No database change (none pending). Checked live after deploy:
+  - Pages return 200 (home, assistant, listings, privacy), and the new photo, avatar and fact-list code, styles and
+    privacy wording (Demo mode photos load from Unsplash) are served.
+  - Signed out, the assistant and Demo APIs return 401 and a cross-site Demo request returns 403; public listings
+    contain no demo ids or photos.
+  - All 15 photo addresses answer 200 with an image (checked without downloading).
+  - Not checked: Demo mode itself while signed in (it needs a real account).
+
+  Before it: `e2e17667-50ba-4f0d-94ef-b2ed994b1d96`, deployed 2026-10-13 with the owner's approval: the Quick check-in and
   coHabit Points (commit `3afb592`, tag `checkpoint-2026-10-13-checkin`). Order used: restore point, migration 0008,
   deploy. Checked live after deploy:
   - Pages return 200 (home, assistant, listings, account, admin survey, privacy, terms), and the drawer, survey
@@ -94,7 +100,7 @@ site still shows the earlier demo data until a deploy is approved.
 | **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
 | **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | Yes (2026-10-13) |
 
-### Demo data refresh (2026-10-14, local only)
+### Demo data refresh (2026-10-14, live as `c35940b7…`)
 
 - **Audit:** 15 listings and 20 profiles already existed, in code (`src/assistant/demo-data.js`), not the database;
   no images; 8 listings outside Waltham. The assistant retrieved them in Demo mode. Improved in place, same ids.
@@ -282,7 +288,8 @@ Earlier runs:
 - [ ] Run part 10 of the manual test with two real renter accounts (Details, Connect, Accept, Messages, room request).
 - [x] Quick check-in live: restore point, migration 0008 on the live database, deploy (version `e2e17667…`).
 - [ ] Run part 11 of the manual test (Quick check-in) on the live site. It adds real responses; that's expected.
-- [ ] Approve deploying the demo data refresh (no database change needed).
+- [x] Deploy and push the demo data refresh (2026-10-14, version `c35940b7…`, no database change).
+- [ ] Try Demo mode on the live site as a renter: a room search, a roommate search, Details on each.
 - [x] Push the Quick check-in commits to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-checkin`).
 - [x] Push commits `d3d9734` and the deploy record to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-requests`).
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
@@ -312,7 +319,7 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
 | Database before migration 0008 | Time Travel bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0007 | Time Travel bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c` (only added a column and tables, so rolling back the code alone is usually enough) |
 | Database before migrations 0005 and 0006 | Time Travel bookmark `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90` (only added tables, so rolling back the code alone is usually enough) |
@@ -323,7 +330,7 @@ one of these is needed:
 | Earlier checkpoint | Git tag `checkpoint-2026-10-12-redesign` |
 | Previous checkpoint | Git tag `checkpoint-2026-10-13-requests` |
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-13-checkin` |
-| This checkpoint (local only) | Git tag `checkpoint-2026-10-14-demo-data` |
+| This checkpoint (live) | Git tag `checkpoint-2026-10-14-demo-data` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 
