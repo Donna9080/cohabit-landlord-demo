@@ -256,7 +256,7 @@ Earlier runs:
 - [ ] Run part 10 of the manual test with two real renter accounts (Details, Connect, Accept, Messages, room request).
 - [x] Quick check-in live: restore point, migration 0008 on the live database, deploy (version `e2e17667…`).
 - [ ] Run part 11 of the manual test (Quick check-in) on the live site. It adds real responses; that's expected.
-- [ ] Push the Quick check-in commits to GitHub (not pushed yet).
+- [x] Push the Quick check-in commits to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-checkin`).
 - [x] Push commits `d3d9734` and the deploy record to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-requests`).
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
 
