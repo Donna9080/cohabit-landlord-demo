@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-17 (email and password accounts, local only)
+# coHabit project checkpoint: 2026-10-17 (accounts: Google-only fallback, freeze fix; local only)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -18,16 +18,16 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 | Roommate requests | 0 | Live, 2026-10-13 (table created that day) |
 | Saved questionnaires | 4 | Live, 2026-10-13 |
 | Admins | 1 | Live (the owner) |
-| Automated tests | 471 passing | `npm test`, local, 2026-10-17 |
+| Automated tests | 475 passing | `npm test`, local, 2026-10-17 (two local Workers: passwords on, and Google only) |
 | AI cost so far | $0 | No Anthropic key exists; the assistant has only run in basic mode or against the test stand-in |
 
 No real listings were imported because no authorized data source exists yet (see "Pending work").
 
 ## Deployment status
 
-**Not deployed: email and password accounts** (below) are committed locally only, and migration 0009 is applied to
-the local databases only. Even after a deploy, the live site stays Google-only until an email service is set up (see
-ACCOUNTS_SETUP.md, "Email and password accounts").
+**Not deployed: email and password accounts and the sign-in freeze fix** (below) are pushed to GitHub but not
+deployed, and migration 0009 is applied to the local databases only. When deployed, the live site stays Google-only:
+password accounts need an email sender and `PASSWORD_ACCOUNTS=on`, and neither exists there (see ACCOUNTS_SETUP.md).
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
 - **Live version:** `c35940b7-6b05-4156-9cf5-c274a3386f0e`, deployed 2026-10-14 with the owner's approval: the demo data refresh
@@ -114,8 +114,15 @@ ACCOUNTS_SETUP.md, "Email and password accounts").
   answers, one-time 1-hour reset links, a new-password form and a confirmation.
 - **Same account system** as Google (Better Auth), permissions still checked on the server for every request.
 - **Database:** migration `0009_password_accounts.sql` (two optional `user` columns).
-- **Missing for the live site:** an email service and a sending domain (owner's decision; may cost money), and a CPU
-  check of password hashing on the Free plan.
+- **Off on the live site, by design:** password accounts need an email sender and `PASSWORD_ACCOUNTS=on`; until
+  then every password endpoint answers 404 and the pages show only Google (tested in a browser and in `npm test`).
+- **Sign-in freeze found and fixed:** a request rejected by our checks as the first sign-in request on a fresh Worker
+  left Better Auth's setup unfinished, and every later sign-in request (Google too) hung. The live code has the same
+  pattern for cross-site sign-out requests. Better Auth is now created only after the checks and kept only when ready.
+- **Email check (2026-10-17):** no sending domain on the account; Cloudflare Email Sending needs Workers Paid and a
+  domain; Resend and similar need a domain. The only $0 route is a dedicated Gmail account through Gmail's SMTP
+  server with an app password (code not written; owner's decision). Password hashing (about 20 ms of CPU against the
+  Free plan's 10 ms) still needs a live check; iterations stay at 100,000.
 
 ### Demo data refresh (2026-10-14, live as `c35940b7…`)
 
@@ -322,7 +329,10 @@ Earlier runs:
 - [ ] Run part 11 of the manual test (Quick check-in) on the live site. It adds real responses; that's expected.
 - [x] Deploy and push the demo data refresh (2026-10-14, version `c35940b7…`, no database change).
 - [ ] Try Demo mode on the live site as a renter: a room search, a roommate search, Details on each.
-- [ ] Decide on an email service and sending domain for password accounts (may cost money); then migration 0009, deploy, and a live CPU check.
+- [ ] Decide whether to use a dedicated Gmail account for coHabit's emails (the only $0 option found). If yes: create
+      it with 2-Step Verification and an app password, enter it with `wrangler secret put`, and I'll add the SMTP sender.
+- [ ] Approve: migration 0009 on the live database (restore point first) and a deploy (passwords stay off; brings the
+      freeze fix and the new homepage paths). Then, only after live email and speed checks, `PASSWORD_ACCOUNTS=on`.
 - [x] Push the Quick check-in commits to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-checkin`).
 - [x] Push commits `d3d9734` and the deploy record to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-requests`).
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).

@@ -30,7 +30,7 @@ import { asPrefs, createInterest, loadPreferences, MAX_INTERESTS_PER_RENTER, sav
 import { firstNameOf, rankedMatches } from "./roommates.js";
 import { handleSurvey, pointsBalance, surveyCsv, surveyDeleteStatements, surveySummary } from "./survey.js";
 import { InvalidInput, isUnitId, parseAccountType, parseEmailOnly, parseInterest, parseNewPassword, parsePreferences, parseSignIn, parseSignup, parseUnit } from "./validate.js";
-import { devOutboxOn, mailer, readOutbox } from "./email.js";
+import { devOutboxOn, passwordAccountsOn, readOutbox } from "./email.js";
 
 const MAX_IMPORT_BODY = 600 * 1024; // admin CSV imports only
 const MAX_UNITS_PER_LANDLORD = 50;
@@ -42,7 +42,7 @@ const hasSessionCookie = (request) => /(?:^|;\s*)(?:__Secure-)?better-auth\.sess
 // revoked session or changed role takes effect immediately.
 async function getViewer(request, env) {
   if (!hasSessionCookie(request)) return { user: null, setCookies: [] };
-  const { headers, response } = await getAuth(env).api.getSession({ headers: request.headers, returnHeaders: true });
+  const { headers, response } = await (await getAuth(env)).api.getSession({ headers: request.headers, returnHeaders: true });
   const setCookies = headers?.getSetCookie?.() ?? [];
   if (!response) return { user: null, expired: true, setCookies };
   const u = response.user;
@@ -106,7 +106,11 @@ async function handleAuth(request, env, url) {
   const route = `${request.method} ${url.pathname}`;
   const resetLink = request.method === "GET" && RESET_LINK.test(url.pathname);
   if (!AUTH_ROUTES.has(route) && !resetLink) throw new HttpError(404, "not_found", "Not found.");
-  const auth = getAuth(env);
+  // Email and password routes exist only where they can work (an email can be sent and they're switched on).
+  if ((PASSWORD_ROUTES.has(url.pathname) || resetLink || url.pathname === "/api/auth/verify-email") && !passwordAccountsOn(env))
+    throw new HttpError(404, "not_available", "Email and password sign-in isn't available yet. Continue with Google.");
+  // Better Auth is created only after every check below has passed (see getAuth in src/auth.js).
+  const handle = async (req) => (await getAuth(env)).handler(req);
   const ip = request.headers.get("CF-Connecting-IP") || "local";
 
   if (url.pathname === "/api/auth/sign-in/social") {
@@ -120,7 +124,7 @@ async function handleAuth(request, env, url) {
       errorCallbackURL: "/signin-error",
       disableRedirect: true,
     });
-    return withSecurityHeaders(await auth.handler(request));
+    return withSecurityHeaders(await handle(request));
   }
 
   if (PASSWORD_ROUTES.has(url.pathname)) {
@@ -130,7 +134,7 @@ async function handleAuth(request, env, url) {
 
     if (url.pathname === "/api/auth/sign-up/email") {
       const s = parseSignup(body);
-      const res = await auth.handler(withBody(request, { ...s, callbackURL: AFTER_CONFIRM }));
+      const res = await handle(withBody(request, { ...s, callbackURL: AFTER_CONFIRM }));
       // New or already registered, the answer is the same: check your email (the owner of an existing account
       // gets a "you already have an account" email instead of a confirmation link).
       if (res.ok) return json({ status: "check_email", email: s.email });
@@ -138,24 +142,24 @@ async function handleAuth(request, env, url) {
     }
     if (url.pathname === "/api/auth/sign-in/email") {
       const s = parseSignIn(body);
-      const res = await auth.handler(withBody(request, { ...s, rememberMe: true, callbackURL: AFTER_CONFIRM }));
+      const res = await handle(withBody(request, { ...s, rememberMe: true, callbackURL: AFTER_CONFIRM }));
       if (res.ok) return replyKeepingCookies(res, { signedIn: true });
       return withSecurityHeaders(res);
     }
     if (url.pathname === "/api/auth/send-verification-email") {
       const s = parseEmailOnly(body);
-      const res = await auth.handler(withBody(request, { ...s, callbackURL: AFTER_CONFIRM }));
+      const res = await handle(withBody(request, { ...s, callbackURL: AFTER_CONFIRM }));
       // Same answer whether or not there is an unconfirmed account for this email.
       return res.status === 429 ? withSecurityHeaders(res) : json({ status: "check_email", email: s.email });
     }
     if (url.pathname === "/api/auth/request-password-reset") {
       const s = parseEmailOnly(body);
-      const res = await auth.handler(withBody(request, { ...s, redirectTo: "/reset-password" }));
+      const res = await handle(withBody(request, { ...s, redirectTo: "/reset-password" }));
       // Same answer whether or not an account exists (Better Auth also evens out the timing).
       return res.status === 429 ? withSecurityHeaders(res) : json({ status: "check_email", email: s.email });
     }
     if (url.pathname === "/api/auth/reset-password") {
-      const res = await auth.handler(withBody(request, parseNewPassword(body)));
+      const res = await handle(withBody(request, parseNewPassword(body)));
       if (res.ok) return json({ status: "password_changed" });
       return withSecurityHeaders(res);
     }
@@ -174,7 +178,7 @@ async function handleAuth(request, env, url) {
     assertSameOrigin(request, env);
     if (Number(request.headers.get("Content-Length") || 0) > MAX_BODY) throw new HttpError(413, "too_large", "Request too large.");
   }
-  return withSecurityHeaders(await auth.handler(request));
+  return withSecurityHeaders(await handle(request));
 }
 
 // ── App API ─────────────────────────────────────────────────────────────────
@@ -224,7 +228,7 @@ async function handleApi(request, env, url) {
 
   // Public settings for the browser. The map key is a browser key restricted to this site's address.
   if (path === "/api/config" && method === "GET") {
-    return reply({ maptilerKey: env.MAPTILER_KEY || null, passwordSignIn: !!mailer(env), devInbox: devOutboxOn(env) });
+    return reply({ maptilerKey: env.MAPTILER_KEY || null, passwordSignIn: passwordAccountsOn(env), devInbox: devOutboxOn(env) });
   }
 
   // Local development only: emails coHabit would have sent (src/email.js). Not available anywhere else.

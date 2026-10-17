@@ -438,7 +438,7 @@
       `<div class="pw-wrap"><input id="f-${id}" name="${id}" type="password" autocomplete="${autocomplete}" required minlength="8" maxlength="128" aria-describedby="h-${id} e-${id}" /><button class="pw-toggle" type="button" data-action="pw-toggle" data-for="f-${id}" aria-controls="f-${id}" aria-pressed="false">Show</button></div>${after}`,
       hint
     );
-  const googleButton = (next, label = "Continue with Google") => `<button class="btn btn-quiet btn-google" type="button" data-action="sign-in" data-next="${esc(next || "")}">${icon("google", 18)} ${label}</button>`;
+  const googleButton = (next, label = "Continue with Google", primary = false) => `<button class="btn${primary ? "" : " btn-quiet"} btn-google" type="button" data-action="sign-in" data-next="${esc(next || "")}">${icon("google", 18)} ${label}</button>`;
   const orLine = `<p class="or-line"><span>or</span></p>`;
   const devInboxLink = (cfg) => (cfg.devInbox ? `<p class="hint">Local preview: emails go to the <a href="/dev/inbox">local test inbox</a> instead of being sent.</p>` : "");
 
@@ -547,7 +547,7 @@
         ${tabs}
         <h1 tabindex="-1">${renter ? "Find a room or roommate" : "List your space"}</h1>
         <p class="muted">${renter ? "Create your account with Google, then tell the assistant what you're looking for." : "Create your landlord account with Google, then add your rooms or units."} We only get your name and email address.</p>
-        ${googleButton(next, "Sign up with Google")}
+        ${googleButton(next, "Sign up with Google", true)}
         <p class="auth-switch-line">Already have an account? <a href="/signin">Sign in</a></p>
       </div>`,
       };
@@ -629,7 +629,11 @@
   }
 
   function forgotPasswordPage() {
-        if (!cfg.passwordSignIn) return messageView("Passwords aren't available yet", "Sign in with Google for now. Email and password sign-in will appear here once it's switched on.", `<a class="btn" href="/signin">Sign in</a>`);
+        // Only Google sign-in where passwords are off: no password controls that couldn't work.
+    if (!cfg.passwordSignIn) {
+      navigate("/signin", true);
+      return null;
+    }
     return {
       title: "Reset your password",
       html: `
@@ -662,6 +666,10 @@
   // The link in the email opens this page with a one-time token. It's taken out of the address bar right away.
   let resetToken = null;
   function resetPasswordPage() {
+    if (!cfg.passwordSignIn) {
+      navigate("/signin", true);
+      return null;
+    }
     const params = new URLSearchParams(location.search);
     if (params.get("token")) {
       resetToken = params.get("token");

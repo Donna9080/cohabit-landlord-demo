@@ -3,7 +3,7 @@
 // OAuth state and rate-limit counters live in the D1 database bound as DB. See ACCOUNTS_SETUP.md.
 // Email and password accounts are only on when coHabit can send email (src/email.js); otherwise only Google.
 import { betterAuth } from "better-auth";
-import { emails, mailer } from "./email.js";
+import { emails, mailer, passwordAccountsOn } from "./email.js";
 import { hashPassword, iterationsFrom, verifyPassword } from "./password.js";
 
 const DAY = 60 * 60 * 24;
@@ -64,7 +64,7 @@ export function authOptions(env) {
     },
     // Email and password: only when an email can be sent, because new accounts must confirm their email.
     emailAndPassword: {
-      enabled: !!mail,
+      enabled: passwordAccountsOn(env),
       requireEmailVerification: true,
       minPasswordLength: 8,
       maxPasswordLength: 128,
@@ -145,9 +145,15 @@ export function authOptions(env) {
   };
 }
 
-let cached;
-export function getAuth(env) {
-  // env is fixed for the life of an isolate, so build the auth object once.
-  if (!cached || cached.env !== env) cached = { env, auth: betterAuth(authOptions(env)) };
-  return cached.auth;
+// Better Auth starts its setup (including database reads) as soon as it is created, tied to the request that
+// created it. If that request ended before the setup finished (for example a form rejected by our own checks),
+// every later request waiting on the same instance would hang. So each request that needs one finishes the setup
+// itself, and an instance is kept for reuse only after its setup is done. env is fixed for the life of an isolate.
+let ready;
+export async function getAuth(env) {
+  if (ready && ready.env === env) return ready.auth;
+  const auth = betterAuth(authOptions(env));
+  await auth.$context;
+  ready = { env, auth };
+  return auth;
 }

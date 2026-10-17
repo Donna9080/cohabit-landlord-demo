@@ -9,10 +9,15 @@
 export const devOutboxOn = (env) => env.DEV_EMAIL_OUTBOX === "1" && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(env.BETTER_AUTH_URL || "");
 
 // Returns a sender, or null when there is no way to send email (so email sign-up and resets stay off).
+// No email provider is set up yet; one would be added here.
 export function mailer(env) {
   if (devOutboxOn(env)) return { kind: "local test inbox", send: (msg) => saveToOutbox(env.DB, msg) };
   return null;
 }
+
+// Email and password accounts are on only where an email can be sent and, outside local development, only when
+// the owner switches them on (PASSWORD_ACCOUNTS=on) after checking delivery and speed on the live site.
+export const passwordAccountsOn = (env) => !!mailer(env) && (devOutboxOn(env) || env.PASSWORD_ACCOUNTS === "on");
 
 async function saveToOutbox(db, { to, subject, text }) {
   await db.batch([

@@ -163,7 +163,7 @@ pin and the street address never leave the server for approximate units.
 saved location stores `geo_source = "© MapTiler © OpenStreetMap contributors"`. Sample units carry
 `"Sample: neighborhood center, set by hand"` instead (they were placed by hand, not geocoded).
 
-## Email and password accounts (local only so far; needs an email provider to go live)
+## Email and password accounts (built; off on the live site until email and speed are checked)
 
 The homepage offers two paths, **Find a room or roommate** and **List your space** (remembered in the browser), plus
 **Browse listings** and **Sign in**. Both paths use one account system (Better Auth, the same `user` table and
@@ -195,21 +195,62 @@ sessions as Google sign-in), and Google sign-in stays available everywhere.
   Password hashes go in the existing `account` table, confirmation and reset tokens in `verification`. Deleting an
   account deletes all of them.
 
-### What's needed before this can go live
+### On the live site: Google only until email and speed are checked
 
-1. **An email service.** coHabit has none, and Better Auth only calls a function to send mail. Without one, the live
-   site keeps password sign-up and reset switched off and shows Google only (`/api/config` → `passwordSignIn: false`),
-   so deploying this code changes nothing for users until email works. Options to discuss (ask before any signup or
-   billing): Cloudflare's own email sending for Workers, or a transactional provider such as Resend, Postmark or
-   SendGrid. Each needs an account and an API key (set by the owner with `npx wrangler secret put`), and a short change
-   in `src/email.js` to call it.
-2. **A domain you control** to send from (DNS records for SPF/DKIM). Providers don't let you send from `workers.dev`,
-   and registering a domain costs money, so that's the owner's decision.
-3. **Check CPU on the live site.** One password check takes about 20 ms of CPU at 100,000 iterations (measured
-   locally), and the Workers Free plan allows 10 ms per request. Before switching password sign-in on, try it on the
-   live site. If requests fail, the choices are the Workers Paid plan (about $5 a month; ask first) or fewer iterations
-   (weaker against offline guessing if the database ever leaked).
-4. Apply migration 0009 to the live database (restore point first) before deploying this code.
+Password sign-up, sign-in and reset are **off on the live site** and stay off until the owner switches them on.
+They need both a way to send email (`mailer()` in `src/email.js`, none yet) and `PASSWORD_ACCOUNTS=on`; either alone
+isn't enough. While off:
+
+- `/api/config` reports `passwordSignIn: false`, every email and password endpoint (sign-up, sign-in, resend, confirm,
+  forgot, reset and the reset link) answers 404 "not available", and the local test inbox doesn't exist.
+- The pages show only Google: the homepage paths lead to "Sign up with Google", `/signin` is the Google sign-in panel,
+  and `/forgot-password` and `/reset-password` go to `/signin`. No password fields or "Forgot password?" links.
+- Tested in a browser on a second local server with passwords off (desktop and phone) and in `npm test` (a second
+  Worker on port 8790), including Google sign-in still producing a Google sign-in link.
+
+### Sign-in freeze (found 2026-10-17, fixed in this code)
+
+Better Auth starts its setup, including database reads, the moment it is created, tied to the request that created
+it. The Worker used to create it at the top of every `/api/auth/*` request. If that request then ended before the setup
+finished (a form rejected by our checks, a request from another site, a body that's too large), every later sign-in
+request on that Worker instance waited forever, Google included, until Cloudflare replaced the instance. It was
+reproduced locally on demand (a rejected sign-up as the first request, then any sign-in request hangs).
+
+The live code has the same pattern for a cross-site POST to `/api/auth/sign-out` arriving first on a fresh instance,
+so it could have caused rare, temporary sign-in hangs there too. Fixed by creating Better Auth only after all checks
+pass and keeping an instance only once its setup has finished (`getAuth` in `src/auth.js`). `npm test` now starts both
+local servers with rejected requests first and checks that sign-in still answers.
+
+### What's needed before passwords can go live (checked 2026-10-17)
+
+**Domain:** none found. The site runs on `cohabit-landlord-demo.dolgorsureng.workers.dev`, the project has no custom
+domain, and Cloudflare Email Routing lists no domains on the account (`npx wrangler email routing list`). Wrangler
+can't list the account's domains directly; the Cloudflare dashboard (Domains) shows them. `workers.dev` can't be
+used as a sending domain, and registering a domain costs money.
+
+**Free email options with the current setup:**
+
+| Option | Free? | Needs a domain? | Notes |
+| --- | --- | --- | --- |
+| Cloudflare Email Sending (Workers `send_email`) | No: sending to anyone needs Workers Paid (about $5/month, 3,000 emails included) | Yes, on Cloudflare DNS | On Workers Free it only sends to verified addresses in your own account. Open beta. The account's API token also got "Unauthorized" listing it. |
+| MailChannels | Its free Workers sending ended in 2024; its own API has a small free plan | Yes | Not usable without a domain |
+| Resend (and similar: SendGrid, Postmark, Brevo) | Free tiers exist (Resend: 3,000/month, 100/day) | Yes, to email real users | Not usable without a domain |
+| **A Gmail account through Gmail's SMTP server** | **Yes** | **No** | The only $0 option today; see below |
+
+**The $0 option: a Gmail account.** The Worker can connect to `smtp.gmail.com` on port 465 (Cloudflare blocks only port
+25 for outgoing connections and supports TLS). It would send from a Gmail address, ideally a new one made just for
+coHabit rather than a personal or Brandeis account. What it needs:
+
+1. The owner creates that Gmail account, turns on 2-Step Verification and creates an **app password**, then enters
+   it with `npx wrangler secret put` (never in chat or in files). The address goes in a variable such as `EMAIL_FROM`.
+2. A small SMTP sender in `src/email.js` (about 100 lines, no new service or package). Not written yet.
+3. Live checks before switching on: emails arrive (and not in spam) at Gmail, Outlook and a Brandeis inbox; Gmail's
+   limits (about 500 recipients a day) are fine for the pilot; Google may warn about or block app-password sign-ins.
+4. **Speed:** a password check takes about 20 ms of CPU at 100,000 PBKDF2 iterations (measured locally) and the
+   Workers Free plan allows 10 ms per request. This must be tried on the live site; if it fails there, password
+   accounts stay off. Lowering the iterations would weaken password storage, so that's not the plan.
+5. Then, with the owner's approval: migration 0009 on the live database (restore point first), deploy, set
+   `PASSWORD_ACCOUNTS=on`, and run part 12 of the manual test.
 
 ### Trying it locally
 

@@ -159,6 +159,20 @@ for (let i = 0; i < 60; i++) {
 const { landlordA, landlordB, renterA, renterB, newbie, admin, rater, chatAi, chatMate, chatBasic, chatFresh, chatPal, outsider } = people;
 
 try {
+  // ── A fresh server: sign-in requests rejected first (by our own checks) must not freeze later ones ──
+  // These must stay the first requests to the Worker in this file.
+  {
+    const quick = (base, path, body, origin = base) =>
+      fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify(body), signal: AbortSignal.timeout(8000) })
+        .then((x) => x.status)
+        .catch((e) => e.name);
+    const rejected = await quick(BASE, "/api/auth/sign-up/email", { signupAs: "renter", name: "", email: "x@example.test", password: "x" });
+    const crossSite = await quick(BASE, "/api/auth/sign-out", {}, "https://evil.example");
+    const google = await quick(BASE, "/api/auth/sign-in/social", { provider: "google" });
+    const forgot = await quick(BASE, "/api/auth/request-password-reset", { email: "nobody@example.test" });
+    check("Sign-in doesn't freeze when the first requests to a fresh server were rejected (400, 403)", rejected === 400 && crossSite === 403 && google === 200 && forgot === 200, `${rejected} ${crossSite} ${google} ${forgot}`);
+  }
+
   // ── Matching rules (pure function, no server) ─────────────────────────────
   {
     const want = { budget_min: 900, budget_max: 1000, move_in_month: "2027-06", area: "Waltham", rooms_needed: 2 };
@@ -1356,6 +1370,54 @@ try {
   check("Scheduled cleanup deletes expired sessions", d1rows(`SELECT COUNT(*) AS n FROM "session" WHERE id='s_expired'`)[0].n === 0);
   check("Scheduled cleanup deletes password sign-ups never confirmed within 7 days, and only those", d1rows(`SELECT COUNT(*) AS n FROM "user" WHERE email = 'old.unconfirmed@example.test'`)[0].n === 0 && d1rows(`SELECT COUNT(*) AS n FROM "user" WHERE email IN ('new.unconfirmed@example.test', 'maya.renter@example.test', 'gia.google@example.test')`)[0].n === 3);
   check("Scheduled cleanup deletes chats unused for 90 days, and only those", d1rows(`SELECT COUNT(*) AS n FROM assistant_messages WHERE user_id='t_chat_mate'`)[0].n === 0 && d1rows(`SELECT COUNT(*) AS n FROM assistant_messages WHERE user_id='t_chat_ai'`)[0].n > 0);
+
+  // ── Google only: email and password accounts off (no way to send email), as on the live site today ──
+  {
+    const PORT2 = 8790;
+    const BASE2 = `http://localhost:${PORT2}`;
+    const STATE2 = ".wrangler/test-state-google-only";
+    rmSync(STATE2, { recursive: true, force: true });
+    wrangler(["d1", "migrations", "apply", "DB", "--local", "--persist-to", STATE2]);
+    const dev2 = spawn(
+      process.execPath,
+      [...WRANGLER, "dev", "--port", String(PORT2), "--persist-to", STATE2, "--var", `BETTER_AUTH_URL:${BASE2}`, "--var", `BETTER_AUTH_SECRET:${SECRET}`,
+        "--var", "GOOGLE_CLIENT_ID:local-test-client.apps.googleusercontent.com", "--var", "GOOGLE_CLIENT_SECRET:local-test-only", "--var", "MAPTILER_KEY:test-browser-key",
+        "--var", "DEV_EMAIL_OUTBOX:0", "--var", "PASSWORD_ACCOUNTS:on"],
+      { stdio: "ignore" }
+    );
+    try {
+      for (let i = 0; i < 60; i++) {
+        try {
+          if ((await fetch(BASE2 + "/")).ok) break;
+        } catch {}
+        await sleep(500);
+      }
+      const call = (path, { method = "GET", body, origin = BASE2 } = {}) =>
+        fetch(BASE2 + path, { method, redirect: "manual", headers: body ? { "Content-Type": "application/json", Origin: origin } : {}, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(8000) })
+          .then(async (x) => ({ status: x.status, data: await x.json().catch(() => null) }))
+          .catch((e) => ({ status: e.name, data: null }));
+      const crossSite = await call("/api/auth/sign-out", { method: "POST", body: {}, origin: "https://evil.example" });
+      const google = await call("/api/auth/sign-in/social", { method: "POST", body: { provider: "google", callbackURL: "/welcome" } });
+      check("Google only: Google sign-in works, even right after a rejected request on a fresh server", crossSite.status === 403 && google.status === 200 && /^https:\/\/accounts\.google\.com\//.test(google.data?.url || ""), `${crossSite.status} ${google.status}`);
+      const cfg = await call("/api/config");
+      check("Google only: the site reports no email and password sign-in and no test inbox (PASSWORD_ACCOUNTS=on alone isn't enough)", cfg.data?.passwordSignIn === false && cfg.data?.devInbox === false);
+      const off = [];
+      for (const [path, body] of [
+        ["/api/auth/sign-up/email", { signupAs: "renter", name: "Ann", email: "ann@example.test", password: "correct horse battery" }],
+        ["/api/auth/sign-in/email", { email: "ann@example.test", password: "correct horse battery" }],
+        ["/api/auth/request-password-reset", { email: "ann@example.test" }],
+        ["/api/auth/reset-password", { token: "abcdefghijklmnop", newPassword: "correct horse battery" }],
+        ["/api/auth/send-verification-email", { email: "ann@example.test" }],
+      ])
+        off.push((await call(path, { method: "POST", body })).status);
+      off.push((await call("/api/auth/verify-email?token=abc&callbackURL=%2Fwelcome")).status);
+      off.push((await call("/api/auth/reset-password/abcdefghijklmnop?callbackURL=%2Freset-password")).status);
+      off.push((await call("/api/dev/outbox")).status);
+      check("Google only: every email and password endpoint and the test inbox answer 404, and nothing is created", off.every((x) => x === 404) && (await call("/api/auth/request-password-reset", { method: "POST", body: { email: "a@example.test" } })).data?.error === "not_available", off.join(","));
+    } finally {
+      dev2.kill();
+    }
+  }
 } catch (err) {
   check("Test run crashed", false, err.stack);
 } finally {

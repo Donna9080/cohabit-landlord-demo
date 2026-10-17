@@ -257,6 +257,18 @@ by the live test.
 - **Built and checked locally first**, then deployed with the owner's approval as `c35940b7-6b05-4156-9cf5-c274a3386f0e` (no database
   change) and pushed.
 
+## Google-only fallback, sign-in freeze, email options (2026-10-17)
+
+- **The pilot stays free and Google sign-in stays as it is.** No purchases, and password hashing isn't weakened.
+- **Passwords off on the live site** until both a sender exists and `PASSWORD_ACCOUNTS=on` is set after live checks;
+  while off, the endpoints answer 404 and the pages show only Google (tested in a browser and in `npm test`).
+- **Freeze fixed:** Better Auth is now created only after all checks pass and kept only once ready. The same pattern
+  existed in the live code (rare, temporary sign-in hangs after a cross-site sign-out request), so the fix is worth
+  deploying even with passwords off.
+- **Email:** no domain on the account; Cloudflare Email Sending needs Workers Paid and a domain; Resend, MailChannels
+  and similar need a domain. The only $0 route is a dedicated Gmail account through Gmail's SMTP server with an app
+  password (owner's decision; code not written yet).
+
 ## Email and password accounts (2026-10-17, local only)
 
 - **Reused Better Auth's own email and password support** (same users, sessions and rate limits as Google), behind
