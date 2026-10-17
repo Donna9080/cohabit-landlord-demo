@@ -1,7 +1,8 @@
 // coHabit Worker. Static pages in ./public are served by Cloudflare directly;
 // only /api/* reaches this code (see run_worker_first in wrangler.jsonc).
 //
-//   /api/auth/*   Google sign-in, sign-out, session (Better Auth, allowlisted paths only)
+//   /api/auth/*   Google sign-in; email sign-up, sign-in, email confirmation and password reset; sign-out, session
+//                 (Better Auth, allowlisted paths only, each request rebuilt from checked fields)
 //   /api/me       who is signed in; one-time landlord/renter choice; delete my account
 //   /api/landlord/units[/<id>]   a landlord's own units
 //   /api/landlord/interests      renters who said "I'm interested" in this landlord's units
@@ -28,7 +29,8 @@ import { rankUnits } from "./match.js";
 import { asPrefs, createInterest, loadPreferences, MAX_INTERESTS_PER_RENTER, savePreferences } from "./profile.js";
 import { firstNameOf, rankedMatches } from "./roommates.js";
 import { handleSurvey, pointsBalance, surveyCsv, surveyDeleteStatements, surveySummary } from "./survey.js";
-import { InvalidInput, isUnitId, parseAccountType, parseInterest, parsePreferences, parseUnit } from "./validate.js";
+import { InvalidInput, isUnitId, parseAccountType, parseEmailOnly, parseInterest, parseNewPassword, parsePreferences, parseSignIn, parseSignup, parseUnit } from "./validate.js";
+import { devOutboxOn, mailer, readOutbox } from "./email.js";
 
 const MAX_IMPORT_BODY = 600 * 1024; // admin CSV imports only
 const MAX_UNITS_PER_LANDLORD = 50;
@@ -44,7 +46,7 @@ async function getViewer(request, env) {
   const setCookies = headers?.getSetCookie?.() ?? [];
   if (!response) return { user: null, expired: true, setCookies };
   const u = response.user;
-  return { user: { id: u.id, name: u.name, email: u.email, role: u.role, accountType: u.accountType ?? null }, setCookies };
+  return { user: { id: u.id, name: u.name, email: u.email, role: u.role, accountType: u.accountType ?? null, occupation: u.occupation ?? null, company: u.company ?? null }, setCookies };
 }
 
 function requireUser(viewer) {
@@ -68,28 +70,106 @@ const AUTH_ROUTES = new Set([
   "POST /api/auth/sign-in/social",
   "GET /api/auth/callback/google",
   "POST /api/auth/sign-out",
+  // Email and password accounts (on only when coHabit can send email; see src/email.js)
+  "POST /api/auth/sign-up/email",
+  "POST /api/auth/sign-in/email",
+  "POST /api/auth/send-verification-email",
+  "GET /api/auth/verify-email",
+  "POST /api/auth/request-password-reset",
+  "POST /api/auth/reset-password",
 ]);
+// The link in a reset email: /api/auth/reset-password/<token>?callbackURL=/reset-password
+const RESET_LINK = /^\/api\/auth\/reset-password\/[A-Za-z0-9_-]{10,128}$/;
+// Where people land after confirming their email: /welcome sends renters to the assistant and landlords to their
+// dashboard (and asks the one-time question if neither is set).
+const AFTER_CONFIRM = "/welcome";
+const PASSWORD_ROUTES = new Set(["/api/auth/sign-up/email", "/api/auth/sign-in/email", "/api/auth/send-verification-email", "/api/auth/request-password-reset", "/api/auth/reset-password"]);
+const AUTH_PER_MINUTE = 20; // per network address, for the password endpoints, on top of Better Auth's own limits
 
 const safePath = (v, fallback) => (typeof v === "string" && /^\/(?!\/)[\w\-/?=&.]*$/.test(v) && v.length <= 200 ? v : fallback);
 
+// Better Auth gets a request with only the fields we allow, built from scratch.
+const withBody = (request, body) => {
+  const headers = new Headers(request.headers);
+  headers.delete("Content-Length");
+  headers.set("Content-Type", "application/json");
+  return new Request(request.url, { method: "POST", headers, body: JSON.stringify(body) });
+};
+// A reply that keeps Better Auth's cookies (a new session, for example) but not its body.
+const replyKeepingCookies = (from, data, status = 200) => {
+  const r = json(data, status);
+  for (const c of from.headers.getSetCookie?.() ?? []) r.headers.append("Set-Cookie", c);
+  return r;
+};
+
 async function handleAuth(request, env, url) {
-  if (!AUTH_ROUTES.has(`${request.method} ${url.pathname}`)) throw new HttpError(404, "not_found", "Not found.");
+  const route = `${request.method} ${url.pathname}`;
+  const resetLink = request.method === "GET" && RESET_LINK.test(url.pathname);
+  if (!AUTH_ROUTES.has(route) && !resetLink) throw new HttpError(404, "not_found", "Not found.");
   const auth = getAuth(env);
+  const ip = request.headers.get("CF-Connecting-IP") || "local";
 
   if (url.pathname === "/api/auth/sign-in/social") {
     assertSameOrigin(request, env);
     const body = await readJson(request);
     // Rebuild the body with only what we allow: Google, same-site return paths.
     // Drops fields such as extra scopes or a client-supplied ID token.
-    const clean = {
+    request = withBody(request, {
       provider: "google",
       callbackURL: safePath(body?.callbackURL, "/welcome"),
       errorCallbackURL: "/signin-error",
       disableRedirect: true,
-    };
-    const headers = new Headers(request.headers);
-    headers.delete("Content-Length");
-    request = new Request(request.url, { method: "POST", headers, body: JSON.stringify(clean) });
+    });
+    return withSecurityHeaders(await auth.handler(request));
+  }
+
+  if (PASSWORD_ROUTES.has(url.pathname)) {
+    assertSameOrigin(request, env);
+    await rateLimit(env, `a:ip:${ip}`, AUTH_PER_MINUTE, "Too many tries. Wait a minute and try again.");
+    const body = await readJson(request);
+
+    if (url.pathname === "/api/auth/sign-up/email") {
+      const s = parseSignup(body);
+      const res = await auth.handler(withBody(request, { ...s, callbackURL: AFTER_CONFIRM }));
+      // New or already registered, the answer is the same: check your email (the owner of an existing account
+      // gets a "you already have an account" email instead of a confirmation link).
+      if (res.ok) return json({ status: "check_email", email: s.email });
+      return withSecurityHeaders(res);
+    }
+    if (url.pathname === "/api/auth/sign-in/email") {
+      const s = parseSignIn(body);
+      const res = await auth.handler(withBody(request, { ...s, rememberMe: true, callbackURL: AFTER_CONFIRM }));
+      if (res.ok) return replyKeepingCookies(res, { signedIn: true });
+      return withSecurityHeaders(res);
+    }
+    if (url.pathname === "/api/auth/send-verification-email") {
+      const s = parseEmailOnly(body);
+      const res = await auth.handler(withBody(request, { ...s, callbackURL: AFTER_CONFIRM }));
+      // Same answer whether or not there is an unconfirmed account for this email.
+      return res.status === 429 ? withSecurityHeaders(res) : json({ status: "check_email", email: s.email });
+    }
+    if (url.pathname === "/api/auth/request-password-reset") {
+      const s = parseEmailOnly(body);
+      const res = await auth.handler(withBody(request, { ...s, redirectTo: "/reset-password" }));
+      // Same answer whether or not an account exists (Better Auth also evens out the timing).
+      return res.status === 429 ? withSecurityHeaders(res) : json({ status: "check_email", email: s.email });
+    }
+    if (url.pathname === "/api/auth/reset-password") {
+      const res = await auth.handler(withBody(request, parseNewPassword(body)));
+      if (res.ok) return json({ status: "password_changed" });
+      return withSecurityHeaders(res);
+    }
+  }
+
+  if (resetLink) {
+    // Always back to coHabit's own reset page, whatever the link says.
+    const target = new URL(url);
+    target.search = `?callbackURL=${encodeURIComponent("/reset-password")}`;
+    request = new Request(target, request);
+  } else if (url.pathname === "/api/auth/verify-email") {
+    const target = new URL(url);
+    target.searchParams.set("callbackURL", AFTER_CONFIRM);
+    request = new Request(target, request);
   } else if (request.method === "POST") {
     assertSameOrigin(request, env);
     if (Number(request.headers.get("Content-Length") || 0) > MAX_BODY) throw new HttpError(413, "too_large", "Request too large.");
@@ -144,14 +224,20 @@ async function handleApi(request, env, url) {
 
   // Public settings for the browser. The map key is a browser key restricted to this site's address.
   if (path === "/api/config" && method === "GET") {
-    return reply({ maptilerKey: env.MAPTILER_KEY || null });
+    return reply({ maptilerKey: env.MAPTILER_KEY || null, passwordSignIn: !!mailer(env), devInbox: devOutboxOn(env) });
+  }
+
+  // Local development only: emails coHabit would have sent (src/email.js). Not available anywhere else.
+  if (path === "/api/dev/outbox" && method === "GET") {
+    if (!devOutboxOn(env)) throw new HttpError(404, "not_found", "Not found.");
+    return reply({ messages: await readOutbox(db, url.searchParams.get("to")) });
   }
 
   // Who am I
   if (path === "/api/me" && method === "GET") {
     const u = viewer.user;
     return reply({
-      user: u && { name: u.name, email: u.email, accountType: u.accountType, isAdmin: u.role === "admin", points: await pointsBalance(db, u.id) },
+      user: u && { name: u.name, email: u.email, accountType: u.accountType, isAdmin: u.role === "admin", points: await pointsBalance(db, u.id), occupation: u.occupation, company: u.company },
       sessionExpired: !!viewer.expired,
     });
   }
@@ -192,6 +278,7 @@ async function handleApi(request, env, url) {
       db.prepare(`DELETE FROM match_preferences WHERE user_id = ?1`).bind(user.id),
       db.prepare(`DELETE FROM "session" WHERE "userId" = ?1`).bind(user.id),
       db.prepare(`DELETE FROM "account" WHERE "userId" = ?1`).bind(user.id),
+      db.prepare(`DELETE FROM "verification" WHERE value = ?1`).bind(user.id),
       db.prepare(`DELETE FROM app_rate_limits WHERE key IN (?1, ?2)`).bind(`r:u:${user.id}`, `w:u:${user.id}`),
       db.prepare(`DELETE FROM "user" WHERE id = ?1`).bind(user.id),
     ]);
@@ -588,6 +675,12 @@ export default {
       env.DB.prepare(`DELETE FROM "rateLimit" WHERE "lastRequest" < ?1`).bind(nowMs - 3600_000),
       env.DB.prepare(`DELETE FROM app_rate_limits WHERE window_start < ?1`).bind(Math.floor(nowMs / 60000) - 60),
       ...assistantCleanup(env.DB, nowMs),
+      // Password sign-ups never confirmed within 7 days, so an unconfirmed sign-up can't hold someone's email.
+      env.DB.prepare(
+        `DELETE FROM "user" WHERE "emailVerified" = 0 AND "createdAt" < ?1
+           AND EXISTS (SELECT 1 FROM "account" a WHERE a."userId" = "user".id AND a."providerId" = 'credential')
+           AND NOT EXISTS (SELECT 1 FROM "account" a WHERE a."userId" = "user".id AND a."providerId" != 'credential')`
+      ).bind(new Date(nowMs - 7 * 86400_000).toISOString()),
     ]);
   },
 };

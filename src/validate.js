@@ -194,3 +194,77 @@ export function parseChatText(body) {
   if (STREET.test(s)) throw new InvalidInput("text", "Please leave out street addresses. Name a town or neighborhood, or say “near campus”.");
   return s;
 }
+
+// ── Email and password accounts ──
+// The sign-up, sign-in and reset forms. Only these fields are passed on to Better Auth; anything else is dropped,
+// so a request can't set a role, an account type other than renter or landlord, or a confirmed email.
+const oneLine = (v) => (typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim() : "");
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const NAME_SHAPE = /^[\p{L}\p{M}][\p{L}\p{M}' .-]*$/u;
+const URLISH = /https?:\/\/|www\./i;
+export const PASSWORD_MIN = 8;
+export const PASSWORD_MAX = 128;
+
+function emailOf(body) {
+  const email = oneLine(body.email).toLowerCase();
+  if (!email) throw new InvalidInput("email", "Enter your email address.");
+  if (email.length > 254 || !EMAIL_SHAPE.test(email)) throw new InvalidInput("email", "Enter a valid email address, like name@example.com.");
+  return email;
+}
+function newPasswordOf(body, field) {
+  const password = body[field];
+  if (typeof password !== "string" || !password) throw new InvalidInput(field, "Choose a password.");
+  if (password.length < PASSWORD_MIN) throw new InvalidInput(field, `Use at least ${PASSWORD_MIN} characters.`);
+  if (password.length > PASSWORD_MAX) throw new InvalidInput(field, `Use at most ${PASSWORD_MAX} characters.`);
+  return password;
+}
+
+export const OCCUPATIONS = ["student", "working", "other"];
+export function parseSignup(body) {
+  if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
+  const as = body.signupAs;
+  if (as !== "renter" && as !== "landlord") throw new InvalidInput("signupAs", "Choose whether you're looking for a room or listing a space.");
+  const name = oneLine(body.name);
+  const max = as === "renter" ? 50 : 80;
+  if (!name) throw new InvalidInput("name", as === "renter" ? "Enter your first name." : "Enter your name.");
+  if (name.length > max) throw new InvalidInput("name", `Keep it under ${max} characters.`);
+  if (!NAME_SHAPE.test(name)) throw new InvalidInput("name", "Use letters only. Spaces, hyphens and apostrophes are fine.");
+  const email = emailOf(body);
+  const password = newPasswordOf(body, "password");
+
+  let occupation = null;
+  if (as === "renter" && body.occupation != null) {
+    const list = body.occupation;
+    if (!Array.isArray(list) || list.some((v) => !OCCUPATIONS.includes(v)) || new Set(list).size !== list.length) throw new InvalidInput("occupation", "Pick Student, Working or Other.");
+    if (list.includes("other") && list.length > 1) throw new InvalidInput("occupation", "“Other” can't be combined with Student or Working.");
+    occupation = OCCUPATIONS.filter((v) => list.includes(v)).join(",") || null; // "student,working" in that order
+  }
+
+  let company = null;
+  if (as === "landlord" && body.company != null && body.company !== "") {
+    company = oneLine(body.company);
+    if (company.length > 100) throw new InvalidInput("company", "Keep it under 100 characters.");
+    if (URLISH.test(company) || EMAIL.test(company) || PHONE.test(company)) throw new InvalidInput("company", "Just the company name, please: no links, emails or phone numbers.");
+    company = company || null;
+  }
+  return { signupAs: as, name, email, password, occupation, company };
+}
+
+export function parseSignIn(body) {
+  if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
+  const email = emailOf(body);
+  if (typeof body.password !== "string" || !body.password) throw new InvalidInput("password", "Enter your password.");
+  if (body.password.length > PASSWORD_MAX) throw new InvalidInput("password", "That email and password don't match.");
+  return { email, password: body.password };
+}
+
+export const parseEmailOnly = (body) => {
+  if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
+  return { email: emailOf(body) };
+};
+
+export function parseNewPassword(body) {
+  if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
+  if (typeof body.token !== "string" || !/^[A-Za-z0-9_-]{10,128}$/.test(body.token)) throw new InvalidInput("token", "This reset link isn't valid. Ask for a new one.");
+  return { token: body.token, newPassword: newPasswordOf(body, "newPassword") };
+}

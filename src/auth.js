@@ -1,7 +1,10 @@
-// Sign-in with Google, handled by Better Auth (https://www.better-auth.com).
-// Users, Google account links, sessions, OAuth state and rate-limit counters
-// live in the D1 database bound as DB. See ACCOUNTS_SETUP.md.
+// Sign-in with Google, and with email and password, handled by Better Auth (https://www.better-auth.com).
+// One account system: users, Google links, password hashes, sessions, email-confirmation and reset tokens,
+// OAuth state and rate-limit counters live in the D1 database bound as DB. See ACCOUNTS_SETUP.md.
+// Email and password accounts are only on when coHabit can send email (src/email.js); otherwise only Google.
 import { betterAuth } from "better-auth";
+import { emails, mailer } from "./email.js";
+import { hashPassword, iterationsFrom, verifyPassword } from "./password.js";
 
 const DAY = 60 * 60 * 24;
 
@@ -18,7 +21,22 @@ const noTokens = (account) => ({
   },
 });
 
+// Which side someone chose on the sign-up form. Read only on the email sign-up endpoint; the Worker has already
+// checked the value (src/index.js), and nothing else can set an account type except the one-time choice.
+const SIGNUP_TYPES = new Set(["renter", "landlord"]);
+const signupFields = (ctx) => {
+  if (ctx?.path !== "/sign-up/email") return { accountType: null, occupation: null, company: null };
+  const as = SIGNUP_TYPES.has(ctx.body?.signupAs) ? ctx.body.signupAs : null;
+  return {
+    accountType: as,
+    occupation: as === "renter" ? ctx.body?.occupation ?? null : null,
+    company: as === "landlord" ? ctx.body?.company ?? null : null,
+  };
+};
+
 export function authOptions(env) {
+  const mail = mailer(env);
+  const iterations = iterationsFrom(env);
   return {
     appName: "coHabit",
     baseURL: env.BETTER_AUTH_URL,
@@ -39,7 +57,35 @@ export function authOptions(env) {
         // Server-controlled. input:false means no Better Auth endpoint accepts them from the browser.
         role: { type: "string", required: false, defaultValue: "user", input: false },
         accountType: { type: "string", required: false, input: false, fieldName: "account_type" },
+        // Optional answers from the email sign-up form (checked by the Worker first; Google sign-ups leave them empty).
+        occupation: { type: "string", required: false, input: true },
+        company: { type: "string", required: false, input: true },
       },
+    },
+    // Email and password: only when an email can be sent, because new accounts must confirm their email.
+    emailAndPassword: {
+      enabled: !!mail,
+      requireEmailVerification: true,
+      minPasswordLength: 8,
+      maxPasswordLength: 128,
+      resetPasswordTokenExpiresIn: 60 * 60, // a reset link works once, for 1 hour
+      revokeSessionsOnPasswordReset: true,
+      password: { hash: (password) => hashPassword(password, iterations), verify: verifyPassword },
+      sendResetPassword: async ({ user, url }) => mail && mail.send(emails.reset(user, url)),
+      // Signing up with an email that already has an account gets the same answer as a new sign-up; the owner of
+      // that email is told instead, so the form never reveals who has an account.
+      onExistingUserSignUp: async ({ user }) => mail && mail.send(emails.alreadyRegistered(user, env.BETTER_AUTH_URL)),
+      // The reset link went to their inbox, so the email is confirmed too.
+      onPasswordReset: async ({ user }) => {
+        await env.DB.prepare(`UPDATE "user" SET "emailVerified" = 1, "updatedAt" = ?2 WHERE id = ?1`).bind(user.id, new Date().toISOString()).run();
+      },
+    },
+    emailVerification: {
+      sendOnSignUp: true,
+      sendOnSignIn: true, // signing in before confirming sends a fresh link
+      autoSignInAfterVerification: true,
+      expiresIn: 24 * 60 * 60,
+      sendVerificationEmail: async ({ user, url }) => mail && mail.send(emails.verify(user, url)),
     },
     account: {
       // One Google subject = one coHabit user. Never merge accounts because emails match.
@@ -59,6 +105,12 @@ export function authOptions(env) {
       customRules: {
         "/sign-in/social": { window: 60, max: 10 },
         "/callback/*": { window: 60, max: 20 },
+        "/sign-in/email": { window: 60, max: 10 },
+        "/sign-up/email": { window: 60, max: 5 },
+        "/request-password-reset": { window: 60, max: 5 },
+        "/reset-password": { window: 60, max: 10 },
+        "/send-verification-email": { window: 60, max: 5 },
+        "/verify-email": { window: 60, max: 10 },
       },
     },
     advanced: {
@@ -69,12 +121,13 @@ export function authOptions(env) {
     databaseHooks: {
       user: {
         create: {
-          // Whatever arrives, a new user starts as an ordinary user with no account type and no photo.
-          before: async (user) => ({ data: { ...user, image: null, role: "user", accountType: null } }),
+          // Whatever arrives, a new user starts as an ordinary user with no photo. Only the email sign-up form sets
+          // an account type (renter or landlord) and its optional answers; Google sign-ups choose a type afterwards.
+          before: async (user, ctx) => ({ data: { ...user, image: null, role: "user", ...signupFields(ctx) } }),
         },
         update: {
           before: async (user) => {
-            const { role, accountType, image, ...rest } = user;
+            const { role, accountType, image, occupation, company, ...rest } = user;
             return { data: rest };
           },
         },

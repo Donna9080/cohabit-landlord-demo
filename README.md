@@ -39,6 +39,7 @@ Landlords list rooms. Renters (Brandeis students) chat with an assistant that le
 | Current listings (active units) | `/listings` | Anyone |
 | Sample dashboard (fictional data) | `/sample`, `/properties/<id>` | Anyone |
 | Choose landlord or renter (once) | `/welcome` | Signed in |
+| Sign up (renter or landlord), sign in, forgot / reset password | `/signup`, `/signin`, `/forgot-password`, `/reset-password` | Anyone (email and password only once email sending is set up) |
 | Your account, coHabit Points, delete my account | `/account` | Signed in |
 | Quick check-in (optional survey, from the feedback icon in the top bar) | any page | Anyone |
 | Dashboard: your units and recent requests | `/landlord` | Landlords |
@@ -103,6 +104,8 @@ src/match.js        renter-to-unit matching rules
 src/roommates.js    renter-to-renter (roommate) matching rules, opt-in
 src/connections.js  roommate Details, requests (Connect, accept, decline, withdraw) and messages
 src/survey.js       Quick check-in survey, coHabit Points (once per person), admin summary and CSV
+src/password.js     password hashing for email and password accounts (PBKDF2, Web Crypto)
+src/email.js        account emails; a local test inbox in development (no email provider yet)
 src/imports.js      checks CSV files of external listings before an admin imports them
 src/assistant/      the renter's chat assistant: routes, memory checks, search, basic mode, Claude (AI) calls,
                     demo-data.js (Demo mode's 15 fictional listings and 20 fictional profiles)

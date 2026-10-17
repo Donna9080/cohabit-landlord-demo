@@ -163,6 +163,59 @@ pin and the street address never leave the server for approximate units.
 saved location stores `geo_source = "© MapTiler © OpenStreetMap contributors"`. Sample units carry
 `"Sample: neighborhood center, set by hand"` instead (they were placed by hand, not geocoded).
 
+## Email and password accounts (local only so far; needs an email provider to go live)
+
+The homepage offers two paths, **Find a room or roommate** and **List your space** (remembered in the browser), plus
+**Browse listings** and **Sign in**. Both paths use one account system (Better Auth, the same `user` table and
+sessions as Google sign-in), and Google sign-in stays available everywhere.
+
+- **Sign-up** (`/signup?as=renter` or `?as=landlord`): renters give a first name, email, password and optionally
+  Student / Working / Other (Student and Working together; Other alone); landlords give a name, email, password and
+  optionally a company. The account type is set from the path at sign-up, so returning users never answer it again.
+  Google sign-ups still answer the one-time renter/landlord question on `/welcome` (the remembered path is shown
+  first).
+- **Email confirmation is required.** Sign-up always answers "Check your email", whether or not the email already has
+  an account (the owner of an existing account gets a "you already have an account" email instead). The link works
+  for 24 hours, signs the person in and opens `/welcome`, which sends renters to the assistant and landlords to their
+  dashboard. Signing in before confirming sends a fresh link. Unconfirmed sign-ups are deleted after 7 days by the
+  daily cleanup, so nobody can hold someone else's email.
+- **Sign-in** (`/signin`): email and password with Show/Hide and **Forgot password?** under the password field, or
+  Google. A wrong password and an unknown email get the same message.
+- **Password reset** (`/forgot-password` → email → `/reset-password`): the answer is the same whether or not the
+  account exists; the link works once, expires after 1 hour, always returns to coHabit's own page, and the token is
+  removed from the address bar. A reset signs the account out everywhere and confirms the email. Google users can
+  add a password this way.
+- **Server checks** (`src/index.js`, `src/validate.js`): only these Better Auth endpoints are open, and each request is
+  rebuilt from checked fields, so the browser can't set a role, an account type other than renter or landlord, a
+  confirmed email or a photo. Same-site Origin required; 20 password requests a minute per network address on top of
+  Better Auth's own per-endpoint limits. Landlord and renter pages are still checked on every request.
+- **Passwords** are stored only as PBKDF2-SHA256 hashes with a random salt (`src/password.js`, 100,000 iterations by
+  default, `PASSWORD_HASH_ITERATIONS` to change; each hash records its own settings).
+- **Storage:** migration `0009_password_accounts.sql` adds two optional columns to `user` (`occupation`, `company`).
+  Password hashes go in the existing `account` table, confirmation and reset tokens in `verification`. Deleting an
+  account deletes all of them.
+
+### What's needed before this can go live
+
+1. **An email service.** coHabit has none, and Better Auth only calls a function to send mail. Without one, the live
+   site keeps password sign-up and reset switched off and shows Google only (`/api/config` → `passwordSignIn: false`),
+   so deploying this code changes nothing for users until email works. Options to discuss (ask before any signup or
+   billing): Cloudflare's own email sending for Workers, or a transactional provider such as Resend, Postmark or
+   SendGrid. Each needs an account and an API key (set by the owner with `npx wrangler secret put`), and a short change
+   in `src/email.js` to call it.
+2. **A domain you control** to send from (DNS records for SPF/DKIM). Providers don't let you send from `workers.dev`,
+   and registering a domain costs money, so that's the owner's decision.
+3. **Check CPU on the live site.** One password check takes about 20 ms of CPU at 100,000 iterations (measured
+   locally), and the Workers Free plan allows 10 ms per request. Before switching password sign-in on, try it on the
+   live site. If requests fail, the choices are the Workers Paid plan (about $5 a month; ask first) or fewer iterations
+   (weaker against offline guessing if the database ever leaked).
+4. Apply migration 0009 to the live database (restore point first) before deploying this code.
+
+### Trying it locally
+
+`.dev.vars` has `DEV_EMAIL_OUTBOX=1` (never set on the live site; it only works on a localhost address). Emails then
+land in a local test inbox at `http://localhost:8787/dev/inbox` instead of being sent.
+
 ## Roommate matching (opt-in)
 
 Renters can be matched with each other on their lifestyle answers. The code is in `src/roommates.js`; the rules and a
@@ -638,6 +691,10 @@ Real Google sign-in locally needs your Google client values in `.dev.vars` and
 
 ## Migrations and deploy (exact commands used)
 
+**Pending: migration `0009_password_accounts.sql`** (two optional `user` columns, `occupation` and `company`;
+additive only). Applied to the local databases only. Apply it to the live database (restore point first, with the
+owner's approval) before deploying the email and password code.
+
 **Migration `0008_survey_points.sql`** (adds `survey_responses` and `points_awards`; additive only) was applied to the
 live database on 2026-10-13 with the owner's approval, after a restore point (bookmark
 `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16`), and before deploying version `e2e17667-50ba-4f0d-94ef-b2ed994b1d96`, which needs it
@@ -839,6 +896,20 @@ These steps describe the redesigned assistant, live since 2026-10-12.
 6. As the owner, **Admin → Check-in survey**: the totals and answers include these, without names or emails.
    **Download CSV** opens in a spreadsheet. Try **Without Demo mode** and **Demo mode only**.
 7. On a phone, the drawer fills the screen, and **Not now** and **Send feedback** stay at the bottom.
+
+### 12. Email and password accounts (once email sending is set up; locally with the test inbox)
+
+1. Signed out, the homepage shows **Find a room or roommate** and **List your space**, with **Browse listings** and
+   **Sign in** below. Choose **Find a room or roommate**.
+2. Fill in a first name, email and password (try **Show**), pick **Student** and **Working**, and **Create account**:
+   **Check your email**. Submit the empty form once first: each field says what's missing.
+3. Open the email (locally: `/dev/inbox`) and the link: you're signed in on the assistant.
+4. Sign out. On **Sign in**, try a wrong password (a neutral message), then **Forgot password?**, enter the email,
+   open the reset email, choose a new password and sign in with it. Opening the same reset link again says it has
+   expired.
+5. Back on the homepage, **List your space** shows "Your last choice" on the path you used last. Create a landlord
+   account with a company; after confirming you land on the landlord dashboard, and the assistant is not available.
+6. On a phone, each form fits the screen and nothing scrolls sideways.
 
 ### If something fails
 

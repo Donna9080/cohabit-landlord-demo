@@ -16,6 +16,8 @@ import { rankUnits } from "../src/match.js";
 import { rankRoommates, scoreRoommate } from "../src/roommates.js";
 import { makeHandle } from "../src/connections.js";
 import { majorDifferences, roommateDifferences } from "../src/roommates.js";
+import { authOptions } from "../src/auth.js";
+import { devOutboxOn } from "../src/email.js";
 import { startFakeAnthropic } from "./fake-anthropic.mjs";
 
 const PORT = 8788;
@@ -141,7 +143,7 @@ const dev = spawn(
     "--var", `BETTER_AUTH_URL:${BASE}`, "--var", `BETTER_AUTH_SECRET:${SECRET}`,
     "--var", "MAPTILER_KEY:test-browser-key", "--var", "GOOGLE_CLIENT_ID:local-test-client.apps.googleusercontent.com", "--var", "GOOGLE_CLIENT_SECRET:local-test-only",
     "--var", "ANTHROPIC_API_KEY:test-key-for-local-tests-only", "--var", `ANTHROPIC_BASE_URL:http://127.0.0.1:${FAKE_AI_PORT}`,
-    "--var", `ASSISTANT_DAILY_PER_USER:${AI_DAILY_PER_USER}`, "--var", "ASSISTANT_PER_MINUTE:100"],
+    "--var", `ASSISTANT_DAILY_PER_USER:${AI_DAILY_PER_USER}`, "--var", "ASSISTANT_PER_MINUTE:100", "--var", "DEV_EMAIL_OUTBOX:1"],
   { stdio: ["ignore", "pipe", "pipe"] }
 );
 let devLog = "";
@@ -284,7 +286,7 @@ try {
   check("Sign-in from another origin → 403", r.status === 403);
   r = await api("/api/auth/callback/google?code=fake&state=forged");
   check("Callback with forged state is rejected (redirect to error page)", r.status === 302 && (r.headers.get("location") || "").includes("error"), `${r.status} ${r.headers.get("location")}`);
-  for (const [m, p] of [["POST", "/api/auth/update-user"], ["POST", "/api/auth/delete-user"], ["GET", "/api/auth/list-sessions"], ["POST", "/api/auth/sign-up/email"], ["POST", "/api/auth/link-social"]]) {
+  for (const [m, p] of [["POST", "/api/auth/update-user"], ["POST", "/api/auth/delete-user"], ["GET", "/api/auth/list-sessions"], ["POST", "/api/auth/change-password"], ["POST", "/api/auth/change-email"], ["POST", "/api/auth/set-password"], ["POST", "/api/auth/link-social"], ["POST", "/api/auth/forget-password"]]) {
     r = await api(p, { method: m, as: landlordA, body: m === "POST" ? { name: "x", role: "admin" } : undefined });
     check(`Better Auth endpoint ${m} ${p} is not exposed (404)`, r.status === 404);
   }
@@ -1218,6 +1220,133 @@ try {
   for (let i = 0; i < 12; i++) statuses.push((await api("/api/auth/sign-in/social", { method: "POST", body: { provider: "google" } })).status);
   check("Better Auth sign-in rate limit → 429 after 10/min", statuses.includes(429), statuses.join(","));
 
+  // ── Email and password accounts (local test inbox instead of real email) ──
+  {
+    const count = (q) => d1rows(q)[0].n;
+    const resetAuthLimits = () => d1(`DELETE FROM "rateLimit"; DELETE FROM app_rate_limits WHERE key LIKE 'a:%'`);
+    const inbox = async (to) => (await api(`/api/dev/outbox?to=${encodeURIComponent(to)}`)).data.messages;
+    const linkIn = (m) => ((m && m.body.match(/http:\/\/\S+/)) || [])[0];
+    const cookieFrom = (res) => ((res.headers.get("set-cookie") || "").match(/better-auth\.session_token=[^;]+/) || [])[0] || null;
+    const signIn = (email, password) => api("/api/auth/sign-in/email", { method: "POST", body: { email, password } });
+    const PASS = "correct horse battery";
+    resetAuthLimits();
+
+    r = await api("/api/config");
+    check("Accounts: email and password is on locally (test inbox), and off anywhere coHabit can't send email", r.data.passwordSignIn === true && r.data.devInbox === true && authOptions({ BETTER_AUTH_URL: "https://cohabit.example", DB: {} }).emailAndPassword.enabled === false && !devOutboxOn({ DEV_EMAIL_OUTBOX: "1", BETTER_AUTH_URL: "https://cohabit.example" }));
+
+    // Renter: first name, email, password, Student + Working
+    const maya = "maya.renter@example.test";
+    r = await api("/api/auth/sign-up/email", { method: "POST", body: { signupAs: "renter", name: " Maya ", email: "Maya.Renter@Example.test", password: PASS, occupation: ["working", "student"], role: "admin", accountType: "landlord", emailVerified: true, image: "https://example.test/me.png", company: "Ignored LLC" } });
+    const mayaRow = d1rows(`SELECT id, name, role, account_type, occupation, company, "emailVerified" AS v, image FROM "user" WHERE email = '${maya}'`)[0];
+    check("Sign-up (renter): saved as a renter with Student and Working; role, confirmed email, photo and company can't be set", r.status === 200 && r.data.status === "check_email" && mayaRow?.name === "Maya" && mayaRow.account_type === "renter" && mayaRow.occupation === "student,working" && mayaRow.role === "user" && mayaRow.v === 0 && mayaRow.image === null && mayaRow.company === null, JSON.stringify(mayaRow));
+    check("Sign-up: the reply is the same short message for everyone (no id, no account)", Object.keys(r.data).sort().join() === "email,status" && !JSON.stringify(r.data).includes(mayaRow.id));
+    const hash = d1rows(`SELECT password FROM "account" WHERE "userId" = '${mayaRow.id}' AND "providerId" = 'credential'`)[0]?.password || "";
+    check("Sign-up: the password is kept only as a salted PBKDF2 hash", /^pbkdf2-sha256\$100000\$[A-Za-z0-9+/=]{24}\$[A-Za-z0-9+/=]{44}$/.test(hash) && !hash.includes(PASS));
+    let mail = await inbox(maya);
+    const verifyLink = linkIn(mail[0]);
+    check("Sign-up: one confirmation email with a link back to coHabit", mail.length === 1 && /Confirm your email/.test(mail[0].subject) && /expires in 24 hours/.test(mail[0].body) && /^http:\/\/localhost:\d+\/api\/auth\/verify-email\?token=[\w.-]+&callbackURL=%2Fwelcome$/.test(verifyLink || ""), verifyLink);
+    r = await signIn(maya, PASS);
+    check("Signing in before confirming is refused, and sends a fresh link", r.status === 403 && r.data.code === "EMAIL_NOT_VERIFIED" && (await inbox(maya)).length === 2);
+    let res = await fetch(verifyLink, { redirect: "manual" });
+    const mayaCookie = cookieFrom(res);
+    check("Confirming the email signs in and opens /welcome, which sends renters to the assistant", res.status === 302 && new URL(res.headers.get("location"), BASE).pathname === "/welcome" && !!mayaCookie);
+    r = await api("/api/me", { as: mayaCookie });
+    check("Role routing: a confirmed renter has the assistant; landlord pages are refused", r.data.user?.accountType === "renter" && r.data.user.occupation === "student,working" && (await api("/api/assistant", { as: mayaCookie })).status === 200 && (await api("/api/landlord/units", { as: mayaCookie })).status === 403);
+    res = await fetch(verifyLink, { redirect: "manual" });
+    check("A used confirmation link doesn't sign anyone in again", res.status === 302 && !cookieFrom(res));
+    r = await signIn("MAYA.renter@example.test", PASS);
+    const mayaCookie2 = cookieFrom(r);
+    check("Sign-in with email and password (any capitalization); the reply holds no account details", r.status === 200 && r.data.signedIn === true && Object.keys(r.data).join() === "signedIn" && !!mayaCookie2 && (await api("/api/me", { as: mayaCookie2 })).data.user?.email === maya);
+    r = await signIn(maya, "not the password");
+    const unknown = await signIn("nobody@example.test", "not the password");
+    check("A wrong password and an unknown email get the same answer (401)", r.status === 401 && unknown.status === 401 && r.data.code === "INVALID_EMAIL_OR_PASSWORD" && unknown.data.code === r.data.code && r.data.message === unknown.data.message);
+
+    // Landlord: name, email, password, optional company
+    resetAuthLimits();
+    const dana = "dana.landlord@example.test";
+    r = await api("/api/auth/sign-up/email", { method: "POST", body: { signupAs: "landlord", name: "Dana Okafor", email: dana, password: PASS, company: "Okafor Rentals", occupation: ["student"] } });
+    const danaRow = d1rows(`SELECT account_type, company, occupation FROM "user" WHERE email = '${dana}'`)[0];
+    check("Sign-up (landlord): saved as a landlord with the company; renter answers ignored", r.status === 200 && danaRow?.account_type === "landlord" && danaRow.company === "Okafor Rentals" && danaRow.occupation === null);
+    res = await fetch(linkIn((await inbox(dana))[0]), { redirect: "manual" });
+    const danaCookie = cookieFrom(res);
+    check("Role routing: a confirmed landlord has the dashboard; renter pages are refused", !!danaCookie && (await api("/api/landlord/units", { as: danaCookie })).status === 200 && (await api("/api/assistant", { as: danaCookie })).status === 403 && (await api("/api/me", { as: danaCookie })).data.user.company === "Okafor Rentals");
+
+    // Validation
+    resetAuthLimits();
+    const fieldOf = async (body) => (await api("/api/auth/sign-up/email", { method: "POST", body })).data.field;
+    const fields = [
+      await fieldOf({ signupAs: "renter", name: "", email: "ann@example.test", password: PASS }),
+      await fieldOf({ signupAs: "renter", name: "R2-D2", email: "ann@example.test", password: PASS }),
+      await fieldOf({ signupAs: "renter", name: "Ann", email: "not-an-email", password: PASS }),
+      await fieldOf({ signupAs: "renter", name: "Ann", email: "ann@example.test", password: "short" }),
+      await fieldOf({ signupAs: "admin", name: "Ann", email: "ann@example.test", password: PASS }),
+      await fieldOf({ signupAs: "renter", name: "Ann", email: "ann@example.test", password: PASS, occupation: ["other", "student"] }),
+      await fieldOf({ signupAs: "landlord", name: "Ann", email: "ann@example.test", password: PASS, company: "Call 617-555-0142" }),
+    ];
+    check("Sign-up checks each field (name, email, password, path, Other alone, company) and creates nothing", fields.join() === "name,name,email,password,signupAs,occupation,company" && count(`SELECT COUNT(*) AS n FROM "user" WHERE email = 'ann@example.test'`) === 0, fields.join());
+    r = await api("/api/auth/sign-up/email", { method: "POST", body: { signupAs: "renter", name: "Ann", email: "ann@example.test", password: PASS }, origin: "https://evil.example" });
+    check("Sign-up from another site is blocked (403)", r.status === 403);
+
+    // Same email again: no new account, same answer, the owner is emailed instead
+    r = await api("/api/auth/sign-up/email", { method: "POST", body: { signupAs: "landlord", name: "Someone Else", email: maya, password: "another passphrase" } });
+    mail = await inbox(maya);
+    check("Signing up with an email that has an account: same answer, nothing changes, the owner is told by email", r.status === 200 && r.data.status === "check_email" && count(`SELECT COUNT(*) AS n FROM "user" WHERE email = '${maya}'`) === 1 && /already have a coHabit account/.test(mail[0].subject) && d1rows(`SELECT account_type FROM "user" WHERE email = '${maya}'`)[0].account_type === "renter");
+    r = await api("/api/auth/sign-up/email", { method: "POST", body: { signupAs: "renter", name: "Copy", email: renterB.email, password: PASS } });
+    check("…also for someone who signed up with Google (no password is added to their account)", r.status === 200 && count(`SELECT COUNT(*) AS n FROM "account" WHERE "userId" = 't_renter_b' AND "providerId" = 'credential'`) === 0 && /already have/.test((await inbox(renterB.email))[0]?.subject || ""));
+
+    // Forgot password → email → reset page → new password
+    resetAuthLimits();
+    r = await api("/api/auth/request-password-reset", { method: "POST", body: { email: maya } });
+    const nobody = await api("/api/auth/request-password-reset", { method: "POST", body: { email: "nobody-here@example.test" } });
+    check("Forgot password: the same answer whether or not the account exists, and no email to unknown addresses", r.status === 200 && nobody.status === 200 && JSON.stringify(Object.keys(r.data)) === JSON.stringify(Object.keys(nobody.data)) && r.data.status === nobody.data.status && (await inbox("nobody-here@example.test")).length === 0);
+    mail = await inbox(maya);
+    const resetLink = linkIn(mail[0]);
+    check("Forgot password: an email with a one-time link that expires in 1 hour", /Reset your coHabit password/.test(mail[0].subject) && /expires in 1 hour/.test(mail[0].body) && /^http:\/\/localhost:\d+\/api\/auth\/reset-password\/[A-Za-z0-9_-]+\?callbackURL=%2Freset-password$/.test(resetLink || ""), resetLink);
+    const expiry = d1rows(`SELECT "expiresAt" AS e FROM verification WHERE identifier LIKE 'reset-password:%' AND value = '${mayaRow.id}'`)[0]?.e;
+    const expiryMs = /^\d+$/.test(String(expiry)) ? Number(expiry) : new Date(expiry).getTime();
+    check("…and the token stored on the server really expires about an hour from now", Math.abs(expiryMs - Date.now() - 3600_000) < 180_000, String(expiry));
+    res = await fetch(resetLink, { redirect: "manual" });
+    const token = new URL(res.headers.get("location") || "/", BASE).searchParams.get("token");
+    check("The reset link opens coHabit's own reset page with the token", res.status === 302 && new URL(res.headers.get("location"), BASE).pathname === "/reset-password" && !!token);
+    res = await fetch(resetLink.replace("%2Freset-password", encodeURIComponent("https://evil.example/steal")), { redirect: "manual" });
+    check("A reset link can't be sent on to another site", res.status === 302 && new URL(res.headers.get("location"), BASE).origin === BASE);
+    r = await api("/api/auth/reset-password", { method: "POST", body: { token, newPassword: "short" } });
+    check("The new password is checked too (too short → 400)", r.status === 400 && r.data.field === "newPassword");
+    r = await api("/api/auth/reset-password", { method: "POST", body: { token, newPassword: "a brand new passphrase" } });
+    check("Reset: password changed, and every session for that account is signed out", r.status === 200 && r.data.status === "password_changed" && (await api("/api/me", { as: mayaCookie2 })).data.user === null);
+    r = await api("/api/auth/reset-password", { method: "POST", body: { token, newPassword: "yet another passphrase" } });
+    check("A reset link works only once", r.status === 400 && r.data.code === "INVALID_TOKEN");
+    check("After the reset the old password fails and the new one works", (await signIn(maya, PASS)).status === 401 && (await signIn(maya, "a brand new passphrase")).status === 200);
+    await api("/api/auth/request-password-reset", { method: "POST", body: { email: maya } });
+    const staleLink = linkIn((await inbox(maya))[0]);
+    const stale = /^\d+$/.test(String(expiry)) ? String(Date.now() - 60_000) : `'${new Date(Date.now() - 60_000).toISOString()}'`;
+    d1(`UPDATE verification SET "expiresAt" = ${stale} WHERE identifier LIKE 'reset-password:%' AND value = '${mayaRow.id}'`);
+    res = await fetch(staleLink, { redirect: "manual" });
+    check("An expired reset link says so instead of opening the form", res.status === 302 && new URL(res.headers.get("location"), BASE).searchParams.get("error") === "INVALID_TOKEN");
+
+    // A Google user can set a password through "Forgot password?" (the email proves it's them)
+    resetAuthLimits();
+    d1(`INSERT INTO "user" (id,name,email,"emailVerified","createdAt","updatedAt",role,account_type) VALUES ('t_google_only','Gia Google','gia.google@example.test',1,'${now}','${now}','user','renter'); INSERT INTO "account" (id,"accountId","providerId","userId","createdAt","updatedAt") VALUES ('a_gia','google-sub-gia','google','t_google_only','${now}','${now}')`);
+    await api("/api/auth/request-password-reset", { method: "POST", body: { email: "gia.google@example.test" } });
+    res = await fetch(linkIn((await inbox("gia.google@example.test"))[0]), { redirect: "manual" });
+    r = await api("/api/auth/reset-password", { method: "POST", body: { token: new URL(res.headers.get("location"), BASE).searchParams.get("token"), newPassword: "gia's new passphrase" } });
+    check("A Google user can add a password with “Forgot password?”, keeping the same account and type", r.status === 200 && (await signIn("gia.google@example.test", "gia's new passphrase")).status === 200 && count(`SELECT COUNT(*) AS n FROM "user" WHERE email = 'gia.google@example.test'`) === 1 && count(`SELECT COUNT(*) AS n FROM "account" WHERE "userId" = 't_google_only'`) === 2);
+
+    // Limits, deleting a password account
+    resetAuthLimits();
+    const tries = [];
+    for (let i = 0; i < 22; i++) tries.push((await signIn("nobody@example.test", "not the password")).status);
+    check("Password sign-in is rate limited per network address (429)", tries.includes(429) && tries.slice(0, 9).every((x) => x === 401), tries.join(","));
+    resetAuthLimits();
+    r = await api("/api/me/delete", { method: "POST", as: danaCookie, body: { confirm: "DELETE" } });
+    check("Deleting a password account deletes its password and any reset links", r.status === 200 && count(`SELECT COUNT(*) AS n FROM "user" WHERE email = '${dana}'`) === 0 && count(`SELECT COUNT(*) AS n FROM "account" WHERE "userId" NOT IN (SELECT id FROM "user")`) === 0);
+    // For the cleanup job below: an unconfirmed sign-up from 8 days ago, and a fresh one
+    await api("/api/auth/sign-up/email", { method: "POST", body: { signupAs: "renter", name: "Old", email: "old.unconfirmed@example.test", password: PASS } });
+    await api("/api/auth/sign-up/email", { method: "POST", body: { signupAs: "renter", name: "New", email: "new.unconfirmed@example.test", password: PASS } });
+    d1(`UPDATE "user" SET "createdAt" = '${new Date(Date.now() - 8 * 86400_000).toISOString()}' WHERE email = 'old.unconfirmed@example.test'`);
+    resetAuthLimits();
+  }
+
   // ── Cleanup job ───────────────────────────────────────────────────────────
   d1(`UPDATE assistant_threads SET updated_at = 0 WHERE user_id = 't_chat_mate'`);
   // /__scheduled would be served the site's page (only /api/* reaches the Worker first), so use the local trigger.
@@ -1225,6 +1354,7 @@ try {
   check("The daily cleanup job runs", r.ok && !(r.headers.get("content-type") || "").includes("text/html"), `${r.status} ${r.headers.get("content-type")}`);
   await sleep(500);
   check("Scheduled cleanup deletes expired sessions", d1rows(`SELECT COUNT(*) AS n FROM "session" WHERE id='s_expired'`)[0].n === 0);
+  check("Scheduled cleanup deletes password sign-ups never confirmed within 7 days, and only those", d1rows(`SELECT COUNT(*) AS n FROM "user" WHERE email = 'old.unconfirmed@example.test'`)[0].n === 0 && d1rows(`SELECT COUNT(*) AS n FROM "user" WHERE email IN ('new.unconfirmed@example.test', 'maya.renter@example.test', 'gia.google@example.test')`)[0].n === 3);
   check("Scheduled cleanup deletes chats unused for 90 days, and only those", d1rows(`SELECT COUNT(*) AS n FROM assistant_messages WHERE user_id='t_chat_mate'`)[0].n === 0 && d1rows(`SELECT COUNT(*) AS n FROM assistant_messages WHERE user_id='t_chat_ai'`)[0].n > 0);
 } catch (err) {
   check("Test run crashed", false, err.stack);

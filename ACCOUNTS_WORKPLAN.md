@@ -257,6 +257,23 @@ by the live test.
 - **Built and checked locally first**, then deployed with the owner's approval as `c35940b7-6b05-4156-9cf5-c274a3386f0e` (no database
   change) and pushed.
 
+## Email and password accounts (2026-10-17, local only)
+
+- **Reused Better Auth's own email and password support** (same users, sessions and rate limits as Google), behind
+  the Worker's allowlist; each request is rebuilt from checked fields.
+- **No email service exists**, so password sign-up and reset are only on where mail can be sent (a local test inbox
+  in development). The live site stays Google-only until a provider and a sending domain are chosen and paid for (or
+  not) by the owner.
+- **Neutral answers** for sign-up, resend and forgot-password, so the forms never reveal who has an account; Better
+  Auth's existing-user and timing protections are kept.
+- **PBKDF2 with Web Crypto** instead of Better Auth's JavaScript scrypt, which is far too slow for a Worker; the
+  Free plan's 10 ms CPU limit is still a risk at a safe iteration count, so it's flagged for a live check.
+- **Account type set at sign-up from the chosen path** (renter or landlord only), so returning users skip the
+  question; Google sign-ups keep the one-time question.
+- **Unconfirmed sign-ups expire after 7 days**, and a password reset confirms the email, so an email can't be held by
+  someone who doesn't own it.
+- **Not deployed, and the live database not changed**, as asked.
+
 ## Next safe step
 
 Run part 10 of the manual test on the live site with two real renter accounts. After that: a "new request" badge

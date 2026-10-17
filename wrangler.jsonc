@@ -31,6 +31,8 @@
   //   BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, MAPTILER_KEY
   //   ANTHROPIC_API_KEY (optional: turns on the assistant's AI mode; it can cost money, see ACCOUNTS_SETUP.md)
   // Optional assistant settings as vars: ASSISTANT_MODEL, ASSISTANT_DAILY_PER_USER, ASSISTANT_DAILY_SITE, ASSISTANT_PER_MINUTE
+  // Optional: PASSWORD_HASH_ITERATIONS (password hashing cost, default 100000). Email and password sign-up stays off
+  // until coHabit can send email (src/email.js); DEV_EMAIL_OUTBOX=1 is for local development only (.dev.vars).
   "triggers": {
     // Daily cleanup (04:17 UTC): expired sessions, old rate-limit counters, assistant chats unused for 90 days.
     "crons": ["17 4 * * *"]

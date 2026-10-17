@@ -45,7 +45,7 @@
     constructor(status, data) {
       super((data && data.message) || "Something went wrong. Please try again.");
       this.status = status;
-      this.code = data && data.error;
+      this.code = data && (data.error || data.code);
       this.field = data && data.field;
     }
   }
@@ -127,7 +127,7 @@
     accountEl.innerHTML = u
       ? `${feedback}<a class="nav-item who" href="/account"${current("/account")} title="Your account: ${esc(u.email)}"><span class="avatar avatar-sm" aria-hidden="true">${esc(initials(u.name || u.email))}</span><span class="who-name">${esc(u.name)}</span><span class="sr-only">Your account</span></a>
          <button class="btn btn-small btn-quiet" type="button" data-action="sign-out">Sign out</button>`
-      : `${feedback}<button class="btn btn-small" type="button" data-action="sign-in">Sign in</button>`;
+      : `${feedback}<a class="btn btn-small" href="/signin${location.pathname.length > 1 && !/^\/(signin|signup|forgot-password|reset-password)/.test(location.pathname) ? `?next=${encodeURIComponent(location.pathname)}` : ""}">Sign in</a>`;
   }
 
   // ── Messages: success banner on the next screen, and short pop-up notes ──────
@@ -371,19 +371,8 @@
   }
 
   function signInView(next, brand) {
-    const expired = me.sessionExpired;
-    return {
-      title: "Sign in",
-      brand,
-      html: `
-      <div class="panel">
-        <h1 tabindex="-1">${expired ? "Your session has ended" : "Sign in to continue"}</h1>
-        <p class="muted">${expired ? "Sign in again to pick up where you left off." : "coHabit uses your Google account. We only get your name and email address."}</p>
-        <div class="actions"><button class="btn" type="button" data-action="sign-in" data-next="${esc(next)}">${icon("google", 18)} Sign in with Google</button></div>
-      </div>`,
-    };
+    return signInPage(next || "");
   }
-
   function errorView(e, brand) {
     if (e.status === 401) {
       me = { user: null, sessionExpired: e.code === "session_expired" };
@@ -414,6 +403,337 @@
     return undefined;
   }
 
+  // ── Accounts: sign up, sign in, confirm email, reset password ───────────────
+  // One account system (Better Auth) for Google and for email and password. Email and password only shows when
+  // coHabit can send email; until then, everything works with Google as before.
+  let cfg = { passwordSignIn: false, devInbox: false };
+  const loadConfig = () =>
+    api("/api/config")
+      .then((c) => (cfg = { ...cfg, ...c }))
+      .catch(() => cfg);
+  const focusHeading = () => document.querySelector("#app h1")?.focus();
+
+  // Which way someone came in: "renter" (find a room or roommate) or "landlord" (list your space).
+  // Remembered in this browser only, to open the same sign-up form and order next time.
+  const PATH_KEY = "cohabit.path";
+  const rememberPath = (p) => {
+    try {
+      if (p === "renter" || p === "landlord") localStorage.setItem(PATH_KEY, p);
+    } catch {}
+  };
+  const rememberedPath = () => {
+    try {
+      const v = localStorage.getItem(PATH_KEY);
+      return v === "renter" || v === "landlord" ? v : null;
+    } catch {
+      return null;
+    }
+  };
+  const homeFor = (type) => (type === "landlord" ? "/landlord" : type === "renter" ? "/assistant" : "/welcome");
+
+  const passwordField = (id, label, autocomplete, hint = "", after = "") =>
+    field(
+      id,
+      label,
+      `<div class="pw-wrap"><input id="f-${id}" name="${id}" type="password" autocomplete="${autocomplete}" required minlength="8" maxlength="128" aria-describedby="h-${id} e-${id}" /><button class="pw-toggle" type="button" data-action="pw-toggle" data-for="f-${id}" aria-controls="f-${id}" aria-pressed="false">Show</button></div>${after}`,
+      hint
+    );
+  const googleButton = (next, label = "Continue with Google") => `<button class="btn btn-quiet btn-google" type="button" data-action="sign-in" data-next="${esc(next || "")}">${icon("google", 18)} ${label}</button>`;
+  const orLine = `<p class="or-line"><span>or</span></p>`;
+  const devInboxLink = (cfg) => (cfg.devInbox ? `<p class="hint">Local preview: emails go to the <a href="/dev/inbox">local test inbox</a> instead of being sent.</p>` : "");
+
+  function checkEmailHtml(email, kind, cfg) {
+    const what =
+      kind === "reset"
+        ? `If there's a coHabit account for <strong>${esc(email)}</strong>, we've sent a link to reset its password. It works once and expires in 1 hour.`
+        : `We sent a link to <strong>${esc(email)}</strong>. Open it to finish creating your account; it expires in 24 hours.`;
+    return `
+      <div class="auth-card" role="status">
+        <h1 tabindex="-1">Check your email</h1>
+        <p>${what}</p>
+        <p class="hint">Nothing there after a few minutes? Check your spam folder.</p>
+        ${devInboxLink(cfg)}
+        <div class="actions">
+          ${kind === "reset" ? `<a class="btn" href="/signin">Back to sign in</a>` : `<button class="btn btn-quiet" type="button" data-action="resend-confirm" data-email="${esc(email)}">Send the link again</button><a class="btn" href="/signin">Sign in</a>`}
+        </div>
+      </div>`;
+  }
+
+  // Sign in: email and password (with "Forgot password?"), or Google.
+  function signInPage(nextParam) {
+    const next = nextParam ?? new URLSearchParams(location.search).get("next") ?? "";
+    if (me.user) {
+      navigate(homeFor(me.user.accountType) === "/welcome" ? "/welcome" + (next ? "?next=" + encodeURIComponent(next) : "") : next.startsWith(homeFor(me.user.accountType)) ? next : homeFor(me.user.accountType), true);
+      return null;
+    }
+        const expired = me.sessionExpired;
+    const path = rememberedPath();
+    const title = expired ? "Your session has ended" : "Sign in";
+    if (!cfg.passwordSignIn)
+      return {
+        title,
+        html: `
+      <div class="panel">
+        <h1 tabindex="-1">${expired ? "Your session has ended" : "Sign in to continue"}</h1>
+        <p class="muted">${expired ? "Sign in again to pick up where you left off." : "coHabit uses your Google account. We only get your name and email address."}</p>
+        <div class="actions"><button class="btn" type="button" data-action="sign-in" data-next="${esc(next)}">${icon("google", 18)} Sign in with Google</button></div>
+      </div>`,
+      };
+    return {
+      title,
+      html: `
+      <div class="auth-card">
+        <h1 tabindex="-1">${title}</h1>
+        <p class="muted">${expired ? "Sign in again to pick up where you left off." : "Welcome back."}</p>
+        <form class="auth-form" id="signin-form" data-next="${esc(next)}" novalidate>
+          ${field("email", "Email", input("email", 'type="email" autocomplete="email" inputmode="email" required maxlength="254" spellcheck="false" autocapitalize="off"', ""))}
+          ${passwordField("password", "Password", "current-password", "", `<a class="forgot" href="/forgot-password">Forgot password?</a>`)}
+          <p class="form-error" id="form-error" role="alert"></p>
+          <button class="btn btn-block" type="submit">Sign in</button>
+        </form>
+        ${orLine}
+        ${googleButton(next)}
+        <p class="auth-switch-line">New to coHabit? <a href="/signup${path ? `?as=${path}` : ""}">Create an account</a></p>
+      </div>`,
+    };
+  }
+
+  async function submitSignIn(form) {
+    const btn = form.querySelector("[type=submit]");
+    const body = { email: form.elements.email.value.trim(), password: form.elements.password.value };
+    btn.disabled = true;
+    try {
+      await api("/api/auth/sign-in/email", { method: "POST", body });
+    } catch (e) {
+      btn.disabled = false;
+            if (e.code === "EMAIL_NOT_VERIFIED") {
+        showErrors(form, { message: "Confirm your email first. We've sent you a new link." });
+        if (cfg.devInbox) form.querySelector("#form-error").insertAdjacentHTML("beforeend", ` <a href="/dev/inbox">Open the local test inbox</a>.`);
+        return;
+      }
+      if (e.code === "INVALID_EMAIL_OR_PASSWORD") return showErrors(form, { message: "That email and password don't match. Try again, or reset your password." });
+      return showErrors(form, e);
+    }
+    form.elements.password.value = "";
+    await loadMe();
+    renderAccount();
+    // Returning users go straight to their side; anyone without one answers the one-time question.
+    const next = form.dataset.next || "";
+    const home = homeFor(me.user && me.user.accountType);
+    navigate(home === "/welcome" ? "/welcome" + (next ? "?next=" + encodeURIComponent(next) : "") : next && next.startsWith(home) ? next : home, true);
+  }
+
+  // Sign up: renter ("Find a room or roommate") or landlord ("List your space"); one form, two paths.
+  function signUpPage() {
+    if (me.user) {
+      navigate(homeFor(me.user.accountType), true);
+      return null;
+    }
+    const want = new URLSearchParams(location.search).get("as");
+    const as = want === "landlord" || want === "renter" ? want : rememberedPath() || "renter";
+    rememberPath(as);
+        const renter = as === "renter";
+    const next = renter ? "/assistant" : "/landlord";
+    const tabs = `
+        <div class="seg auth-path" role="group" aria-label="I want to">
+          <button type="button" data-action="signup-as" data-as="renter" aria-pressed="${renter}">Find a room or roommate</button>
+          <button type="button" data-action="signup-as" data-as="landlord" aria-pressed="${!renter}">List your space</button>
+        </div>`;
+    if (!cfg.passwordSignIn)
+      return {
+        title: "Create an account",
+        html: `
+      <div class="auth-card">
+        ${tabs}
+        <h1 tabindex="-1">${renter ? "Find a room or roommate" : "List your space"}</h1>
+        <p class="muted">${renter ? "Create your account with Google, then tell the assistant what you're looking for." : "Create your landlord account with Google, then add your rooms or units."} We only get your name and email address.</p>
+        ${googleButton(next, "Sign up with Google")}
+        <p class="auth-switch-line">Already have an account? <a href="/signin">Sign in</a></p>
+      </div>`,
+      };
+    const occupation = `
+          <fieldset class="field auth-chips" aria-describedby="h-occupation e-occupation">
+            <legend>I'm… <span class="muted">(optional)</span></legend>
+            <div class="sq-options">
+              ${[["student", "Student"], ["working", "Working"], ["other", "Other"]].map(([v, l]) => `<button type="button" class="sq-chip" data-action="occupation-pick" data-v="${v}" aria-pressed="false">${l}</button>`).join("")}
+            </div>
+            <p class="hint" id="h-occupation">Pick any that fit. Student and Working can go together.</p>
+            <p class="field-error" id="e-occupation"></p>
+          </fieldset>`;
+    return {
+      title: "Create an account",
+      html: `
+      <div class="auth-card">
+        ${tabs}
+        <h1 tabindex="-1">${renter ? "Create your account" : "List your space"}</h1>
+        <p class="muted">${renter ? "Find rooms and roommates that fit, with a guided chat." : "Create a landlord account to list rooms or units and hear from interested renters."}</p>
+        <form class="auth-form" id="signup-form" data-as="${as}" novalidate>
+          ${renter ? field("name", "First name", input("name", 'type="text" autocomplete="given-name" required maxlength="50"', "")) : field("name", "Name", input("name", 'type="text" autocomplete="name" required maxlength="80"', ""))}
+          ${field("email", "Email", input("email", 'type="email" autocomplete="email" inputmode="email" required maxlength="254" spellcheck="false" autocapitalize="off"', ""))}
+          ${passwordField("password", "Password", "new-password", "At least 8 characters. A short phrase is easy to remember.")}
+          ${renter ? occupation : field("company", 'Company <span class="muted">(optional)</span>', input("company", 'type="text" autocomplete="organization" maxlength="100"', ""))}
+          <p class="form-error" id="form-error" role="alert"></p>
+          <button class="btn btn-block" type="submit">Create account</button>
+          <p class="hint">We'll email you a link to confirm your address. By creating an account you agree to the <a href="/terms">terms</a> and <a href="/privacy">privacy policy</a>.</p>
+        </form>
+        ${orLine}
+        ${googleButton(next, "Sign up with Google")}
+        <p class="auth-switch-line">Already have an account? <a href="/signin">Sign in</a></p>
+      </div>`,
+    };
+  }
+
+  function pickOccupation(button) {
+    const form = button.closest("form");
+    const v = button.dataset.v;
+    const pressed = button.getAttribute("aria-pressed") === "true";
+    for (const b of form.querySelectorAll("[data-action=occupation-pick]")) {
+      if (b === button) b.setAttribute("aria-pressed", String(!pressed));
+      // "Other" stands alone; Student and Working can be picked together.
+      else if (!pressed && (v === "other" || b.dataset.v === "other")) b.setAttribute("aria-pressed", "false");
+    }
+  }
+
+  async function submitSignUp(form) {
+    const btn = form.querySelector("[type=submit]");
+    const as = form.dataset.as;
+    const body = { signupAs: as, name: form.elements.name.value.trim(), email: form.elements.email.value.trim(), password: form.elements.password.value };
+    if (as === "renter") {
+      const picked = [...form.querySelectorAll("[data-action=occupation-pick][aria-pressed=true]")].map((b) => b.dataset.v);
+      if (picked.length) body.occupation = picked;
+    } else if (form.elements.company.value.trim()) body.company = form.elements.company.value.trim();
+    btn.disabled = true;
+    try {
+      const d = await api("/api/auth/sign-up/email", { method: "POST", body });
+      rememberPath(as);
+            form.closest(".auth-card").outerHTML = checkEmailHtml(d.email, "confirm", cfg);
+      focusHeading();
+    } catch (e) {
+      btn.disabled = false;
+      if (e.code === "PASSWORD_TOO_SHORT" || e.code === "PASSWORD_TOO_LONG") return showErrors(form, { field: "password", message: e.code === "PASSWORD_TOO_SHORT" ? "Use at least 8 characters." : "Use at most 128 characters." });
+      if (e.code === "INVALID_EMAIL") return showErrors(form, { field: "email", message: "Enter a valid email address, like name@example.com." });
+      showErrors(form, e.field === "signupAs" ? { message: e.message } : e);
+    }
+  }
+
+  async function resendConfirm(button) {
+    button.disabled = true;
+    try {
+      await api("/api/auth/send-verification-email", { method: "POST", body: { email: button.dataset.email } });
+      toast("If that account still needs confirming, a new link is on its way.");
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      setTimeout(() => (button.disabled = false), 30000);
+    }
+  }
+
+  function forgotPasswordPage() {
+        if (!cfg.passwordSignIn) return messageView("Passwords aren't available yet", "Sign in with Google for now. Email and password sign-in will appear here once it's switched on.", `<a class="btn" href="/signin">Sign in</a>`);
+    return {
+      title: "Reset your password",
+      html: `
+      <div class="auth-card">
+        <h1 tabindex="-1">Reset your password</h1>
+        <p class="muted">Enter the email you signed up with. We'll send a link to choose a new password.</p>
+        <form class="auth-form" id="forgot-form" novalidate>
+          ${field("email", "Email", input("email", 'type="email" autocomplete="email" inputmode="email" required maxlength="254" spellcheck="false" autocapitalize="off"', ""))}
+          <p class="form-error" id="form-error" role="alert"></p>
+          <button class="btn btn-block" type="submit">Send reset link</button>
+        </form>
+        <p class="auth-switch-line"><a href="/signin">Back to sign in</a></p>
+      </div>`,
+    };
+  }
+
+  async function submitForgot(form) {
+    const btn = form.querySelector("[type=submit]");
+    btn.disabled = true;
+    try {
+      const d = await api("/api/auth/request-password-reset", { method: "POST", body: { email: form.elements.email.value.trim() } });
+      form.closest(".auth-card").outerHTML = checkEmailHtml(d.email, "reset", cfg);
+      focusHeading();
+    } catch (e) {
+      btn.disabled = false;
+      showErrors(form, e);
+    }
+  }
+
+  // The link in the email opens this page with a one-time token. It's taken out of the address bar right away.
+  let resetToken = null;
+  function resetPasswordPage() {
+    const params = new URLSearchParams(location.search);
+    if (params.get("token")) {
+      resetToken = params.get("token");
+      history.replaceState(null, "", "/reset-password");
+    }
+    if (params.get("error") || !resetToken)
+      return messageView("This link has expired", "Reset links work once and only for 1 hour. Ask for a new one and use the newest email.", `<a class="btn" href="/forgot-password">Get a new link</a><a class="btn btn-quiet" href="/signin">Sign in</a>`);
+    return {
+      title: "Choose a new password",
+      html: `
+      <div class="auth-card">
+        <h1 tabindex="-1">Choose a new password</h1>
+        <form class="auth-form" id="reset-form" novalidate>
+          ${passwordField("newPassword", "New password", "new-password", "At least 8 characters.")}
+          <p class="form-error" id="form-error" role="alert"></p>
+          <button class="btn btn-block" type="submit">Save new password</button>
+        </form>
+      </div>`,
+    };
+  }
+
+  async function submitReset(form) {
+    const btn = form.querySelector("[type=submit]");
+    btn.disabled = true;
+    try {
+      await api("/api/auth/reset-password", { method: "POST", body: { token: resetToken, newPassword: form.elements.newPassword.value } });
+      resetToken = null;
+      me = { user: null, sessionExpired: false };
+      renderAccount();
+      form.closest(".auth-card").outerHTML = `
+      <div class="auth-card" role="status">
+        <h1 tabindex="-1">Password changed</h1>
+        <p>You can sign in with your new password now. For your safety, you've been signed out everywhere else.</p>
+        <div class="actions"><a class="btn" href="/signin">Sign in</a></div>
+      </div>`;
+      focusHeading();
+    } catch (e) {
+      btn.disabled = false;
+      if (e.code === "INVALID_TOKEN" || e.field === "token") return showErrors(form, { message: "This reset link has expired or was already used. Ask for a new one from “Forgot password?”." });
+      if (e.code === "PASSWORD_TOO_SHORT") return showErrors(form, { field: "newPassword", message: "Use at least 8 characters." });
+      showErrors(form, e);
+    }
+  }
+
+  // Local development only: the emails coHabit would have sent, with their links.
+  async function devInboxPage() {
+        if (!cfg.devInbox) return notFound();
+    const { messages } = await api("/api/dev/outbox");
+    const linkify = (t) => esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>');
+    return {
+      title: "Local test inbox",
+      html: `
+      <div class="heading"><h1 tabindex="-1">Local test inbox</h1><p class="muted">Only on this computer. coHabit can't send email yet, so in local development each account email lands here instead.</p></div>
+      ${
+        messages.length
+          ? `<ul class="dev-inbox" role="list">${messages
+              .map((m) => `<li><p class="small muted">To ${esc(m.to)} · ${esc(new Date(m.createdAt).toLocaleString())}</p><h2 class="card-title">${esc(m.subject)}</h2><pre>${linkify(m.body)}</pre></li>`)
+              .join("")}</ul>`
+          : emptyState("No emails yet", "Sign up or ask for a password reset, and the email appears here.")
+      }`,
+    };
+  }
+
+  function togglePassword(button) {
+    const inputEl = document.getElementById(button.dataset.for);
+    const show = inputEl.type === "password";
+    inputEl.type = show ? "text" : "password";
+    button.setAttribute("aria-pressed", String(show));
+    button.textContent = show ? "Hide" : "Show";
+    inputEl.focus();
+  }
+
   // ── Public pages ─────────────────────────────────────────────────────────────
   function home() {
     const u = me.user;
@@ -436,8 +756,19 @@
             </span>
             <span class="choice-cta">${role === "renter" ? "Continue the chat" : "Start a chat"} ${icon("right", 16)}</span>
           </a>`;
+    // Visitors pick a path ("Find a room or roommate" or "List your space"), remembered for next time.
     // Signed-in people only see the card for their own side.
-    const cards = role === "landlord" ? landlordCard : role === "renter" ? renterCard : landlordCard + renterCard;
+    const last = rememberedPath();
+    const pathCard = (as) => `
+          <a class="choice${last === as ? " is-last" : ""}" href="/signup?as=${as}" data-path="${as}">
+            <span class="choice-top"><span class="choice-icon">${icon(as === "renter" ? "user" : "building", 24)}</span>${last === as ? `<span class="choice-badge">Your last choice</span>` : ""}</span>
+            <span class="choice-text">
+              <span class="choice-title">${as === "renter" ? "Find a room or roommate" : "List your space"}</span>
+              <span class="choice-desc">${as === "renter" ? "Chat about your budget, timing and how you like to live. See rooms and roommates that fit, and why." : "List rooms or units, keep rent and move-in dates current, and hear from interested renters."}</span>
+            </span>
+            <span class="choice-cta">${last === as ? "Continue" : "Get started"} ${icon("right", 16)}</span>
+          </a>`;
+    const cards = role === "landlord" ? landlordCard : role === "renter" ? renterCard : u ? landlordCard + renterCard : pathCard("renter") + pathCard("landlord");
     return {
       title: "Welcome",
       html: `
@@ -451,6 +782,7 @@
         </div>
         <div class="actions home-actions">
           <a class="btn btn-quiet" href="/listings">Browse listings</a>
+          ${u ? "" : `<a class="btn btn-quiet" href="/signin">Sign in</a>`}
           ${role === "renter" ? `<a class="btn btn-quiet" href="/renter">My matches</a>` : `<a class="btn btn-quiet" href="/sample">View a sample dashboard</a>`}
         </div>
       </div>`,
@@ -470,6 +802,7 @@
         <h2>What we collect</h2>
         <ul>
           <li><strong>From Google when you sign in:</strong> your name, your email address, and Google's ID for your account. We ask Google only for basic sign-in information (openid, email, profile). We do not keep Google access tokens or your profile photo, and we never see your Google password.</li>
+          <li><strong>If you sign up with email and a password:</strong> your name and email, your password as a salted hash (never the password itself), whether you've confirmed your email, and short-lived links for confirming your email or resetting your password. Optionally, renters can say whether they're a student, working or other, and landlords their company.</li>
           <li><strong>Your account type:</strong> whether you chose landlord or renter.</li>
           <li><strong>If you are a landlord:</strong> the units you add: name, general area, monthly rent, rooms available, move-in date, description and status. If you choose to add one, the unit's street address and map pin (Massachusetts only), and whether renters see an approximate area or the exact location.</li>
           <li><strong>If you are a renter:</strong> your questionnaire answers: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets and smoking. Also any “I'm interested” requests you send, with your note, and any roommate requests you send or receive, with the introduction and the messages you exchange after one is accepted.</li>
@@ -1316,7 +1649,10 @@
 
   // ── Welcome: one-time landlord / renter choice ───────────────────────────────
   function welcome() {
-    const next = new URLSearchParams(location.search).get("next") || "";
+    const params = new URLSearchParams(location.search);
+    const next = params.get("next") || "";
+    if (!me.user && params.get("error"))
+      return messageView("This link has expired", "Confirmation links work once and for 24 hours. Sign in with your email and password and we'll send you a new one.", `<a class="btn" href="/signin">Sign in</a>`);
     if (!me.user) return signInView(next || "/welcome");
     const t = me.user.accountType;
     if (t) {
@@ -1334,7 +1670,7 @@
           <h1 tabindex="-1">Welcome, ${esc(me.user.name.split(" ")[0])}</h1>
           <p class="lead">How will you use coHabit? You can't change this later.</p>
         </div>
-        <div class="choices">
+        <div class="choices${rememberedPath() === "renter" ? " choices-flip" : ""}">
           <button class="choice" type="button" data-action="choose-type" data-type="landlord">
             <span class="choice-top"><span class="choice-icon">${icon("building", 24)}</span></span>
             <span class="choice-text"><span class="choice-title">I'm a landlord</span><span class="choice-desc">I have rooms or units to list.</span></span>
@@ -3426,6 +3762,8 @@
         <div class="fact"><dt>Name</dt><dd>${esc(u.name)}</dd></div>
         <div class="fact"><dt>Email</dt><dd class="wrap">${esc(u.email)}</dd></div>
         <div class="fact"><dt>Account type</dt><dd>${u.accountType ? esc(u.accountType[0].toUpperCase() + u.accountType.slice(1)) : "Not chosen yet"}${u.isAdmin ? ` <span class="badge">Admin</span>` : ""}</dd></div>
+        ${u.occupation ? `<div class="fact"><dt>I'm</dt><dd>${esc(u.occupation.split(",").map((o) => ({ student: "Student", working: "Working", other: "Other" })[o] || o).join(" and "))}</dd></div>` : ""}
+        ${u.company ? `<div class="fact"><dt>Company</dt><dd>${esc(u.company)}</dd></div>` : ""}
         <div class="fact"><dt>coHabit Points</dt><dd>${u.points || 0}</dd></div>
       </dl>
       <p class="muted small">${POINTS_NOTE} ${u.points ? "Thanks for your check-in." : `Earn 100 for your first <button class="link-button" type="button" data-action="survey-open">Quick check-in</button>.`}</p>
@@ -3475,9 +3813,16 @@
     if (clean === "/listings") return listings();
     if (clean === "/sample") return sampleDashboard();
     if (clean === "/welcome") return welcome();
+    if (clean === "/signin") return signInPage();
+    if (clean === "/signup") return signUpPage();
+    if (clean === "/forgot-password") return forgotPasswordPage();
+    if (clean === "/reset-password") return resetPasswordPage();
+    if (clean === "/dev/inbox") return devInboxPage();
     if (clean === "/account") return accountPage();
     if (clean === "/signin-error")
-      return messageView("Sign-in didn't work", "Google sign-in was cancelled or failed. Nothing was changed.", `<button class="btn" type="button" data-action="sign-in">Try again</button><a class="btn btn-quiet" href="/">Go to home page</a>`);
+      return new URLSearchParams(location.search).get("error") === "account_not_linked"
+        ? messageView("You already have an account", "This email already has a coHabit account that signs in with a password. Sign in with your email and password, or choose “Forgot password?” to set a new one.", `<a class="btn" href="/signin">Sign in</a><a class="btn btn-quiet" href="/forgot-password">Forgot password?</a>`)
+        : messageView("Sign-in didn't work", "Google sign-in was cancelled or failed. Nothing was changed.", `<button class="btn" type="button" data-action="sign-in">Try again</button><a class="btn btn-quiet" href="/">Go to home page</a>`);
     if (clean === "/landlord") return landlordDashboard();
     if (clean === "/landlord/units/new") return unitForm(null);
     let m = clean.match(/^\/landlord\/units\/([^/]+)\/edit$/);
@@ -3588,6 +3933,12 @@
       else if (a === "import-commit") commitImport(action);
       else if (a === "import-rollback") rollbackImport(action.dataset.id);
       else if (a === "toggle-samples") toggleSampleListings(action.dataset.hide === "true");
+      else if (a === "pw-toggle") togglePassword(action);
+      else if (a === "signup-as") {
+        rememberPath(action.dataset.as);
+        navigate(`/signup?as=${action.dataset.as}`, true);
+      } else if (a === "occupation-pick") pickOccupation(action);
+      else if (a === "resend-confirm") resendConfirm(action);
       else if (a === "survey-open") openSurvey();
       else if (a === "survey-close") document.getElementById("survey").close();
       else if (a === "survey-pick") surveyPick(action.dataset.q, action.dataset.v);
@@ -3651,6 +4002,7 @@
       return;
     }
     const link = e.target.closest("a");
+    if (link && link.dataset.path) rememberPath(link.dataset.path);
     if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if ((link.getAttribute("href") || "").startsWith("#")) return; // in-page jumps such as "Skip to content"
     const url = new URL(link.href, location.href);
@@ -3683,6 +4035,18 @@
     } else if (e.target.id === "pref-form") {
       e.preventDefault();
       savePref(false);
+    } else if (e.target.id === "signin-form") {
+      e.preventDefault();
+      submitSignIn(e.target);
+    } else if (e.target.id === "signup-form") {
+      e.preventDefault();
+      submitSignUp(e.target);
+    } else if (e.target.id === "forgot-form") {
+      e.preventDefault();
+      submitForgot(e.target);
+    } else if (e.target.id === "reset-form") {
+      e.preventDefault();
+      submitReset(e.target);
     } else if (e.target.id === "survey-form") {
       e.preventDefault();
       sendSurvey();
@@ -3766,5 +4130,5 @@
 
   window.addEventListener("popstate", () => render(true));
 
-  loadMe().then(() => render(false));
+  Promise.all([loadMe(), loadConfig()]).then(() => render(false));
 })();

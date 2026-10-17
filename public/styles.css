@@ -809,3 +809,41 @@ p.interest { display: block; }
   .details-body .card-pic.has-photo { height: 180px; }
   .facts-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Accounts: sign up, sign in, reset password (same panel, fields and buttons as the rest of the site) ── */
+.auth-card {
+  display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 460px; margin: 8px auto 0;
+  padding: 32px; border: 1px solid var(--border); border-radius: 16px; background: var(--white);
+}
+.auth-card h1 { font-size: 28px; line-height: 36px; }
+.auth-card > .muted { margin-top: -6px; }
+.auth-card .actions { margin-top: 4px; }
+.auth-form { display: flex; flex-direction: column; gap: 16px; }
+.auth-form .field input { width: 100%; }
+.btn-block { width: 100%; }
+.auth-path { align-self: stretch; display: flex; }
+.auth-path button { flex: 1; min-height: 38px; padding: 0 10px; }
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 72px; }
+.pw-toggle {
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%); min-height: 32px; padding: 0 10px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--blue); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.pw-toggle:hover { background: var(--blue-bg); }
+.forgot { align-self: flex-end; font-size: 14px; font-weight: 600; color: var(--blue); }
+.auth-chips { border: 0; margin: 0; padding: 0; }
+.auth-chips legend { padding: 0; margin-bottom: 6px; font-size: 15px; font-weight: 600; }
+.or-line { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; }
+.or-line::before, .or-line::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.btn-google { width: 100%; }
+.auth-switch-line { text-align: center; font-size: 15px; color: var(--sub); }
+.choice.is-last { border-color: var(--navy); }
+.choice-badge { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--blue-bg); color: var(--navy); }
+.choices-flip > :first-child { order: 2; }
+.dev-inbox { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.dev-inbox li { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-card); }
+.dev-inbox pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 14px; color: var(--sub); }
+@media (max-width: 720px) {
+  .auth-card { padding: 20px 16px; border: 0; margin-top: 0; }
+  .auth-path button { font-size: 13px; }
+}

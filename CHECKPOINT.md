@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-14 (demo data refresh)
+# coHabit project checkpoint: 2026-10-17 (email and password accounts, local only)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -18,12 +18,16 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 | Roommate requests | 0 | Live, 2026-10-13 (table created that day) |
 | Saved questionnaires | 4 | Live, 2026-10-13 |
 | Admins | 1 | Live (the owner) |
-| Automated tests | 437 passing | `npm test`, local, 2026-10-14 |
+| Automated tests | 471 passing | `npm test`, local, 2026-10-17 |
 | AI cost so far | $0 | No Anthropic key exists; the assistant has only run in basic mode or against the test stand-in |
 
 No real listings were imported because no authorized data source exists yet (see "Pending work").
 
 ## Deployment status
+
+**Not deployed: email and password accounts** (below) are committed locally only, and migration 0009 is applied to
+the local databases only. Even after a deploy, the live site stays Google-only until an email service is set up (see
+ACCOUNTS_SETUP.md, "Email and password accounts").
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
 - **Live version:** `c35940b7-6b05-4156-9cf5-c274a3386f0e`, deployed 2026-10-14 with the owner's approval: the demo data refresh
@@ -99,6 +103,19 @@ No real listings were imported because no authorized data source exists yet (see
 | **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
 | **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
 | **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | Yes (2026-10-13) |
+
+### Email and password accounts (2026-10-17, local only)
+
+- **Homepage:** "Find a room or roommate" and "List your space" (remembered in the browser), with Browse listings and
+  Sign in kept.
+- **Sign-up:** renters (first name, email, password, optional Student / Working / Other) and landlords (name, email,
+  password, optional company); email confirmation required, then the assistant or the landlord dashboard.
+- **Sign-in and recovery:** Show/Hide password, "Forgot password?" under the field, neutral "check your email"
+  answers, one-time 1-hour reset links, a new-password form and a confirmation.
+- **Same account system** as Google (Better Auth), permissions still checked on the server for every request.
+- **Database:** migration `0009_password_accounts.sql` (two optional `user` columns).
+- **Missing for the live site:** an email service and a sending domain (owner's decision; may cost money), and a CPU
+  check of password hashing on the Free plan.
 
 ### Demo data refresh (2026-10-14, live as `c35940b7…`)
 
@@ -201,6 +218,21 @@ Built and tested in three stages, each committed separately:
 
 ## Tests
 
+- `npm test`: **471/471** on 2026-10-17. New account checks (34): renter and landlord sign-up with their optional
+  answers; role, confirmed email and photo can't be set; neutral replies; salted hashes only; confirmation email,
+  sign-in refused until confirmed, confirmation signs in and routes by role; used links don't sign in again; same
+  answer for wrong password and unknown email; field validation; other sites blocked; existing email (password or
+  Google) gets the same answer and an email to the owner; reset: neutral request, 1-hour single-use token, no
+  redirect to other sites, sessions signed out, old password fails, expired link refused; Google users can add a
+  password; rate limit; account deletion; unconfirmed sign-ups cleaned up after 7 days; email sign-up off without a
+  way to send mail.
+- **Browser walkthrough (local preview, local test inbox):** homepage paths and remembered choice, renter sign-up
+  with Student + Working and Show password, field errors, Check your email, landlord sign-up with company, local
+  inbox, confirming (renter → assistant, landlord → dashboard), sign-in (wrong password, success), forgot password
+  (known and unknown email: same message), reset form, password changed, reused link, phone 390 px.
+
+Earlier:
+
 - `npm test`: **437/437** on 2026-10-14. New demo-data checks: Waltham neighborhoods within 4 km; every listing has
   rent basis, utilities, lease, furnishing, laundry and transport; a unique labeled Unsplash photo with credit and
   license; every profile is a senior or grad student with program, intro, 3 interests and an avatar; no gender field,
@@ -290,6 +322,7 @@ Earlier runs:
 - [ ] Run part 11 of the manual test (Quick check-in) on the live site. It adds real responses; that's expected.
 - [x] Deploy and push the demo data refresh (2026-10-14, version `c35940b7…`, no database change).
 - [ ] Try Demo mode on the live site as a renter: a room search, a roommate search, Details on each.
+- [ ] Decide on an email service and sending domain for password accounts (may cost money); then migration 0009, deploy, and a live CPU check.
 - [x] Push the Quick check-in commits to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-checkin`).
 - [x] Push commits `d3d9734` and the deploy record to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-requests`).
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
@@ -330,7 +363,8 @@ one of these is needed:
 | Earlier checkpoint | Git tag `checkpoint-2026-10-12-redesign` |
 | Previous checkpoint | Git tag `checkpoint-2026-10-13-requests` |
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-13-checkin` |
-| This checkpoint (live) | Git tag `checkpoint-2026-10-14-demo-data` |
+| Previous checkpoint (live code) | Git tag `checkpoint-2026-10-14-demo-data` |
+| This checkpoint (local only) | Git tag `checkpoint-2026-10-17-accounts` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 
