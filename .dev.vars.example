@@ -15,3 +15,7 @@ MAPTILER_KEY=
 ANTHROPIC_API_KEY=
 # Optional: claude-opus-5-5 (default), claude-sonnet-5-5 or claude-haiku-5-5
 # ASSISTANT_MODEL=claude-haiku-5-5
+
+# Local development only: account emails go to the local test inbox (http://localhost:8787/dev/inbox) instead of
+# being sent. Never set on the live site (it only works on a localhost address anyway).
+DEV_EMAIL_OUTBOX=1
