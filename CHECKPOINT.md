@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-17 (accounts: Google-only fallback, freeze fix; local only)
+# coHabit project checkpoint: 2026-10-17 (accounts: homepage paths, Google-only sign-in, freeze fix)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -9,12 +9,12 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 | | Count | Where checked |
 |---|---|---|
 | **Real external listings imported** | **0** | Live (table created 2026-10-12, empty). Local: 0. |
-| Real accounts | 12 | Live database, 2026-10-13 |
+| Real accounts | 13 | Live database, 2026-10-17 |
 | Sample (fictional) accounts | 0 | Live: all 36 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
 | Real landlord units | 5 | Live, 2026-10-12 |
 | Sample units | 0 | Live: all 20 deleted 2026-10-06 at the owner's request (restorable, see Rollback points) |
 | "I'm interested" requests | 4 | Live, 2026-10-13 |
-| Quick check-in responses | 0 | Live, 2026-10-13 (table created that day) |
+| Quick check-in responses | 2 | Live, 2026-10-17 (1 points award) |
 | Roommate requests | 0 | Live, 2026-10-13 (table created that day) |
 | Saved questionnaires | 4 | Live, 2026-10-13 |
 | Admins | 1 | Live (the owner) |
@@ -25,12 +25,21 @@ No real listings were imported because no authorized data source exists yet (see
 
 ## Deployment status
 
-**Not deployed: email and password accounts and the sign-in freeze fix** (below) are pushed to GitHub but not
-deployed, and migration 0009 is applied to the local databases only. When deployed, the live site stays Google-only:
-password accounts need an email sender and `PASSWORD_ACCOUNTS=on`, and neither exists there (see ACCOUNTS_SETUP.md).
-
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `c35940b7-6b05-4156-9cf5-c274a3386f0e`, deployed 2026-10-14 with the owner's approval: the demo data refresh
+- **Live version:** `05be52b1-a9aa-4485-8d33-3b94b38e6e02`, deployed 2026-10-17 with the owner's approval: the homepage paths, the account
+  pages (Google only on the live site), and the sign-in freeze fix (commits `3fc6c9d`…`89e8e4d`, tag
+  `checkpoint-2026-10-17-accounts`). Order used: restore point, migration 0009, deploy. Password accounts stay off:
+  the Worker has no email sender and no `PASSWORD_ACCOUNTS` setting (secrets: names checked only). Checked live:
+  - Pages return 200 (home, sign-up, sign-in, forgot and reset, listings, assistant, privacy) and serve the new code.
+  - `/api/config` reports no password sign-in and no test inbox; all five password endpoints, the confirmation and
+    reset links and `/api/dev/outbox` answer 404.
+  - Google sign-in answers in 0.4 s with a Google link, right after a blocked cross-site sign-out (the freeze sequence).
+  - In a browser, signed out: the homepage paths, "Sign up with Google", the Google sign-in panel, and
+    `/forgot-password` going to `/signin`; no password fields anywhere (desktop and phone).
+  - Signed out, the assistant, admin survey and roommate-request APIs return 401.
+  - Not checked: a full Google sign-in with a real account (that needs the owner).
+
+  Before it: `c35940b7-6b05-4156-9cf5-c274a3386f0e`, deployed 2026-10-14 with the owner's approval: the demo data refresh
   (commit `419c826`, tag `checkpoint-2026-10-14-demo-data`). No database change (none pending). Checked live after deploy:
   - Pages return 200 (home, assistant, listings, privacy), and the new photo, avatar and fact-list code, styles and
     privacy wording (Demo mode photos load from Unsplash) are served.
@@ -64,7 +73,11 @@ password accounts need an email sender and `PASSWORD_ACCOUNTS=on`, and neither e
 
   Before it: `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (rooms with no map location shown, commit `27df59b`). The version before it, `d7e38548-66c4-4eab-890c-ac0c692a1bcd`,
   brought the chat assistant (basic mode) and the external listing import tool (commit `a5f8e92`).
-- **Live database (`cohabit-db`):** migrations 0001 to 0008 applied. 0008 was applied on 2026-10-13 with the owner's
+- **Live database (`cohabit-db`):** migrations 0001 to 0009 applied. 0009 was applied on 2026-10-17 with the owner's
+  approval, after a restore point (bookmark `000000a0-00000000-00005107-945d11084f9aa143232ee332dac64224`). It only added two empty, optional columns
+  to `user` (`occupation`, `company`); data was checked before and after (13 users, 13 linked accounts, 6 sessions,
+  5 units, 4 requests, 4 questionnaires, 3 chats, 2 check-in responses, 1 points award: unchanged).
+  Earlier: migrations 0001 to 0008. 0008 was applied on 2026-10-13 with the owner's
   approval, after a restore point (bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16`). It only added two empty tables
   (`survey_responses`, `points_awards`) and their indexes; existing data was checked before and after (12 users,
   5 units, 4 "I'm interested" requests, 4 questionnaires, 3 chats, 1 saved option: unchanged). 0007 was applied on 2026-10-13 with the owner's
@@ -331,8 +344,9 @@ Earlier runs:
 - [ ] Try Demo mode on the live site as a renter: a room search, a roommate search, Details on each.
 - [ ] Decide whether to use a dedicated Gmail account for coHabit's emails (the only $0 option found). If yes: create
       it with 2-Step Verification and an app password, enter it with `wrangler secret put`, and I'll add the SMTP sender.
-- [ ] Approve: migration 0009 on the live database (restore point first) and a deploy (passwords stay off; brings the
-      freeze fix and the new homepage paths). Then, only after live email and speed checks, `PASSWORD_ACCOUNTS=on`.
+- [x] Migration 0009 on the live database (restore point first) and deploy, passwords off (2026-10-17, version `05be52b1…`).
+- [ ] Sign in with Google on the live site once (yours or a teammate's account) to confirm the real flow end to end.
+- [ ] Only after a sender exists and live email and speed checks pass: `PASSWORD_ACCOUNTS=on`.
 - [x] Push the Quick check-in commits to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-checkin`).
 - [x] Push commits `d3d9734` and the deploy record to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-requests`).
 - [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
@@ -362,7 +376,8 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Database before migration 0009 | Time Travel bookmark `000000a0-00000000-00005107-945d11084f9aa143232ee332dac64224` (only added two empty columns, so rolling back the code alone is usually enough) |
 | Database before migration 0008 | Time Travel bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0007 | Time Travel bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c` (only added a column and tables, so rolling back the code alone is usually enough) |
 | Database before migrations 0005 and 0006 | Time Travel bookmark `00000068-00000000-00005103-a85f3ce1468cd45f9f60c37caba86d90` (only added tables, so rolling back the code alone is usually enough) |
@@ -374,7 +389,7 @@ one of these is needed:
 | Previous checkpoint | Git tag `checkpoint-2026-10-13-requests` |
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-13-checkin` |
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-14-demo-data` |
-| This checkpoint (local only) | Git tag `checkpoint-2026-10-17-accounts` |
+| This checkpoint (live) | Git tag `checkpoint-2026-10-17-accounts` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 

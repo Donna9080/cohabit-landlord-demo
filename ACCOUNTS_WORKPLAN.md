@@ -265,6 +265,8 @@ by the live test.
 - **Freeze fixed:** Better Auth is now created only after all checks pass and kept only once ready. The same pattern
   existed in the live code (rare, temporary sign-in hangs after a cross-site sign-out request), so the fix is worth
   deploying even with passwords off.
+- **Deployed 2026-10-17** with the owner's approval (restore point `000000a0-00000000-00005107-945d11084f9aa143232ee332dac64224`, migration 0009, version
+  `05be52b1-a9aa-4485-8d33-3b94b38e6e02`), passwords off; live checks show Google only and no password endpoints.
 - **Email:** no domain on the account; Cloudflare Email Sending needs Workers Paid and a domain; Resend, MailChannels
   and similar need a domain. The only $0 route is a dedicated Gmail account through Gmail's SMTP server with an app
   password (owner's decision; code not written yet).

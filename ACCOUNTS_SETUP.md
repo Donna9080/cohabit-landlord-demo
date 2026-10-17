@@ -163,7 +163,7 @@ pin and the street address never leave the server for approximate units.
 saved location stores `geo_source = "© MapTiler © OpenStreetMap contributors"`. Sample units carry
 `"Sample: neighborhood center, set by hand"` instead (they were placed by hand, not geocoded).
 
-## Email and password accounts (built; off on the live site until email and speed are checked)
+## Email and password accounts (live since 2026-10-17 with passwords off: Google only until email and speed are checked)
 
 The homepage offers two paths, **Find a room or roommate** and **List your space** (remembered in the browser), plus
 **Browse listings** and **Sign in**. Both paths use one account system (Better Auth, the same `user` table and
@@ -732,9 +732,10 @@ Real Google sign-in locally needs your Google client values in `.dev.vars` and
 
 ## Migrations and deploy (exact commands used)
 
-**Pending: migration `0009_password_accounts.sql`** (two optional `user` columns, `occupation` and `company`;
-additive only). Applied to the local databases only. Apply it to the live database (restore point first, with the
-owner's approval) before deploying the email and password code.
+**Migration `0009_password_accounts.sql`** (two optional `user` columns, `occupation` and `company`; additive only)
+was applied to the live database on 2026-10-17 with the owner's approval, after a restore point (bookmark
+`000000a0-00000000-00005107-945d11084f9aa143232ee332dac64224`), before deploying version `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (password accounts off).
+Existing data was unchanged.
 
 **Migration `0008_survey_points.sql`** (adds `survey_responses` and `points_awards`; additive only) was applied to the
 live database on 2026-10-13 with the owner's approval, after a restore point (bookmark
