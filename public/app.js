@@ -13,6 +13,8 @@
 //   /landlord/units/<id>/edit  Edit or delete a unit
 //   /assistant               A renter's chat assistant: rooms and roommates that fit, with reasons
 //   /renter                  A renter's match preferences and matching units
+//   /demo/people             Demo mode: all the made-up roommate profiles, with filters (public, clearly labeled)
+//                            (Demo mode also turns Listings, /renter and /assistant to the made-up data)
 //   /admin                   Read-only user list (admins only; enforced by the server)
 //   /admin/import            Import external listings from an authorized source (admins only)
 (function () {
@@ -254,7 +256,8 @@
     btn.disabled = true;
     btn.textContent = "Sending…";
     try {
-      const d = await api("/api/survey", { method: "POST", body: { id: survey.id, answers: surveyAnswers(), comment: surveyComment(), page: location.pathname } });
+      // demo: a label only, for anyone whose Demo mode lives in this browser (a renter's is read on the server).
+      const d = await api("/api/survey", { method: "POST", body: { id: survey.id, answers: surveyAnswers(), comment: surveyComment(), page: location.pathname, demo: demoOn() } });
       if (survey.points && survey.points.signedIn) {
         survey.points.earned = survey.points.earned || d.awarded;
         survey.points.balance = d.balance;
@@ -815,13 +818,13 @@
           <li><strong>If you are a landlord:</strong> the units you add: name, general area, monthly rent, rooms available, move-in date, description and status. If you choose to add one, the unit's street address and map pin (Massachusetts only), and whether renters see an approximate area or the exact location.</li>
           <li><strong>If you are a renter:</strong> your questionnaire answers: budget range, move-in month, area, rooms needed, sleep schedule, cleanliness, noise, guests, pets and smoking. Also any “I'm interested” requests you send, with your note, and any roommate requests you send or receive, with the introduction and the messages you exchange after one is accepted.</li>
           <li><strong>If you use the assistant:</strong> your chat messages, the answers it learns from them (budget, move-in month, areas, distance from campus, rooms, lease length, lifestyle and chores), the results and confirmation cards it showed you, options you save, and a daily count of AI replies.</li>
-          <li><strong>If you send a Quick check-in</strong> (the optional survey behind the feedback icon): your answers and comment, whether you were signed in and as a landlord or renter, whether the assistant's Demo mode was on, the page you opened it from, and the time. Guests can send it without an account. Signed in, it's linked to your account so coHabit Points are awarded only once. It's kept apart from your matching answers and never used for matching.</li>
+          <li><strong>If you send a Quick check-in</strong> (the optional survey behind the feedback icon): your answers and comment, whether you were signed in and as a landlord or renter, whether Demo mode was on, the page you opened it from, and the time. Guests can send it without an account. Signed in, it's linked to your account so coHabit Points are awarded only once. It's kept apart from your matching answers and never used for matching.</li>
           <li><strong>coHabit Points:</strong> a record of points awarded to your account and why. They are pilot participation points with no cash value, and they can't be redeemed or exchanged for anything yet.</li>
           <li><strong>To keep you signed in:</strong> one cookie that holds your session. It can't be read by scripts and expires after 7 days without use.</li>
           <li><strong>To limit abuse:</strong> short-lived request counters that include your IP address. They are deleted within about a day.</li>
         </ul>
         <p>Apart from a unit's optional address, we do not ask for street addresses, phone numbers, government IDs, dates of birth, payment details or health information. Please don't put them in names or descriptions.</p>
-        <p><strong>Demo mode photos:</strong> the illustrative photos on demo listings load from Unsplash's image servers, which see your IP address and browser like any website. Nothing about you is sent with them. Real listings and everything else load from coHabit.</p>
+        <p><strong>Demo mode photos:</strong> the illustrative photos on demo listings load from Unsplash's image servers, which see your IP address and browser like any website. Nothing about you is sent with them. Real listings and everything else load from coHabit. Demo mode itself is saved with a renter's assistant settings; for anyone else it's remembered only in their browser.</p>
         <p><strong>“Use my location”:</strong> when a renter clicks it, the browser asks for permission. The position is used only in that browser to show nearby listings. It is never sent to coHabit or saved.</p>
 
         <h2>Who can see it</h2>
@@ -1315,6 +1318,7 @@
     ]);
 
   function visibleListings() {
+    if (listingDemo) return filteredDemoListings();
     const q = listingQuery.trim().toLowerCase();
     let list = lastListings.map((u) => ({
       ...u,
@@ -1349,7 +1353,7 @@
 
   function refreshListings() {
     const grid = document.getElementById("listing-grid");
-    if (grid) grid.innerHTML = listingsGrid();
+    if (grid) grid.innerHTML = listingDemo ? demoListingsGrid() : listingsGrid();
     const sort = document.getElementById("listing-sort");
     if (sort) {
       sort.innerHTML = sortOptions().map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
@@ -1392,6 +1396,8 @@
   }
 
   async function listings() {
+    if (demoOn()) return demoListingsPage();
+    listingDemo = false;
     const [{ listings }] = await Promise.all([api("/api/listings"), loadMyInterests()]);
     lastListings = listings;
     listingQuery = "";
@@ -1406,9 +1412,12 @@
         openListingMap();
       },
       html: `
-      <div class="heading">
-        <h1 tabindex="-1">Listings</h1>
-        <p class="muted">${plural(listings.length, "room listing", "room listings")} in Massachusetts.${isRenter() ? "" : ` Looking for a room? <a href="/renter">See which ones match you</a>.`}</p>
+      <div class="heading-row">
+        <div class="heading">
+          <h1 tabindex="-1">Listings</h1>
+          <p class="muted">${plural(listings.length, "room listing", "room listings")} in Massachusetts.${isRenter() ? "" : ` Looking for a room? <a href="/renter">See which ones match you</a>.`}</p>
+        </div>
+        ${demoSwitchHtml()}
       </div>
       ${hasSample ? `<div class="notice notice-info" role="note"><span>Listings tagged <span class="tag">Sample</span> are fictional and can't be contacted.</span></div>` : ""}
       ${listings.some((u) => u.external) ? `<div class="notice notice-info" role="note"><span>Listings tagged <span class="tag tag-external">External</span> come from other websites that allow coHabit to show them. Contact them through the original listing.</span></div>` : ""}
@@ -1476,11 +1485,12 @@
     for (const u of located) {
       const pin = document.createElement("button");
       pin.type = "button";
-      pin.className = "map-pin" + (u.sample ? " map-pin-sample" : u.external ? " map-pin-external" : "");
-      const pinLabel = `${u.name}, ${u.monthly_rent != null ? money(u.monthly_rent) + " a month" : "rent not listed"}${u.sample ? ", sample listing" : u.external ? ", external listing" : ""}. Show details.`;
-      const where = u.location.precision === "exact" ? esc(u.location.address || "Exact location") : "Approximate area";
+      pin.className = "map-pin" + (u.demo ? " map-pin-demo" : u.sample ? " map-pin-sample" : u.external ? " map-pin-external" : "");
+      pin.dataset.id = u.id;
+      const pinLabel = `${u.name}, ${u.monthly_rent != null ? money(u.monthly_rent) + " a month" : "rent not listed"}${u.demo ? ", demo listing, made up" : u.sample ? ", sample listing" : u.external ? ", external listing" : ""}. Show details.`;
+      const where = u.location.precision === "exact" ? esc(u.location.address || "Exact location") : u.demo ? "Made-up spot, approximate area" : "Approximate area";
       const popup = new maplibregl.Popup({ offset: 14, maxWidth: "260px" }).setHTML(
-        `<div class="map-popup">${u.sample ? `<span class="tag">Sample</span>` : u.external ? `<span class="tag tag-external">External · ${esc(u.source.name)}</span>` : ""}<strong>${esc(u.name)}</strong><span>${u.monthly_rent != null ? `${money(u.monthly_rent)}/mo${u.external ? " " + rentBasisLabel(u.rent_basis) : ""}` : "Rent not listed"} · ${esc(u.area)}</span><span class="muted small">${where}</span><button class="btn btn-small" type="button" data-action="jump-listing" data-id="${esc(u.id)}">View listing</button></div>`
+        `<div class="map-popup">${u.demo ? demoTag : u.sample ? `<span class="tag">Sample</span>` : u.external ? `<span class="tag tag-external">External · ${esc(u.source.name)}</span>` : ""}<strong>${esc(u.name)}</strong><span>${u.monthly_rent != null ? `${u.demo ? shareLine(u) : `${money(u.monthly_rent)}/mo`}${u.external ? " " + rentBasisLabel(u.rent_basis) : ""}` : "Rent not listed"} · ${esc(u.area)}</span><span class="muted small">${where}</span><button class="btn btn-small" type="button" data-action="jump-listing" data-id="${esc(u.id)}">View listing</button></div>`
       );
       const marker = new maplibregl.Marker({ element: pin }).setLngLat([u.location.lng, u.location.lat]).setPopup(popup).addTo(listingMap);
       pin.setAttribute("aria-label", pinLabel); // the map library overwrites it
@@ -2074,6 +2084,18 @@
   function matchesHtml(data) {
     lastMatches = data;
     if (data.needsPreferences) return emptyState("Save your preferences first", "Fill in the questionnaire and save to see rooms that match.");
+    if (data.demo) {
+      // Demo mode: the same ranking over the demo listings, shown as the same cards as Listings and the assistant.
+      if (!data.matches.length)
+        return emptyState("No demo listings match your preferences", "Try a wider budget, a different area or another month.", `<button class="btn btn-quiet" type="button" data-action="edit-prefs">Edit preferences</button><a class="btn btn-quiet" href="/listings">Browse all demo listings</a>`);
+      const list = [...data.matches];
+      if (matchSort === "rent") list.sort((a, b) => perPerson(a.unit) - perPerson(b.unit));
+      else if (matchSort === "date") list.sort((a, b) => byDate(a.unit, b.unit));
+      for (const k of [...chatCards.keys()]) if (k.startsWith("mmr:")) chatCards.delete(k);
+      return `<ul class="res-grid" role="list">${list
+        .map((m) => demoRoomCard({ ...m.unit, km: m.km }, { key: `mmr:${m.unit.id}`, pill: `<span class="pill pill-ok" title="Match score out of 100, worked out by coHabit">${m.score}% match</span>`, reasons: m.reasons }))
+        .join("")}</ul>`;
+    }
     if (!data.matches.length)
       return emptyState("No rooms match yet", "Try a wider budget, a different area or another month.", `<button class="btn btn-quiet" type="button" data-action="edit-prefs">Edit preferences</button><a class="btn btn-quiet" href="/listings">Browse all listings</a>`);
     const list = [...data.matches];
@@ -2090,7 +2112,12 @@
   }
 
   function roommatesHtml(data) {
-    if (data.needsPreferences) return emptyState("Save your preferences first", "Roommate matching uses your lifestyle answers.");
+    if (data.needsPreferences) return emptyState("Save your preferences first", "Roommate matching uses your lifestyle answers.", data.demo ? `<a class="btn btn-quiet" href="/demo/people">Browse all demo profiles</a>` : "");
+    if (data.demo) {
+      if (!data.roommates.length)
+        return emptyState("No compatible demo profiles", "None of the made-up people shares your area, timing and lifestyle closely enough. Browse them all to see why.", `<a class="btn btn-quiet" href="/demo/people">Browse all demo profiles</a>`);
+      return `<ul class="res-grid" role="list">${data.roommates.map((m) => personCard(m, `mm:${m.id}`)).join("")}</ul>`;
+    }
     if (!data.optedIn)
       return emptyState(
         "Roommate matching is off",
@@ -2133,8 +2160,9 @@
   async function renterPage() {
     const blocked = gate("renter");
     if (blocked !== undefined) return blocked;
-    const [{ preferences: p }, matches, mates, contacted] = await Promise.all([api("/api/renter/preferences"), api("/api/renter/matches"), api("/api/renter/roommates"), loadMyInterests()]);
+    const [{ preferences: p }, matches, mates, contacted] = await Promise.all([api("/api/renter/preferences"), api("/api/renter/matches"), api("/api/renter/roommates"), loadMyInterests(), loadSavedIndex()]);
     lastRoommates = mates;
+    const demo = !!matches.demo;
     const v = p || { budget_min: "", budget_max: "", move_in_month: "", area: "", rooms_needed: 1 };
     const lifestyle = Object.entries(CHOICES)
       .map(([k, [label, opts]]) => field(k, label, select(k, (p ? [] : [["", "Choose…"]]).concat(opts), v[k] || "")))
@@ -2142,10 +2170,14 @@
     return {
       title: "Your matches",
       html: `
-      <div class="heading">
-        <h1 tabindex="-1">${p ? "Your matches" : "Find your room"}</h1>
-        <p class="muted">${p ? "Rooms and renters that fit the preferences you saved." : "Answer these once. We'll save them so you can come back and edit them."}</p>
+      <div class="heading-row">
+        <div class="heading">
+          <h1 tabindex="-1">${p ? "Your matches" : "Find your room"}</h1>
+          <p class="muted">${p ? "Rooms and renters that fit the preferences you saved." : "Answer these once. We'll save them so you can come back and edit them."}</p>
+        </div>
+        ${demoSwitchHtml()}
       </div>
+      ${demo ? demoBannerHtml("Matching rooms and possible roommates below are made-up demo listings and profiles, matched to your real preferences with the same rules. Your preferences, requests and contacts stay real and unchanged.") : ""}
       ${p ? prefsSummary(p) : ""}
       <form class="form" id="prefs-form" novalidate${p ? " hidden" : ""}>
         <fieldset>
@@ -2183,8 +2215,8 @@
       </form>
       <section aria-labelledby="matches-heading">
         <div class="heading-row">
-          <div class="section-heading"><h2 id="matches-heading">Matching rooms</h2><span class="muted small" id="match-count">${matches.matches.length ? plural(matches.matches.length, "match", "matches") : ""}</span></div>
-          ${matches.matches.length > 1 ? sortSelect("match-sort", matchSort, [["best", "Best match"], ["rent", "Lowest rent"], ["date", "Soonest move-in"]]) : ""}
+          <div class="section-heading"><h2 id="matches-heading">Matching rooms${demo ? ` ${demoTag}` : ""}</h2><span class="muted small" id="match-count">${demo && !matches.needsPreferences ? `${matches.matches.length} of ${matches.total} demo listings match` : matches.matches.length ? plural(matches.matches.length, "match", "matches") : ""}</span></div>
+          ${matches.matches.length > 1 ? sortSelect("match-sort", matchSort, [["best", "Best match"], ["rent", demo ? "Lowest rent per person" : "Lowest rent"], ["date", "Soonest move-in"]]) : ""}
         </div>
         <div id="matches">${matchesHtml(matches)}</div>
       </section>
@@ -2193,7 +2225,10 @@
         <div id="contacted">${contactedHtml(contacted)}</div>
       </section>
       <section aria-labelledby="roommates-heading">
-        <div class="section-heading"><h2 id="roommates-heading">Possible roommates</h2><span class="muted small" id="roommate-count">${mates.roommates.length ? plural(mates.roommates.length, "person", "people") : ""}</span></div>
+        <div class="heading-row">
+          <div class="section-heading"><h2 id="roommates-heading">Possible roommates${demo ? ` ${demoTag}` : ""}</h2><span class="muted small" id="roommate-count">${demo && !mates.needsPreferences ? `${mates.roommates.length} of ${mates.total} demo profiles are compatible` : mates.roommates.length ? plural(mates.roommates.length, "person", "people") : ""}</span></div>
+          ${demo ? `<a class="btn btn-quiet btn-small" href="/demo/people">Browse all demo profiles</a>` : ""}
+        </div>
         <div id="roommates">${roommatesHtml(mates)}</div>
       </section>
       <section aria-labelledby="requests-heading">
@@ -2238,6 +2273,341 @@
       showErrors(form, e);
       btn.disabled = false;
       btn.textContent = label;
+    }
+  }
+
+  // ── Demo mode across the site: Listings, My matches, the assistant and the demo profile page ──
+  // One switch. A renter's is saved on the server (the same setting the assistant uses), so every page agrees and
+  // nothing else changes: chats, answers, preferences and real saved options stay as they are. Anyone else's lives
+  // in this browser only. Demo data comes from /api/demo/*, never mixed into real listings or people.
+  const DEMO_KEY = "cohabit.demo";
+  function demoOn() {
+    if (!cfg.demoData) return false;
+    if (isRenter()) return !!me.demo;
+    try {
+      return localStorage.getItem(DEMO_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+  async function setDemo(on) {
+    if (isRenter()) {
+      const d = await api("/api/assistant/demo", { method: "POST", body: { on } });
+      me.demo = d.demo;
+      return d;
+    }
+    try {
+      if (on) localStorage.setItem(DEMO_KEY, "1");
+      else localStorage.removeItem(DEMO_KEY);
+    } catch {}
+    return { demo: on };
+  }
+  const demoSwitchHtml = () =>
+    cfg.demoData
+      ? `<button class="demo-switch" type="button" role="switch" data-action="demo-switch" aria-checked="${demoOn()}"><span class="demo-knob" aria-hidden="true"></span>Demo mode</button>`
+      : "";
+  async function switchDemo(button) {
+    if (document.getElementById("chat-log") && chat) return toggleDemo(); // the assistant keeps its page in place
+    if (button) button.disabled = true;
+    const on = !demoOn();
+    try {
+      await setDemo(on);
+      toast(on ? "Demo mode on: made-up listings and people." : "Demo mode off: real listings and people again.");
+      render(false);
+    } catch (e) {
+      if (button) button.disabled = false;
+      if (e.status === 401) return showView(errorView(e));
+      toast(e.message);
+    }
+  }
+  const demoBannerHtml = (what) =>
+    `<div class="demo-banner" role="note"><strong>Demo mode.</strong> ${what} None of it is real: requests are previews (“Demo only, nothing sent”) and nobody is notified.${isRenter() ? " Save works and keeps demo cards apart from real ones." : ""} <button class="link-button" type="button" data-action="demo-switch">Turn off</button></div>`;
+
+  // Save buttons for demo cards, the same on every page. Which demo cards are saved comes from the server.
+  let savedIndex = new Map(); // "room:demo-12" -> saved option id
+  async function loadSavedIndex() {
+    if (!isRenter()) return (savedIndex = new Map());
+    try {
+      const { saved } = await api("/api/assistant/saved");
+      savedIndex = new Map(saved.map((s) => [`${s.kind}:${s.targetId}`, s.id]));
+    } catch {
+      savedIndex = new Map();
+    }
+  }
+  function demoSaveButton(kind, id) {
+    if (!isRenter()) return "";
+    const savedId = savedIndex.get(`${kind}:${id}`);
+    return savedId
+      ? `<button class="btn btn-small btn-quiet" type="button" data-action="demo-save" data-kind="${kind}" data-target="${esc(id)}" data-saved="${esc(savedId)}" aria-pressed="true">Saved ✓</button>`
+      : `<button class="btn btn-small btn-quiet" type="button" data-action="demo-save" data-kind="${kind}" data-target="${esc(id)}" aria-pressed="false" title="A bookmark for you. Nobody is told.">Save</button>`;
+  }
+  async function toggleDemoSave(button) {
+    const { kind, target, saved } = button.dataset;
+    button.disabled = true;
+    try {
+      if (saved) await api(`/api/assistant/saved/${encodeURIComponent(saved)}`, { method: "DELETE" });
+      else await api("/api/assistant/saved", { method: "POST", body: kind === "room" ? { kind, unitId: target } : { kind, demoId: target } });
+      toast(saved ? "Removed from saved." : "Saved. It's under Saved in the assistant while Demo mode is on.");
+    } catch (e) {
+      button.disabled = false;
+      if (e.status === 401) return showView(errorView(e));
+      return toast(e.message);
+    }
+    await loadSavedIndex();
+    document.querySelectorAll(`[data-action="demo-save"][data-target="${CSS.escape(target)}"]`).forEach((b) => (b.outerHTML = demoSaveButton(kind, target)));
+    if (document.getElementById("chat-log")) reloadChat();
+  }
+
+  // A demo room as a card: the same card in Listings and My matches (the assistant adds its own reasons).
+  const shareLine = (u) =>
+    u.rent_basis === "unit" && (u.bedrooms || 1) > 1
+      ? `${money(u.monthly_rent)}/mo whole place (${money(Math.round(u.monthly_rent / u.bedrooms))} each for ${u.bedrooms})`
+      : priceLine(u);
+  function demoRoomCard(u, { key, pill = "", reasons = [] }) {
+    chatCards.set(key, { unit: u, km: u.km, fits: reasons, misses: [] });
+    return `
+      <li>
+        <article class="res-card is-demo" id="listing-${esc(u.id)}" tabindex="-1" aria-label="${esc(u.name)}, demo listing">
+          ${roomPicture(u)}
+          <div class="res-body">
+            <div class="res-card-top">${pill}${demoTag}</div>
+            <h3 class="mini-title">${esc(u.name)}</h3>
+            <p class="small muted">${esc(u.area)} · about ${u.km} km from Brandeis</p>
+            <p class="mini-stats">${shareLine(u)} · from ${fmtDate(u.move_in_date)}</p>
+            <p class="small muted">${esc(u.kind)} · ${esc(u.lease.label)} · ${u.furnished ? "Furnished" : "Unfurnished"}</p>
+            ${reasons.length ? `<ul class="fit-list" aria-label="Why it fits">${reasons.slice(0, 2).map((r) => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+            <div class="mini-actions">
+              <button class="btn btn-small" type="button" data-action="chat-details" data-key="${esc(key)}">Details</button>
+              ${demoSaveButton("room", u.id)}
+              ${key.startsWith("lst:") ? `<button class="btn btn-small btn-quiet" type="button" data-action="demo-on-map" data-id="${esc(u.id)}">On map</button>` : ""}
+            </div>
+          </div>
+        </article>
+      </li>`;
+  }
+
+  // ── Listings in Demo mode: all 100 demo listings, with filters and counts ──
+  const HOOD_NAMES = ["near Brandeis", "Warrendale", "Moody Street", "South Side", "Downtown", "The Highlands", "Prospect Hill", "Lakeview"];
+  const KINDS = ["Private room", "Shared room", "Studio", "Whole apartment", "Sublet", "Lease takeover", "Replacing a roommate"];
+  const LEASES = [["short", "Up to 6 months"], ["academic", "7 to 10 months"], ["year", "A year or more"]];
+  const leaseBucket = (m) => (m <= 6 ? "short" : m <= 10 ? "academic" : "year");
+  const perPerson = (u) => (u.rent_basis === "unit" ? Math.round(u.monthly_rent / Math.max(1, u.bedrooms || 1)) : u.monthly_rent);
+  const monthsApart = (ymd, ym) => (Number(ymd.slice(0, 4)) - Number(ym.slice(0, 4))) * 12 + Number(ymd.slice(5, 7)) - Number(ym.slice(5, 7));
+  const DEMO_FILTERS0 = { q: "", hood: "", kind: "", maxRent: "", month: "", lease: "", furnished: "", rooms: "", sort: "date" };
+  const demoFilters = { ...DEMO_FILTERS0 }; // kept while moving between pages
+  let demoListingsData = [];
+  let listingDemo = false;
+
+  function filteredDemoListings() {
+    const f = demoFilters;
+    const q = f.q.trim().toLowerCase();
+    const list = demoListingsData.filter(
+      (u) =>
+        (!q || `${u.name} ${u.area} ${u.kind} ${u.description}`.toLowerCase().includes(q)) &&
+        (!f.hood || u.area === `Waltham, MA (${f.hood})`) &&
+        (!f.kind || u.kind === f.kind) &&
+        (!f.maxRent || perPerson(u) <= Number(f.maxRent)) &&
+        // The same window the matching uses: available in that month or the month before.
+        (!f.month || [0, -1].includes(monthsApart(u.move_in_date, f.month))) &&
+        (!f.lease || leaseBucket(u.lease.months) === f.lease) &&
+        (!f.furnished || String(u.furnished) === f.furnished) &&
+        (!f.rooms || u.rooms_available >= Number(f.rooms))
+    );
+    const order = f.sort === "rent" ? (a, b) => perPerson(a) - perPerson(b) || a.id.localeCompare(b.id) : f.sort === "near" ? (a, b) => a.km - b.km : (a, b) => a.move_in_date.localeCompare(b.move_in_date) || a.id.localeCompare(b.id);
+    return list.sort(order);
+  }
+  const demoFiltersActive = () => Object.keys(DEMO_FILTERS0).some((k) => k !== "sort" && demoFilters[k] !== DEMO_FILTERS0[k]);
+
+  const demoListingCount = (n) =>
+    `Showing ${n} of ${demoListingsData.length} demo listings${demoFiltersActive() ? ` <button class="link-button" type="button" data-action="demo-filters-clear">Clear filters</button>` : ""}`;
+  function demoListingsGrid() {
+    const list = filteredDemoListings();
+    const count = document.getElementById("listing-count");
+    if (count) count.innerHTML = demoListingCount(list.length);
+    if (mapOpen) drawListingMarkers(list);
+    if (!list.length)
+      return emptyState("No demo listings match these filters", "Try a higher rent, another neighborhood or month, or clear the filters.", `<button class="btn btn-quiet" type="button" data-action="demo-filters-clear">Clear filters</button>`);
+    return `<ul class="res-grid" role="list">${list.map((u) => demoRoomCard(u, { key: `lst:${u.id}` })).join("")}</ul>`;
+  }
+
+  const opt = (value, label, current) => `<option value="${esc(value)}"${String(current) === String(value) ? " selected" : ""}>${esc(label)}</option>`;
+  const filterSelect = (name, label, options, current) =>
+    `<label class="filter"><span>${label}</span><select name="${name}">${opt("", "Any", current)}${options.map(([v, l]) => opt(v, l, current)).join("")}</select></label>`;
+
+  async function demoListingsPage() {
+    const [d] = await Promise.all([api("/api/demo/listings"), loadSavedIndex(), loadMyInterests()]);
+    demoListingsData = d.listings;
+    listingDemo = true;
+    mapOpen = false;
+    const f = demoFilters;
+    return {
+      title: "Listings",
+      mount: () => {
+        document.getElementById("listing-count").innerHTML = demoListingCount(filteredDemoListings().length);
+        openListingMap();
+      },
+      html: `
+      <div class="heading-row">
+        <div class="heading">
+          <h1 tabindex="-1">Listings</h1>
+          <p class="muted">${plural(d.total, "made-up room listing", "made-up room listings")} in Waltham, for trying coHabit.</p>
+        </div>
+        ${demoSwitchHtml()}
+      </div>
+      ${demoBannerHtml(`These ${d.total} listings, their photos and map spots are made up. Photos are illustrative stock photos of similar rooms.`)}
+      <form class="filters" id="demo-filters" role="search" aria-label="Filter demo listings" novalidate>
+        <label class="filter filter-wide"><span>Search</span><input type="search" name="q" value="${esc(f.q)}" placeholder="Porch, furnished, near campus…" autocomplete="off" /></label>
+        ${filterSelect("hood", "Neighborhood", HOOD_NAMES.map((h) => [h, h]), f.hood)}
+        ${filterSelect("kind", "Type", KINDS.map((k) => [k, k]), f.kind)}
+        <label class="filter"><span>Rent per person up to</span><input type="number" name="maxRent" min="0" step="50" inputmode="numeric" value="${esc(f.maxRent)}" placeholder="Any" /></label>
+        <label class="filter"><span>Move-in month</span><input type="month" name="month" value="${esc(f.month)}" /></label>
+        ${filterSelect("lease", "Lease", LEASES, f.lease)}
+        ${filterSelect("furnished", "Furnishing", [["true", "Furnished"], ["false", "Unfurnished"]], f.furnished)}
+        ${filterSelect("rooms", "Rooms free", [["2", "2 or more"], ["3", "3 or more"]], f.rooms)}
+        <label class="filter"><span>Sort by</span><select name="sort">${opt("date", "Soonest move-in", f.sort)}${opt("rent", "Lowest rent per person", f.sort)}${opt("near", "Nearest to Brandeis", f.sort)}</select></label>
+      </form>
+      <p class="small muted">Rent per person splits a whole place across its bedrooms. Move-in month shows listings free that month or a month earlier, as matching does.</p>
+      <p class="muted small" id="listing-count" role="status"></p>
+      <div class="map-panel" id="listing-map" role="region" aria-label="Map of demo listings (made-up spots)"><div class="map-canvas" id="listing-map-canvas"></div></div>
+      <p class="small muted">Dashed pins are made-up spots, shown as approximate areas about 500 m wide.</p>
+      <div id="listing-grid">${demoListingsGrid()}</div>`,
+    };
+  }
+
+  function readDemoFilters(form) {
+    for (const k of Object.keys(DEMO_FILTERS0)) if (form.elements[k]) demoFilters[k] = form.elements[k].value;
+    const grid = document.getElementById("listing-grid");
+    if (grid) grid.innerHTML = demoListingsGrid();
+  }
+
+  function showOnListingMap(id) {
+    const marker = mapMarkers.find((m) => m.getElement().dataset.id === id);
+    const panel = document.getElementById("listing-map");
+    if (!marker || !listingMap || !panel) return toast("The map isn't available right now.");
+    panel.scrollIntoView({ behavior: "smooth", block: "center" });
+    listingMap.easeTo({ center: marker.getLngLat(), zoom: Math.max(listingMap.getZoom(), 14), duration: 400 });
+    mapMarkers.forEach((m) => m.getPopup() && m.getPopup().isOpen() && m.togglePopup());
+    marker.togglePopup();
+  }
+
+  // ── All demo profiles: the 197 that chose to be found, with filters and counts ──
+  const PEOPLE_FILTERS0 = { q: "", hood: "", month: "", level: "", sleep_schedule: "", cleanliness: "", noise: "", pets: "", smoking: "", only: "", sort: "best" };
+  const peopleFilters = { ...PEOPLE_FILTERS0 };
+  let demoPeople = null;
+  const LEVELS = [["senior", "Seniors"], ["masters", "Master's students"], ["phd", "PhD students"], ["mba", "MBA students"]];
+  const levelOf = (program) => (/^MBA|MBA student/.test(program) ? "mba" : /PhD/.test(program) ? "phd" : /master's/i.test(program) ? "masters" : "senior");
+
+  function filteredPeople() {
+    const f = peopleFilters;
+    const q = f.q.trim().toLowerCase();
+    const list = demoPeople.people.filter((p) => {
+      const a = p.answers;
+      return (
+        (!q || `${p.firstName} ${p.program} ${(p.interests || []).join(" ")} ${p.intro || ""}`.toLowerCase().includes(q)) &&
+        (!f.hood || a.looking_in.includes(f.hood)) &&
+        (!f.month || a.move_in_month === f.month) &&
+        (!f.level || levelOf(p.program) === f.level) &&
+        ["sleep_schedule", "cleanliness", "noise", "pets", "smoking"].every((k) => !f[k] || a[k] === f[k]) &&
+        (!f.only || p.compatible === true)
+      );
+    });
+    const byName = (a, b) => a.firstName.localeCompare(b.firstName);
+    const order =
+      f.sort === "name"
+        ? byName
+        : f.sort === "month"
+          ? (a, b) => a.answers.move_in_month.localeCompare(b.answers.move_in_month) || byName(a, b)
+          : (a, b) => (b.score ?? -1) - (a.score ?? -1) || byName(a, b);
+    return list.sort(order);
+  }
+  const peopleFiltersActive = () => Object.keys(PEOPLE_FILTERS0).some((k) => k !== "sort" && peopleFilters[k] !== PEOPLE_FILTERS0[k]);
+
+  const peopleCount = (list) =>
+    `Showing ${list.length} of ${demoPeople.shown} demo profiles${demoPeople.compared ? ` · ${demoPeople.people.filter((p) => p.compatible).length} compatible with your preferences` : ""} · ${demoPeople.hidden} more chose not to be found${peopleFiltersActive() ? ` <button class="link-button" type="button" data-action="people-filters-clear">Clear filters</button>` : ""}`;
+  function demoPeopleGrid() {
+    const list = filteredPeople();
+    const count = document.getElementById("people-count");
+    if (count) count.innerHTML = peopleCount(list);
+    for (const k of [...chatCards.keys()]) if (k.startsWith("ppl:")) chatCards.delete(k);
+    if (!list.length)
+      return emptyState("No demo profiles match these filters", "Try another month or neighborhood, or clear the filters.", `<button class="btn btn-quiet" type="button" data-action="people-filters-clear">Clear filters</button>`);
+    return `<ul class="res-grid" role="list">${list.map((p) => personCard(p, `ppl:${p.id}`)).join("")}</ul>`;
+  }
+
+  async function demoPeoplePage() {
+    if (!cfg.demoData) return messageView("Demo mode isn't available", "The made-up profiles are switched off on this site right now.", `<a class="btn" href="/listings">See listings</a>`);
+    const head = (sub) => `
+      <div class="heading-row">
+        <div class="heading"><h1 tabindex="-1">Demo roommate profiles</h1><p class="muted">${sub}</p></div>
+        ${demoSwitchHtml()}
+      </div>`;
+    if (!demoOn())
+      return {
+        title: "Demo profiles",
+        html: `${head("Made-up seniors and grad students looking in Waltham, for trying coHabit.")}${emptyState("Demo mode is off", "Turn on Demo mode to browse the made-up profiles. Real people are only shown through roommate matching, never here.", `<button class="btn" type="button" data-action="demo-switch">Turn on Demo mode</button>`)}`,
+      };
+    const [d] = await Promise.all([api("/api/demo/people"), loadSavedIndex()]);
+    demoPeople = d;
+    const f = peopleFilters;
+    const months = [...new Set(d.people.map((p) => p.answers.move_in_month))].sort();
+    const life = (k, label, opts) => filterSelect(k, label, opts, f[k]);
+    return {
+      title: "Demo profiles",
+      html: `
+      ${head(`${d.shown} made-up seniors and grad students looking in Waltham, for trying coHabit.`)}
+      ${demoBannerHtml("These profiles are fictional people with illustrated avatars, not students.")}
+      ${d.compared ? "" : `<p class="small muted">${isRenter() ? `<a href="/renter">Save your preferences</a> to see who's compatible with you, worked out by coHabit's matching.` : "Sign in as a renter and save your preferences to see who's compatible with you."}</p>`}
+      <form class="filters" id="people-filters" role="search" aria-label="Filter demo profiles" novalidate>
+        <label class="filter filter-wide"><span>Search</span><input type="search" name="q" value="${esc(f.q)}" placeholder="Name, program or interest" autocomplete="off" /></label>
+        ${filterSelect("hood", "Looking in", HOOD_NAMES.map((h) => [h, h]), f.hood)}
+        ${filterSelect("month", "Move-in month", months.map((m) => [m, fmtDate(m)]), f.month)}
+        ${filterSelect("level", "Program", LEVELS, f.level)}
+        ${life("sleep_schedule", "Sleep", CHOICES.sleep_schedule[1])}
+        ${life("cleanliness", "Tidiness", CHOICES.cleanliness[1])}
+        ${life("noise", "Noise", CHOICES.noise[1])}
+        ${life("pets", "Pets", [["no_pets", "No pets, please"], ["ok_with_pets", "OK with pets"], ["have_pets", "Has a pet"]])}
+        ${life("smoking", "Smoking", [["no_smoking", "No smoking"], ["outside_ok", "OK outside"], ["smoker", "Smokes"]])}
+        ${d.compared ? `<label class="filter filter-check"><input type="checkbox" name="only" value="1"${f.only ? " checked" : ""} /><span>Only compatible with me</span></label>` : ""}
+        <label class="filter"><span>Sort by</span><select name="sort">${opt("best", d.compared ? "Best match" : "Name", f.sort)}${opt("name", "Name", f.sort)}${opt("month", "Move-in month", f.sort)}</select></label>
+      </form>
+      <p class="muted small" id="people-count" role="status"></p>
+      <div id="people-grid">${demoPeopleGrid()}</div>`,
+      mount: () => (document.getElementById("people-count").innerHTML = peopleCount(filteredPeople())),
+    };
+  }
+
+  function readPeopleFilters(form) {
+    for (const k of Object.keys(PEOPLE_FILTERS0)) {
+      const el = form.elements[k];
+      if (el) peopleFilters[k] = el.type === "checkbox" ? (el.checked ? "1" : "") : el.value;
+    }
+    document.getElementById("people-grid").innerHTML = demoPeopleGrid();
+  }
+
+  // Admin: Demo mode status and removing bookmarks to demo cards.
+  function adminDemoHtml(d) {
+    return `
+      <section class="summary" aria-labelledby="demo-admin-heading">
+        <div class="heading-row"><div class="section-heading"><h2 id="demo-admin-heading">Demo mode</h2><span class="muted small">${d.on ? "On" : "Off (DEMO_DATA=off)"}</span></div>
+          <button class="btn btn-quiet" type="button" data-action="demo-cleanup"${d.savedDemoCards ? "" : " disabled"}>Remove saved demo cards</button></div>
+        <dl class="tiles">
+          ${tile("Demo listings", d.counts.listings, "in code, never in the database")}
+          ${tile("Demo profiles", d.counts.people, `${d.counts.shown} shown, ${d.counts.people - d.counts.shown} hidden by choice`)}
+          ${tile("Saved demo cards", d.savedDemoCards, "renters' bookmarks to demo ids")}
+          ${tile("Renters with Demo mode on", d.rentersWithDemoOn)}
+        </dl>
+        <p class="hint">Demo data is never counted in the numbers above this section. Removing saved demo cards deletes only bookmarks that point at demo ids; real saved options, listings and accounts aren't touched.</p>
+      </section>`;
+  }
+  async function cleanupDemo() {
+    const ok = await confirmDialog({ title: "Remove saved demo cards?", text: "This deletes every renter's bookmarks to demo listings and profiles. Real saved options aren't touched. It can't be undone.", confirmLabel: "Remove", danger: true });
+    if (!ok) return;
+    try {
+      const d = await api("/api/admin/demo/cleanup", { method: "POST", body: { confirm: "REMOVE" } });
+      toast(`Removed ${plural(d.removed, "saved demo card", "saved demo cards")}.`);
+      render(false);
+    } catch (e) {
+      toast(e.message);
     }
   }
 
@@ -2297,17 +2667,18 @@
       return `<li class="mini-card is-gone"><p class="small muted">${s.kind === "room" ? "This room is no longer listed." : "This person is no longer looking for roommates."}</p>${unsaveButton(s.savedId)}</li>`;
     }
     if (s.kind === "person") {
+      // A demo person keeps their illustrated avatar and opens the same Details as everywhere else.
       return `
-        <li class="mini-card">
-          <div class="mini-top"><span class="avatar-pic avatar-sm" aria-hidden="true">${esc(initials(s.firstName))}</span><span class="name">${esc(s.firstName)}</span>${s.sample ? `<span class="tag">Sample</span>` : ""}</div>
-          <div class="mini-actions">${unsaveButton(s.savedId)}</div>
+        <li class="mini-card${s.demo ? " is-demo" : ""}">
+          <div class="mini-top">${s.demo ? personAvatar(s).replace("avatar-pic", "avatar-pic avatar-sm") : `<span class="avatar-pic avatar-sm" aria-hidden="true">${esc(initials(s.firstName))}</span>`}<span class="name">${esc(s.firstName)}</span>${s.demo ? demoTag : ""}${s.sample ? `<span class="tag">Sample</span>` : ""}</div>
+          <div class="mini-actions">${s.demo ? `<button class="btn btn-small btn-quiet" type="button" data-action="person-details" data-key="${esc(key)}">Details</button>` : ""}${unsaveButton(s.savedId)}</div>
         </li>`;
     }
     const u = s.unit;
     return `
-      <li class="mini-card">
-        <div class="mini-top"><h3 class="mini-title">${esc(u.name)}</h3>${u.sample ? `<span class="tag">Sample</span>` : ""}${myInterests.has(u.id) ? `<span class="badge-status">Request sent</span>` : ""}</div>
-        <p class="small muted">${money(u.monthly_rent)}/mo · ${esc(u.area)}</p>
+      <li class="mini-card${u.demo ? " is-demo" : ""}">
+        <div class="mini-top"><h3 class="mini-title">${esc(u.name)}</h3>${u.demo ? demoTag : ""}${u.sample ? `<span class="tag">Sample</span>` : ""}${myInterests.has(u.id) ? `<span class="badge-status">Request sent</span>` : ""}</div>
+        <p class="small muted">${u.demo ? shareLine(u) : `${money(u.monthly_rent)}/mo`} · ${esc(u.area)}</p>
         <div class="mini-actions"><button class="btn btn-small btn-quiet" type="button" data-action="chat-details" data-key="${esc(key)}">Details</button>${unsaveButton(s.savedId)}</div>
       </li>`;
   }
@@ -2408,10 +2779,10 @@
     const key = `res:${c.ref}`;
     chatCards.set(key, c);
     const u = c.unit;
-    const save = c.savedId
-      ? unsaveButton(c.savedId)
-      : u.demo
-        ? ""
+    const save = u.demo
+      ? demoSaveButton("room", u.id)
+      : c.savedId
+        ? unsaveButton(c.savedId)
         : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="room" data-unit="${esc(u.id)}" aria-pressed="false" title="A bookmark for you. Nobody is told.">Save</button>`;
     return `
       <li>
@@ -2455,19 +2826,29 @@
 
   function personCard(c, key, { save = true } = {}) {
     chatCards.set(key, c);
-    const saveBtn = !save || c.demo ? "" : c.savedId
-      ? unsaveButton(c.savedId)
-      : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="person" data-ref="${esc(c.ref)}" data-first="${esc(c.firstName)}" aria-pressed="false" title="A bookmark for you. Nobody is told.">Save</button>`;
+    const saveBtn = c.demo
+      ? demoSaveButton("person", c.id)
+      : !save
+        ? ""
+        : c.savedId
+          ? unsaveButton(c.savedId)
+          : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="person" data-ref="${esc(c.ref)}" data-first="${esc(c.firstName)}" aria-pressed="false" title="A bookmark for you. Nobody is told.">Save</button>`;
+    // Demo profiles on the profile page may not be compared (no saved preferences) or may not be a match; they say so.
+    const scored = c.score != null;
+    const scoreText = scored ? `${c.score}% compatible` : c.compatible === false ? "Not a match for you" : "Not compared with you";
+    const pill = scored ? matchPill(c.match || (c.mainMiss ? "partial" : "exact"), true) : c.compatible === false ? `<span class="pill pill-off">Not a match</span>` : "";
+    const why = c.compatible === false && c.notMatching && c.notMatching.length ? `<ul class="miss-list" aria-label="Why it's not a match"><li>${esc(c.notMatching[0])}</li></ul>` : shortReasons(c);
     return `
       <li>
-        <article class="res-card person-card${c.demo ? " is-demo" : ""}" data-ref="${esc(c.ref || "")}" tabindex="-1" aria-label="${esc(c.firstName)}">
+        <article class="res-card person-card${c.demo ? " is-demo" : ""}" data-ref="${esc(c.ref || "")}" tabindex="-1" aria-label="${esc(c.firstName)}${c.demo ? ", demo profile" : ""}">
           <div class="person-head">
             ${personAvatar(c)}
-            <div class="person-name"><h3 class="mini-title">${esc(c.firstName)}</h3><span class="small muted" title="Compatibility score out of 100, worked out by coHabit">${c.score}% compatible</span></div>
+            <div class="person-name"><h3 class="mini-title">${esc(c.firstName)}</h3><span class="small muted" title="Compatibility score out of 100, worked out by coHabit">${scoreText}</span></div>
           </div>
           ${c.about ? `<p class="small muted">${esc(c.about)}</p>` : ""}
-          <div class="res-card-top">${matchPill(c.match || (c.mainMiss ? "partial" : "exact"), true)}${c.demo ? demoTag : ""}${c.sample ? sampleTagSmall : ""}${requestBadge(c.request)}</div>
-          ${shortReasons(c)}
+          ${c.demo && c.details ? `<p class="small muted">${esc(c.details.area)} · ${esc(c.details.moveIn)} · ${esc(c.details.budget)}</p>` : ""}
+          <div class="res-card-top">${pill}${c.demo ? demoTag : ""}${c.sample ? sampleTagSmall : ""}${requestBadge(c.request)}</div>
+          ${why}
           <div class="mini-actions">
             ${personPrimary(c, key)}
             <button class="btn btn-small btn-quiet" type="button" data-action="person-details" data-key="${esc(key)}">Details</button>
@@ -2593,7 +2974,7 @@
     const items = resShowAll ? people.items : people.items.slice(0, VISIBLE);
     const more = !resShowAll && people.items.length > VISIBLE ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${people.items.length - VISIBLE} more</button>` : "";
     return {
-      head: `<div class="res-head"><div><h2 class="res-title">Roommates</h2><p class="small muted">${people.total === 1 ? "1 person fits" : `${people.total} people fit`}: ${exactSplit(people.total, people.exact, true)}. Only students who chose to be found.</p></div></div>`,
+      head: `<div class="res-head"><div><h2 class="res-title">Roommates</h2><p class="small muted">${people.total === 1 ? "1 person fits" : `${people.total} people fit`}: ${exactSplit(people.total, people.exact, true)}. ${chat.demo ? `Made-up profiles only. <a href="/demo/people">Browse all demo profiles</a>` : "Only students who chose to be found."}</p></div></div>`,
       list:
         groupedCards(items, (c) => personCard(c, `res:${c.ref}`), {
           exactLabel: "Strong matches",
@@ -2611,7 +2992,7 @@
     for (const k of [...chatCards.keys()]) if (k.startsWith("res:")) chatCards.delete(k);
     const r = chat.results;
     document.getElementById("res-demo").innerHTML = chat.demo
-      ? `<div class="demo-banner" role="note"><strong>Demo mode.</strong> These 15 listings and 20 people are made up so you can try coHabit. None of them is real, nothing can be saved, and nobody gets contacted. <button class="link-button" type="button" data-action="demo-toggle">Turn off</button></div>`
+      ? demoBannerHtml(`Results here come from ${cfg.demoCounts ? `${cfg.demoCounts.listings} made-up listings and ${cfg.demoCounts.shown} made-up profiles` : "made-up listings and profiles"} in Waltham, matched to your answers with the usual rules. Your chat and answers stay as they are.`)
       : "";
     document.getElementById("demo-switch").setAttribute("aria-checked", String(!!chat.demo));
     document.getElementById("res-chips").innerHTML = prefChipsHtml();
@@ -2773,12 +3154,11 @@
   async function toggleDemo() {
     try {
       const d = await api("/api/assistant/demo", { method: "POST", body: { on: !chat.demo } });
-      chat.demo = d.demo;
-      chat.results = d.results;
+      me.demo = d.demo; // the same switch as on Listings and My matches
       resSelected = null;
       resShowAll = false;
-      if (d.event) chat.messages.push(d.event);
-      refreshChat();
+      // Reloaded so the saved list switches too (demo saves show only in Demo mode). The chat and answers stay.
+      await reloadChat();
       toast(d.demo ? "Demo mode on: made-up listings and people." : "Demo mode off: real listings and people again.");
     } catch (e) {
       if (e.status === 401) return showView(errorView(e));
@@ -2952,7 +3332,8 @@
     }
     const blocked = gate("renter");
     if (blocked !== undefined) return blocked;
-    const [state] = await Promise.all([api("/api/assistant"), loadMyInterests()]);
+    const [state] = await Promise.all([api("/api/assistant"), loadMyInterests(), loadSavedIndex()]);
+    me.demo = !!state.demo;
     chat = state;
     resSelected = null;
     resShowAll = false;
@@ -3042,7 +3423,9 @@
   }
 
   async function reloadChat() {
-    chat = await api("/api/assistant");
+    const [state] = await Promise.all([api("/api/assistant"), loadSavedIndex()]);
+    chat = state;
+    me.demo = !!state.demo;
     refreshChat();
   }
 
@@ -3157,7 +3540,8 @@
       ${u.description ? `<p class="desc">${esc(u.description)}</p>` : `<p class="small muted">No description.</p>`}
       ${demoFacts(u)}
       ${c.fits && (c.fits.length || c.misses.length) ? `<h3 class="details-h">How it fits</h3>${fitLists(c)}` : ""}
-      ${u.demo ? `<p class="hint">Demo listing: made up so you can try coHabit. It isn't available.</p>` : `<p class="hint">Listings don't record lease length, utilities, furnishing or fees unless the description says so. Ask the landlord.</p>`}
+      ${u.demo ? `<p class="hint">Demo listing ${esc(u.id)}: made up so you can try coHabit. It isn't available.</p>` : `<p class="hint">Listings don't record lease length, utilities, furnishing or fees unless the description says so. Ask the landlord.</p>`}
+      ${u.demo && isRenter() ? `<div class="mini-actions">${demoSaveButton("room", u.id)}</div>` : ""}
       ${interestFooter(u)}`;
     if (!dialog.open) dialog.showModal();
   }
@@ -3169,11 +3553,16 @@
       : !c.youShare
         ? `${esc(c.firstName)} shares these with matches who share theirs. Turn on “Share my details with my matches” in <a href="/renter">your preferences</a> to see them.`
         : "";
+    // Demo profiles also say what they're looking for (lease, rooms, furnishing); real renters' searches stay private.
+    const extra = c.details
+      ? [["Lease", c.details.lease], ["Looking for", c.details.rooms], ["Furnishing", c.details.furnished], ["Distance", c.details.distance]].filter(([, v]) => v)
+      : [];
     const profile = c.details
       ? `<dl class="pdetails">
            <div><dt>Budget</dt><dd>${esc(c.details.budget)}</dd></div>
            <div><dt>Move-in</dt><dd>${esc(c.details.moveIn)}</dd></div>
            <div><dt>Looking in</dt><dd>${esc(c.details.area)}</dd></div>
+           ${extra.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("")}
          </dl>
          <h3 class="details-h">Lifestyle</h3><ul class="reasons" aria-label="Lifestyle">${c.details.lifestyle.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>`
       : `<p class="small muted">${why}</p>`;
@@ -3183,7 +3572,7 @@
         : `<p class="small muted">None: your lifestyle answers match.</p>`
       : `<p class="small muted">${c.differenceCount ? `${plural(c.differenceCount, "lifestyle answer differs", "lifestyle answers differ")}. Talk them through before deciding.` : "None: your lifestyle answers match."}</p>`;
     let actions = "";
-    if (c.demo) actions = `<button class="btn" type="button" data-action="connect-open" data-key="${esc(key)}">Connect (preview)</button>`;
+    if (c.demo) actions = `${demoSaveButton("person", c.id)}<button class="btn" type="button" data-action="connect-open" data-key="${esc(key)}">Connect (preview)</button>`;
     else if (!r) actions = `<button class="btn" type="button" data-action="connect-open" data-key="${esc(key)}">Connect</button>`;
     else if (r.status === "pending" && r.direction === "out") actions = `<button class="btn btn-quiet" type="button" data-action="req-withdraw" data-id="${esc(r.id)}">Withdraw request</button>`;
     else if (r.status === "pending") actions = `<button class="btn btn-quiet" type="button" data-action="req-decline" data-id="${esc(r.id)}">Decline</button><button class="btn" type="button" data-action="req-accept" data-id="${esc(r.id)}">Accept</button>`;
@@ -3192,20 +3581,26 @@
       <div class="person-head big">
         ${personAvatar(c)}
         <div class="person-name"><h2 id="details-title" class="card-title">${esc(c.firstName)}</h2>${c.about ? `<p class="small muted">${esc(c.about)}</p>` : ""}</div>
-        <span class="pill pill-ok">${c.score}% compatible</span>
+        ${c.score != null ? `<span class="pill pill-ok">${c.score}% compatible</span>` : c.compatible === false ? `<span class="pill pill-off">Not a match</span>` : ""}
       </div>
-      <div class="res-card-top">${matchPill(c.match || (c.mainMiss ? "partial" : "exact"), true)}${c.demo ? demoTag : ""}${c.sample ? sampleTagSmall : ""}${requestBadge(r)}</div>
+      <div class="res-card-top">${c.score != null ? matchPill(c.match || (c.mainMiss ? "partial" : "exact"), true) : ""}${c.demo ? demoTag : ""}${c.sample ? sampleTagSmall : ""}${requestBadge(r)}</div>
       ${c.intro ? `<p class="desc">${esc(c.intro)}</p>` : ""}
       ${profile}
       ${c.interests && c.interests.length ? `<h3 class="details-h">Interests</h3><ul class="reasons" aria-label="Interests">${c.interests.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
-      <h3 class="details-h">What you have in common</h3>
-      <ul class="fit-list">${c.fits.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
-      <h3 class="details-h">Differences</h3>
-      ${differences}
+      ${
+        c.compatible === false
+          ? `<h3 class="details-h">Why coHabit doesn't match you</h3><ul class="miss-list">${(c.notMatching || []).map((f) => `<li>${esc(f)}</li>`).join("")}</ul>`
+          : c.score == null && c.demo
+            ? `<p class="small muted">Not compared with you: ${isRenter() ? `<a href="/renter">save your preferences</a> to see what you have in common.` : "sign in as a renter and save your preferences to see what you have in common."}</p>`
+            : `<h3 class="details-h">What you have in common</h3>
+      <ul class="fit-list">${c.fits.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>`
+      }
+      ${c.score == null && c.demo && c.compatible !== false ? "" : `<h3 class="details-h">Differences</h3>
+      ${differences}`}
       ${c.email ? `<p class="small">Email they chose to share: <a href="mailto:${esc(c.email)}">${esc(c.email)}</a></p>` : ""}
       <p class="hint">${
         c.demo
-          ? `Demo profile: a fictional person${c.avatar ? " with an illustrated avatar" : ""}, not a real student. Connecting is a preview only; nothing is sent.`
+          ? `Demo profile ${esc(c.id || "")}: a fictional person${c.avatar ? " with an illustrated avatar" : ""}, not a real student, with no contact details. Connecting is a preview only; nothing is sent and nobody is notified.`
           : r && r.status === "pending" && r.direction === "in"
             ? `${esc(c.firstName)} sent you a request. Accepting lets you message each other here; your email stays private.`
             : r && r.status === "accepted"
@@ -3401,7 +3796,7 @@
   // ── Admin ────────────────────────────────────────────────────────────────────
   async function adminPage() {
     if (!me.user) return signInView("/admin");
-    const [{ users }, ai] = await Promise.all([api("/api/admin/users"), api("/api/admin/assistant").catch(() => null)]);
+    const [{ users }, ai, demo] = await Promise.all([api("/api/admin/users"), api("/api/admin/assistant").catch(() => null), api("/api/admin/demo").catch(() => null)]);
     const detail = (u) =>
       u.accountType === "landlord"
         ? plural(u.unitCount, "unit", "units")
@@ -3442,6 +3837,7 @@
         ${samples ? tile("Sample accounts", samples, "fictional, not counted") : ""}
       </dl>
       ${ai ? assistantUsageHtml(ai) : ""}
+      ${demo ? adminDemoHtml(demo) : ""}
       <table class="tenants users">
         <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Account type</th><th scope="col">Joined</th><th scope="col">Activity</th></tr></thead>
         <tbody>${rows}</tbody>
@@ -3838,6 +4234,7 @@
     m = clean.match(/^\/landlord\/units\/([^/]+)$/);
     if (m) return unitPage(safeDecode(m[1]));
     if (clean === "/assistant") return assistantPage();
+    if (clean === "/demo/people") return demoPeoplePage();
     if (clean === "/renter") return renterPage();
     if (clean === "/admin") return adminPage();
     if (clean === "/admin/import") return adminImportPage();
@@ -3972,6 +4369,17 @@
       else if (a === "chat-unsave") chatRequest(`/api/assistant/saved/${encodeURIComponent(action.dataset.id)}`, { method: "DELETE" }, "Removed from saved.").then((d) => d && reloadChat());
       else if (a === "pane") setPane(action.dataset.pane);
       else if (a === "demo-toggle") toggleDemo();
+      else if (a === "demo-switch") switchDemo(action);
+      else if (a === "demo-save") toggleDemoSave(action);
+      else if (a === "demo-on-map") showOnListingMap(action.dataset.id);
+      else if (a === "demo-cleanup") cleanupDemo();
+      else if (a === "demo-filters-clear") {
+        Object.assign(demoFilters, DEMO_FILTERS0);
+        render(false);
+      } else if (a === "people-filters-clear") {
+        Object.assign(peopleFilters, PEOPLE_FILTERS0);
+        render(false);
+      }
       else if (a === "res-tab") {
         resTab = action.dataset.tab;
         resShowAll = false;
@@ -4020,8 +4428,9 @@
   });
 
   document.addEventListener("click", (e) => {
+    // Only the assistant's cards (they have a ref like R1) are selectable; demo cards elsewhere aren't.
     const card = e.target.closest(".res-card");
-    if (card && !e.target.closest("button, a")) selectResult(card.dataset.ref, false);
+    if (card && card.dataset.ref && document.getElementById("res-list") && !e.target.closest("button, a")) selectResult(card.dataset.ref, false);
   });
 
   document.addEventListener("submit", (e) => {
@@ -4116,6 +4525,9 @@
     sendChat(e.target.value);
   });
   document.addEventListener("input", (e) => {
+    const filters = e.target.form;
+    if (filters && filters.id === "demo-filters") return readDemoFilters(filters);
+    if (filters && filters.id === "people-filters") return readPeopleFilters(filters);
     if (e.target.id === "chat-input") growInput(e.target);
     else if (e.target.id === "survey-comment") syncSurvey();
   });

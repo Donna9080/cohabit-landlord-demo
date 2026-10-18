@@ -20,12 +20,19 @@ function monthsBetween(ymd, ym) {
   return (y1 - y2) * 12 + (m1 - m2);
 }
 
+// What one renter would pay. coHabit units are priced per room; a demo listing priced for the whole place is split
+// by the rooms the renter needs (up to its bedrooms), as in the assistant's search. Comparing the whole rent with a
+// one-person budget used to hide every whole two- or three-bedroom from renters moving in together.
+const shareOf = (prefs, unit) =>
+  unit.rent_basis === "unit" ? Math.round(unit.monthly_rent / Math.max(1, Math.min(prefs.rooms_needed || 1, unit.bedrooms || unit.rooms_available || 1))) : unit.monthly_rent;
+
 export function scoreUnit(prefs, unit) {
   let score = 0;
   const reasons = [];
 
-  const affordable = unit.monthly_rent <= prefs.budget_max * OVER_BUDGET_LIMIT;
-  if (unit.monthly_rent <= prefs.budget_max) {
+  const cost = shareOf(prefs, unit);
+  const affordable = cost <= prefs.budget_max * OVER_BUDGET_LIMIT;
+  if (cost <= prefs.budget_max) {
     score += 40;
     reasons.push("Within your budget");
   } else if (affordable) {

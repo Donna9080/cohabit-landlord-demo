@@ -322,8 +322,9 @@ page, so the chat, results, tabs and any search stay exactly as they were. The c
   check-in (`UNIQUE (user_id, reason)`), so retries, repeat submissions and two sends at once can't award twice.
   Only then does the drawer say "You earned 100 coHabit Points 🎉". Points are pilot participation points with no
   cash value and nothing to redeem yet; the balance shows on **Account**.
-- **Demo mode:** submissions sent while a renter's assistant Demo mode is on are labeled, and the admin can show
-  them alone or leave them out.
+- **Demo mode:** submissions sent while Demo mode is on are labeled (a renter's switch is read on the server; a
+  guest's or landlord's comes from their browser and is only a label), and the admin can show them alone or leave
+  them out.
 - **Separate from matching:** the answers are in their own table and never read by matching or the assistant.
 - **Admin:** **Admin → Check-in survey** (`/admin/survey`) shows totals, answers per question (count and share of
   those who answered), the newest 200 responses, and **Download CSV** (all responses, formulas neutralized), each
@@ -452,15 +453,40 @@ sees daily totals and an estimated cost, never chats (Admin page, "AI assistant"
 
 ### Demo mode (fictional listings and people)
 
-A switch at the top of `/assistant` swaps the results for 15 made-up listings and 20 made-up roommate profiles in
-Waltham. They let anyone try coHabit, given how few real listings there are. Every record, its photo source and
-license, and example searches are listed in [docs/DEMO_DATA.md](docs/DEMO_DATA.md) (generated from the data).
+One **Demo mode** switch (on Listings, My matches, the assistant and `/demo/people`) swaps real results for 100
+made-up listings and 200 made-up roommate profiles in Waltham (197 shown; 3 chose not to be found). They let anyone
+try coHabit, given how few real listings there are. Coverage, 20 example searches, every record, and each photo's
+source and license are in [docs/DEMO_DATA.md](docs/DEMO_DATA.md) (written from the data by `npm run demo:report`).
 
-- **The data lives in code** (`src/assistant/demo-data.js`), never in the database:
-  - There is nothing to seed, so nothing can be seeded twice.
-  - Real data is never touched.
-  - Demo records never appear in Listings, real matches, the admin user list or any count.
-  - Every id starts with `demo-`.
+- **One switch.** A renter's Demo mode is saved on the server (it's the assistant's setting), so every page agrees.
+  Guests and landlords can use it on Listings and the profile page; theirs is remembered in their browser only.
+  Switching never changes chats, answers, saved preferences, requests or real saved options.
+- **Where it shows:**
+  - **Listings:** all 100 demo listings with filters (search, neighborhood, type, rent per person, move-in month,
+    lease, furnishing, rooms free), "Showing X of 100 demo listings", dashed map pins, Details, Save and a preview
+    request.
+  - **My matches:** demo rooms ("N of 100 demo listings match", same rules as for real units) and demo roommates
+    ("N of 197 demo profiles are compatible", same roommate rules) for the renter's saved preferences, plus
+    **Browse all demo profiles**.
+  - **`/demo/people`:** all 197 visible demo profiles with filters and counts; for a renter with saved preferences,
+    each says how compatible they are or why they aren't a match.
+  - **The assistant:** its results come from the same demo data.
+- **The data lives in code,** never in the database: 15 listings and 20 profiles written by hand
+  (`src/assistant/demo-base.js`) and 85 and 180 more written by `scripts/demo-build.mjs` to
+  `src/assistant/demo-generated.js` (fixed seeds, the same every time). `src/assistant/demo-data.js` joins them.
+  - There is nothing to seed, so nothing can be seeded twice. `npm run demo:check` fails if the file differs from
+    what the script builds or if a coverage target is missed (`npm test` checks the same).
+  - Real data is never touched, and demo records never appear in real listings, real matches, the admin user list
+    or any count. Every id starts with `demo-`.
+  - **Coverage targets** (checked with the matching code, nothing loosened): every profile has 3+ rooms that match
+    everything and 3+ roommates compatible both ways; every room suits 3+ visible profiles.
+  - **Turning it off:** set the Worker variable `DEMO_DATA=off` (`npx wrangler secret put` isn't needed; it's a
+    plain variable). The switch disappears and `/api/demo/*` answers 404. Not set means on.
+  - **Removing demo records:** the only ones in the database are renters' saved demo cards. **Admin → Demo mode →
+    Remove saved demo cards** deletes those only (recorded in `admin_audit`); real saved options stay.
+- **API:** `GET /api/demo/listings`, `GET /api/demo/people` (public); `POST /api/assistant/demo {on}` (renters);
+  `GET /api/assistant/saved`; `POST /api/assistant/saved {kind:"room", unitId}` or `{kind:"person", demoId}` for a
+  demo card; `GET /api/admin/demo`, `POST /api/admin/demo/cleanup {confirm:"REMOVE"}` (admins).
 - **Scenarios covered** (all in Waltham neighborhoods: near Brandeis, Moody Street, the South Side, Downtown, the
   Highlands, Prospect Hill, Warrendale and Lakeview):
   - Private rooms in shared houses, a shared bedroom, furnished and unfurnished studios, spring and summer sublets,
@@ -485,7 +511,8 @@ license, and example searches are listed in [docs/DEMO_DATA.md](docs/DEMO_DATA.m
     opt-in, because nobody real is involved; their lifestyle answers are still needed.
 - **Labels and limits.**
   - Every demo card says "Demo", demo pins are dashed, and a banner stays on while Demo mode is on.
-  - Demo cards can't be saved (409), and demo listings have no landlord to contact.
+  - Demo cards can be saved (they show under Saved only in Demo mode). Demo listings have no landlord and demo
+    profiles no account: a request is a preview that says "Demo only, nothing sent", and nobody is notified.
   - Listing photos are free Unsplash stock photos (Unsplash License), labeled "Illustrative demo photo" and credited
     in Details; they never show the listing itself. They load from `images.unsplash.com` (named on the privacy
     page); if one can't load, a drawing shows instead.
@@ -902,8 +929,11 @@ These steps describe the redesigned assistant, live since 2026-10-12.
    block them and offer a change to make; nothing is loosened until you tap one.
 5. Open a card's **Details**, then **Save** it. It appears under **Saved**, below the results.
 6. Turn on **Demo mode**. A banner appears and every card and pin says Demo. Change the goal chip to **Both** and
-   answer the roommate questions. **Rooms** and **Roommates** tabs appear, the roommates have no contact details, and
-   demo cards have no Save button. Turn Demo mode off: only real results again.
+   answer the roommate questions. **Rooms** and **Roommates** tabs appear and the roommates have no contact details.
+   Save a demo card: it shows under **Saved**. Open **Listings** and **My matches**: Demo mode is on there too (100 demo
+   listings with filters; demo rooms and roommates for your preferences, and **Browse all demo profiles**). Connect
+   with a demo profile: "Demo only, nothing sent". Turn Demo mode off: only real results again, and the demo card
+   is no longer under Saved.
 7. On a phone, switch **Chat** / **Results**: the chat and the map keep their place.
 8. Reload: everything is still there. Then **Clear chat** and confirm: the chat and answers are gone, **Saved** stays.
 

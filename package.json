@@ -8,7 +8,10 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "test": "node tests/run-local.mjs",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "demo:build": "node scripts/demo-build.mjs",
+    "demo:check": "node scripts/demo-build.mjs --check",
+    "demo:report": "node scripts/demo-report.mjs"
   },
   "devDependencies": {
     "wrangler": "4.139.0"

@@ -5,7 +5,8 @@
 //   POST   /api/assistant/memory          change or forget an answer, or mark it must-have / flexible (no AI call)
 //   POST   /api/assistant/clear           delete the chat and what it learned (saved options stay)
 //   POST   /api/assistant/actions/<id>    confirm or dismiss a confirmation card
-//   POST   /api/assistant/saved           save a room or person from a reply
+//   GET    /api/assistant/saved           what the renter saved (ids only), for the Save buttons on other pages
+//   POST   /api/assistant/saved           save a room or person from a reply, the results or a demo card
 //   DELETE /api/assistant/saved/<id>      remove a saved option
 //   POST   /api/assistant/demo            turn Demo mode on or off (fictional listings and people, see demo-data.js)
 //
@@ -16,13 +17,13 @@
 import { HttpError, readJson, rateLimit } from "../http.js";
 import { LISTING_FIELDS, activeListings, listingMapper } from "../listings.js";
 import { createInterest, loadPreferences, savePreferences } from "../profile.js";
-import { firstNameOf } from "../roommates.js";
+import { firstNameOf, scoreRoommate } from "../roommates.js";
 import { InvalidInput, isUnitId, parseChatText, parseInterest, parsePreferences } from "../validate.js";
 import { AiUnavailable, MODELS, aiConfigured, allowedNumbers, groundReply, modelFor, runAiTurn } from "./ai.js";
 import { BASIC_INTRO, CONSIDERATIONS, describeAnswer, describeRoommates, describeRooms, nextQuestion, question, understand } from "./basic.js";
 import { LABELS, STRICTNESS_FIELDS, applyUpdates, displayValue, isRequired, memoryFacts, mergedPreferences, missingBasics, parseMemory, profileChanges } from "./memory.js";
 import { demoPersonView, personView, requestsByPerson } from "../connections.js";
-import { DEMO_LISTINGS, DEMO_PEOPLE, isDemoId } from "./demo-data.js";
+import { DEMO_LISTINGS, DEMO_PEOPLE, demoDataOn, demoListing, demoPerson, isDemoId } from "./demo-data.js";
 import { BRANDEIS, kmBetween, searchRoommates, searchRooms } from "./search.js";
 
 const HISTORY_FOR_MODEL = 12; // earlier messages replayed to the model as context
@@ -60,11 +61,22 @@ class ToolRefused extends Error {
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 
-async function loadThread(db, userId) {
+async function loadThread(db, userId, env) {
   const row = await db.prepare(`SELECT memory, last_results FROM assistant_threads WHERE user_id = ?1`).bind(userId).first();
-  // state: what's on screen (refs -> ids, server only) and, for basic mode, the question last asked.
-  return { memory: parseMemory(row?.memory), state: parseJson(row?.last_results, {}) };
+  // state: what's on screen (refs -> ids, server only), for basic mode the question last asked, and whether Demo
+  // mode is on (never while DEMO_DATA=off).
+  const state = parseJson(row?.last_results, {});
+  if (state.demo && !demoDataOn(env)) state.demo = false;
+  return { memory: parseMemory(row?.memory), state };
 }
+
+// Whether this renter has Demo mode on. It's one switch for the whole site: Listings, My matches and the assistant.
+export async function demoModeOn(db, env, userId) {
+  return !!(await loadThread(db, userId, env)).state.demo;
+}
+
+// Saved options belong to the mode they were saved in: demo cards show only in Demo mode, real ones only outside it.
+const savedForMode = (rows, demo) => rows.filter((s) => isDemoId(s.target_id) === !!demo);
 
 const saveThread = (db, userId, memory, state) =>
   db
@@ -149,6 +161,7 @@ async function hydrate(db, env, user, messages, savedRows) {
   for (const s of savedRows) (s.kind === "room" ? unitIds : personIds).add(s.target_id);
 
   const json = (set) => JSON.stringify([...set]);
+  const demoMine = [...personIds].some(isDemoId) ? await loadPreferences(db, user.id) : null;
   const [units, people, actions, mine, interests, saved] = await Promise.all([
     unitIds.size
       ? db.prepare(`SELECT ${LISTING_FIELDS} FROM units WHERE status = 'active' AND id IN (SELECT value FROM json_each(?1))`).bind(json(unitIds)).all()
@@ -182,8 +195,11 @@ async function hydrate(db, env, user, messages, savedRows) {
         const u = DEMO_LISTINGS.find((x) => x.id === it.targetId);
         return u ? { ...base, available: true, unit: u, km: Math.round(kmBetween(u.location, BRANDEIS) * 10) / 10, interestSent: false } : { ...base, available: false };
       }
-      const p = DEMO_PEOPLE.find((x) => x.id === it.targetId && x.discoverable);
-      return p ? { ...base, available: true, firstName: p.firstName, about: p.about, avatar: p.avatar, score: it.score ?? null, email: null, sample: false, demo: true } : { ...base, available: false };
+      // The full fictional profile, so Details works the same here as on every other page.
+      const p = demoPerson(it.targetId);
+      return p
+        ? { ...base, available: true, ...demoPersonView(demoMine, { userId: p.id, prefs: p, firstName: p.firstName, about: p.about, score: it.score ?? null, fits: it.fits || [] }), misses: base.misses }
+        : { ...base, available: false };
     }
     if (it.kind === "room") {
       const u = unitById.get(it.targetId);
@@ -230,12 +246,12 @@ async function pageState(db, env, user) {
   const [{ results: rows }, { results: savedRows }, thread, prefs, reason, used] = await Promise.all([
     db.prepare(`SELECT id, role, content, cards, mode, created_at FROM assistant_messages WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ${SHOW_MESSAGES}`).bind(user.id).all(),
     db.prepare(`SELECT id, kind, target_id, note FROM saved_options WHERE user_id = ?1 ORDER BY created_at DESC LIMIT 30`).bind(user.id).all(),
-    loadThread(db, user.id),
+    loadThread(db, user.id, env),
     loadPreferences(db, user.id),
     basicReason(env, db, user.id),
     usageToday(db, user.id),
   ]);
-  const { messages, saved } = await hydrate(db, env, user, rows.reverse(), savedRows);
+  const { messages, saved } = await hydrate(db, env, user, rows.reverse(), savedForMode(savedRows, thread.state.demo));
   return {
     messages,
     saved,
@@ -603,7 +619,7 @@ async function handleMessage({ request, env, db, user }) {
   const text = parseChatText(await readJson(request));
   const limits = limitsFor(env);
   const [thread, saved, { results: recentDesc }, reason, { results: pending }] = await Promise.all([
-    loadThread(db, user.id),
+    loadThread(db, user.id, env),
     loadPreferences(db, user.id),
     db.prepare(`SELECT role, content FROM assistant_messages WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ${HISTORY_FOR_MODEL}`).bind(user.id).all(),
     basicReason(env, db, user.id),
@@ -663,7 +679,7 @@ async function handleMessage({ request, env, db, user }) {
   ]);
 
   const { results: savedRows } = await db.prepare(`SELECT id, kind, target_id, note FROM saved_options WHERE user_id = ?1 ORDER BY created_at DESC LIMIT 30`).bind(user.id).all();
-  const { messages, saved: savedList } = await hydrate(db, env, user, [userMsg, assistantMsg], savedRows);
+  const { messages, saved: savedList } = await hydrate(db, env, user, [userMsg, assistantMsg], savedForMode(savedRows, turn.state.demo));
   const nowReason = mode === "ai" ? await basicReason(env, db, user.id) : reason || "unavailable";
   return {
     messages,
@@ -721,13 +737,28 @@ async function decideAction({ request, db, user }, id) {
 
 async function saveOption({ request, env, db, user }) {
   const body = await readJson(request);
-  if (isDemoId(body?.unitId) || (body?.kind === "person" && (await loadThread(db, user.id)).state.demo)) {
-    throw new HttpError(409, "demo", "Demo cards can't be saved. They're made up.");
-  }
   let it;
-  if (body?.kind === "room" || body?.kind === "person") {
+  const demo = (body?.kind === "room" && isDemoId(body.unitId)) || (body?.kind === "person" && isDemoId(body.demoId));
+  if (demo) {
+    // A demo card from any page: a bookmark to a made-up record, nothing is sent to anyone. Fits are worked out
+    // here from the renter's answers, as for real results.
+    if (!demoDataOn(env)) throw new HttpError(404, "not_found", "Demo mode is off.");
+    const { memory } = await loadThread(db, user.id, env);
+    if (body.kind === "room") {
+      const u = demoListing(body.unitId);
+      if (!u) throw new HttpError(404, "not_found", "That demo listing doesn't exist.");
+      const r = searchRooms(memory, DEMO_LISTINGS, { limit: DEMO_LISTINGS.length }).results.find((x) => x.unitId === u.id);
+      it = { kind: "room", ref: r?.ref || "", targetId: u.id, fits: r?.fits || [], misses: r?.misses || [] };
+    } else {
+      const p = demoPerson(body.demoId);
+      if (!p) throw new HttpError(404, "not_found", "That demo profile doesn't exist.");
+      const merged = mergedPreferences(memory, await loadPreferences(db, user.id));
+      const m = merged.prefs ? scoreRoommate(merged.prefs, p) : null;
+      it = { kind: "person", ref: "", targetId: p.id, fits: m?.eligible ? m.shared : [], misses: [], score: m?.eligible ? m.score : null };
+    }
+  } else if (body?.kind === "room" || body?.kind === "person") {
     // From the results panel. Fits and misses are worked out again here, never taken from the request.
-    const { memory } = await loadThread(db, user.id);
+    const { memory } = await loadThread(db, user.id, env);
     if (body.kind === "room" && isUnitId(body.unitId)) {
       const found = searchRooms(memory, await activeListings(db, env), { limit: 200 });
       const r = found.results.find((x) => x.unitId === body.unitId);
@@ -744,8 +775,9 @@ async function saveOption({ request, env, db, user }) {
     it = parseJson(m?.cards, {}).items?.find((x) => x.ref === body?.ref);
   }
   if (!it) throw new HttpError(404, "not_found", "That result is no longer available.");
-  const still =
-    it.kind === "room"
+  const still = demo
+    ? true
+    : it.kind === "room"
       ? await db.prepare(`SELECT 1 FROM units WHERE id = ?1 AND status = 'active'`).bind(it.targetId).first()
       : await db.prepare(`SELECT 1 FROM match_preferences WHERE user_id = ?1 AND roommate_visible = 1`).bind(it.targetId).first();
   if (!still) throw new HttpError(409, "gone", it.kind === "room" ? "This room is no longer listed." : "This person is no longer looking for roommates.");
@@ -780,7 +812,7 @@ export async function handleAssistant({ request, env, db, user, path, method, re
       if (body.mustHave === false) input.flexible = [field];
     }
     if (!Object.keys(input).length) throw new InvalidInput("field", "Nothing to change.");
-    const [thread, prefs] = await Promise.all([loadThread(db, user.id), loadPreferences(db, user.id)]);
+    const [thread, prefs] = await Promise.all([loadThread(db, user.id, env), loadPreferences(db, user.id)]);
     const r = applyUpdates(thread.memory, input, today());
     if (r.errors.length) throw new InvalidInput("value", r.errors[0].message);
     const label = LABELS[field] || field;
@@ -808,7 +840,8 @@ export async function handleAssistant({ request, env, db, user, path, method, re
   if (path === "/api/assistant/demo" && method === "POST") {
     const body = await readJson(request);
     if (typeof body?.on !== "boolean") throw new InvalidInput("on", "Must be true or false.");
-    const [thread, prefs] = await Promise.all([loadThread(db, user.id), loadPreferences(db, user.id)]);
+    if (body.on && !demoDataOn(env)) throw new HttpError(409, "demo_off", "Demo mode isn't available right now.");
+    const [thread, prefs] = await Promise.all([loadThread(db, user.id, env), loadPreferences(db, user.id)]);
     const state = { ...thread.state, demo: body.on, rooms: [], people: [] };
     await saveThread(db, user.id, thread.memory, state).run();
     const event = await addEvent(db, user.id, !!thread.state.demo === body.on ? null : body.on ? "Demo mode on: results are made-up listings and people." : "Demo mode off: results are real again.");
@@ -818,6 +851,10 @@ export async function handleAssistant({ request, env, db, user, path, method, re
   const action = path.match(/^\/api\/assistant\/actions\/([^/]+)$/);
   if (action && method === "POST") return reply(await decideAction(ctx, action[1]));
 
+  if (path === "/api/assistant/saved" && method === "GET") {
+    const { results } = await db.prepare(`SELECT id, kind, target_id FROM saved_options WHERE user_id = ?1 ORDER BY created_at DESC LIMIT 30`).bind(user.id).all();
+    return reply({ saved: results.map((s) => ({ id: s.id, kind: s.kind, targetId: s.target_id, demo: isDemoId(s.target_id) })) });
+  }
   if (path === "/api/assistant/saved" && method === "POST") {
     await saveOption(ctx);
     return reply(await pageState(db, env, user).then((s) => ({ saved: s.saved })), 201);

@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-17 (accounts: homepage paths, Google-only sign-in, freeze fix)
+# coHabit project checkpoint: 2026-10-18 (connected demo data: 100 rooms and 200 profiles; local only)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -18,12 +18,16 @@ Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, command
 | Roommate requests | 0 | Live, 2026-10-13 (table created that day) |
 | Saved questionnaires | 4 | Live, 2026-10-13 |
 | Admins | 1 | Live (the owner) |
-| Automated tests | 475 passing | `npm test`, local, 2026-10-17 (two local Workers: passwords on, and Google only) |
+| Automated tests | 498 of 498 passing | `npm test`, local, 2026-10-18 (two local Workers: passwords on, and Google only with Demo mode off) |
+| Demo listings / profiles (fictional, in code) | 100 / 200 | `npm run demo:check`, 2026-10-18 (197 profiles shown, 3 hidden by choice) |
 | AI cost so far | $0 | No Anthropic key exists; the assistant has only run in basic mode or against the test stand-in |
 
 No real listings were imported because no authorized data source exists yet (see "Pending work").
 
 ## Deployment status
+
+**Not deployed: connected demo data (2026-10-18)** (below) is committed locally only. It needs no database change, and
+nothing was sent to Cloudflare or the live database.
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
 - **Live version:** `05be52b1-a9aa-4485-8d33-3b94b38e6e02`, deployed 2026-10-17 with the owner's approval: the homepage paths, the account
@@ -115,7 +119,35 @@ No real listings were imported because no authorized data source exists yet (see
 | Import tool | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | Yes (2026-10-12) |
 | **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
 | **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
+| **Connected demo data** | 100 demo rooms and 200 demo profiles in Waltham, one Demo mode switch across Listings, My matches, the assistant and a demo profile page; coverage checked with the matching code (details below) | No (local, 2026-10-18) |
 | **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | Yes (2026-10-13) |
+
+### Connected demo data (2026-10-18, local only)
+
+- **Data:** 100 fictional rooms and 200 fictional roommate profiles, all in Waltham. The 15 listings and 20 profiles
+  that existed are kept with their ids (`src/assistant/demo-base.js`); the other 85 and 180 are written by
+  `scripts/demo-build.mjs` to `src/assistant/demo-generated.js`, the same every time. Still in code, never the database.
+  26 more free Unsplash photos (41 in all, each checked on its page, none on more than 3 listings); illustrated avatars.
+- **Coverage, checked with the matching code (nothing loosened):** every profile has 3+ rooms that match everything
+  (median 6) and 3+ roommates compatible both ways (median 23); every room suits 3+ visible profiles (median 10). Pairs
+  fail on month, lease, must-haves, budget, lifestyle, pets and smoking, so not everyone matches everyone.
+- **Demo mode across the site:** one switch (a renter's saved on the server, others' in the browser).
+  Listings shows all 100 demo listings with filters (neighborhood, type, rent per person, move-in month, lease,
+  furnishing, rooms), "Showing X of 100", dashed map pins, Details and Save. My matches shows demo rooms and demo
+  roommates that fit the renter's saved preferences ("N of 100", "N of 197") and links to "Browse all demo profiles"
+  (`/demo/people`, with filters and counts). The assistant uses the same data. Chats, answers, preferences, requests
+  and real saved options never change when switching.
+- **Safety:** no sign-in accounts or contact details for anyone fictional; demo requests are previews ("Demo only,
+  nothing sent"), with no notifications. Demo cards can be saved and show only in Demo mode.
+- **Data management:** `npm run demo:build`, `demo:check` (repeatable, targets met), `demo:report`. `DEMO_DATA=off`
+  turns Demo mode off everywhere. An admin action removes only saved demo cards (the only demo records in the database).
+- **Bugs fixed:** My matches compared a whole place's rent with one person's budget (whole two- and three-bedrooms never
+  showed for people moving in together); a wish for "unfurnished" counted as wanting furnished; Save didn't work in
+  Demo mode.
+- **Found, not changed (owner's decision):** My matches shows a room in your area and budget even when the move-in
+  month is months off (80% match), because area + budget + rooms reach its threshold. Details in docs/DEMO_DATA.md.
+- **Report:** coverage, 20 representative searches with results and exclusion reasons, and every listing, photo and
+  profile: [docs/DEMO_DATA.md](docs/DEMO_DATA.md).
 
 ### Email and password accounts (2026-10-17, local only)
 
@@ -238,6 +270,22 @@ Built and tested in three stages, each committed separately:
 
 ## Tests
 
+- `npm test`: **498/498** on 2026-10-18. New demo checks: 100 listings and 200 profiles with unique `demo-`
+  ids and the 35 originals kept; 41 photos, none on more than 3 listings; every coverage target met using the matching
+  code; realistic variation; compatibility symmetric; the generator writes exactly the committed file; exclusion counts;
+  the two bug fixes; the demo endpoints (public, no contact details, never in real listings); one Demo mode switch
+  across `/api/me`, My matches rooms and roommates; My matches in Demo mode equals the same rules over the demo data;
+  demo saves (hidden or unknown ids refused) shown only in Demo mode; real matches unchanged after switching back;
+  the admin cleanup removes only saved demo cards and is recorded; guest check-ins in Demo mode are labeled; with
+  `DEMO_DATA=off` nothing demo is served.
+- **Browser walkthrough (local preview):** guest Listings in Demo mode (100 cards, filters and counts, 100 dashed pins,
+  photos, Details with photo credit, preview request); the demo profile page (filters, counts, Details, Connect preview
+  with no network write); as a local test renter: My matches (81 of 100 demo listings, 73 of 197 profiles), the
+  assistant in Demo mode (71 rooms fit, 31 match everything; 73 roommates, the same as My matches), Save from each
+  page, switching back to real data; phone 390 px.
+
+Earlier:
+
 - `npm test`: **471/471** on 2026-10-17. New account checks (34): renter and landlord sign-up with their optional
   answers; role, confirmed email and photo can't be set; neutral replies; salted hashes only; confirmation email,
   sign-in refused until confirmed, confirmation signs in and routes by role; used links don't sign in again; same
@@ -342,6 +390,9 @@ Earlier runs:
 - [ ] Run part 11 of the manual test (Quick check-in) on the live site. It adds real responses; that's expected.
 - [x] Deploy and push the demo data refresh (2026-10-14, version `c35940b7…`, no database change).
 - [ ] Try Demo mode on the live site as a renter: a room search, a roommate search, Details on each.
+- [ ] Approve: deploy the connected demo data (no database change). Then try Demo mode on the live site as a renter.
+- [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
+      budget shows at 80% even months off; it affects real matches too).
 - [ ] Decide whether to use a dedicated Gmail account for coHabit's emails (the only $0 option found). If yes: create
       it with 2-Step Verification and an app password, enter it with `wrangler secret put`, and I'll add the SMTP sender.
 - [x] Migration 0009 on the live database (restore point first) and deploy, passwords off (2026-10-17, version `05be52b1…`).
@@ -389,7 +440,8 @@ one of these is needed:
 | Previous checkpoint | Git tag `checkpoint-2026-10-13-requests` |
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-13-checkin` |
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-14-demo-data` |
-| This checkpoint (live) | Git tag `checkpoint-2026-10-17-accounts` |
+| Previous checkpoint (live code) | Git tag `checkpoint-2026-10-17-accounts` |
+| This checkpoint (local only) | Git tag `checkpoint-2026-10-18-demo-100` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 

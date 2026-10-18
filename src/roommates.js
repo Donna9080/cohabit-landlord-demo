@@ -86,6 +86,26 @@ export function scoreRoommate(me, other) {
   return { score, shared, eligible: score >= MIN_ROOMMATE_SCORE };
 }
 
+// Why two renters aren't a possible match, using the same checks as scoreRoommate in the same order (empty when
+// they are a match). For explanations and reports only; scoreRoommate decides.
+export const BLOCKER_TEXT = {
+  area: "No area in common",
+  month: "Move-in months more than a month apart",
+  pets: "One has a pet and the other wants no pets",
+  smoking: "One smokes and the other wants no smoking",
+  score: "Lifestyle answers too far apart (score under 60)",
+};
+export function roommateBlockers(me, other) {
+  const out = [];
+  const mine = new Set(words(me.area));
+  if (!words(other.area).some((w) => mine.has(w))) out.push("area");
+  if (Math.abs(monthIndex(me.move_in_month) - monthIndex(other.move_in_month)) > 1) out.push("month");
+  if ([me.pets, other.pets].includes("no_pets") && [me.pets, other.pets].includes("have_pets")) out.push("pets");
+  if ([me.smoking, other.smoking].includes("no_smoking") && [me.smoking, other.smoking].includes("smoker")) out.push("smoking");
+  if (!out.length && !scoreRoommate(me, other).eligible) out.push("score");
+  return out;
+}
+
 // others: [{ prefs, firstName, email (already null unless they chose to share it), sample }]
 // Server side: the ranked matches with the other person's record (id and answers) still attached.
 export function rankedMatches(me, others, limit = 20) {

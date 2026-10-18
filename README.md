@@ -108,13 +108,14 @@ src/password.js     password hashing for email and password accounts (PBKDF2, We
 src/email.js        account emails; a local test inbox in development (no email provider yet)
 src/imports.js      checks CSV files of external listings before an admin imports them
 src/assistant/      the renter's chat assistant: routes, memory checks, search, basic mode, Claude (AI) calls,
-                    demo-data.js (Demo mode's 15 fictional listings and 20 fictional profiles)
+                    demo-data.js + demo-base.js + demo-generated.js (Demo mode: 100 fictional listings, 200 profiles)
 public/import-template.csv  column template for listing imports
 migrations/         database tables (D1)
 tests/run-local.mjs automated local tests (npm test)
 tests/fake-anthropic.mjs  stand-in for the AI service, used only by the tests
 scripts/sample-data.mjs  fictional sample landlords, units and renters (see ACCOUNTS_SETUP.md)
+scripts/demo-*.mjs  Demo mode data: build (npm run demo:build), check coverage (demo:check), report (demo:report)
 docs/SAMPLE_MATCHING.md  how matching works, shown with the sample data
-docs/DEMO_DATA.md   Demo mode's listings, profiles, photo credits and licenses, and example searches
+docs/DEMO_DATA.md   Demo mode's coverage, 20 example searches, listings, profiles, photo credits and licenses
 wrangler.jsonc      Cloudflare settings
 ```

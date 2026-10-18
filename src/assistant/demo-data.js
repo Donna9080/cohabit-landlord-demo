@@ -1,408 +1,61 @@
-// Demo mode: 15 fictional listings and 20 fictional roommate profiles in Waltham, for trying the assistant.
+// Demo mode: 100 fictional room listings and 200 fictional roommate profiles in Waltham, for trying coHabit.
 //
-// They live here in code, never in the database, so they can't be seeded twice, can't mix with real listings
-// or people, and never show up in Listings, real matches, requests, the admin user list or any count. Editing
-// this file and deploying is the only way to change them, so updates are repeatable and never duplicate. Every
-// id starts with "demo-". Nothing here is real: no real places' availability, no real people, no contact details.
-// Locations are made-up points in Waltham neighborhoods, shown only as approximate areas (about 500 m). Roommate
-// profiles have a first name and a preferred area, never a location. Scores and "fits" come from the normal
-// matching code, which never sees anything about gender (there is no such field).
+// They live in code, never in the database, so they can't be seeded twice and can't mix with real listings or
+// people. They appear only while someone has Demo mode on (Listings, My matches, the assistant and the demo profile
+// page), always labeled, and never in real searches, real matches, requests, the admin user list or any count.
+// Every id starts with "demo-". Nothing here is real: no real places' availability, no real people, no contact
+// details. Locations are made-up points in Waltham neighborhoods, shown only as approximate areas (about 500 m).
+// Roommate profiles have a first name and the areas they're looking in, never a location. Scores and "fits" come
+// from the normal matching code, which never sees anything about gender (there is no such field).
+//
+// The first 15 listings and 20 profiles are written by hand in demo-base.js; scripts/demo-build.mjs writes the rest
+// to demo-generated.js the same way every time (fixed seed) and checks the coverage targets with the matching code
+// (npm run demo:check). Setting DEMO_DATA=off turns Demo mode off everywhere without touching anything else.
 //
 // Photos are illustrative stock photos from Unsplash (free under the Unsplash License), loaded from Unsplash's
 // image servers. They never show the listing they're on. Sources are listed in docs/DEMO_DATA.md. Profile pictures
-// are illustrated avatars drawn by coHabit's own code from the settings below, not photos of anyone.
-
-const approx = (lat, lng) => ({ precision: "approximate", lat, lng, radiusM: 500 });
+// are illustrated avatars drawn by coHabit's own code from a few settings, not photos of anyone.
+import { HAND_LISTINGS, HAND_PEOPLE, PHOTOS } from "./demo-base.js";
+import { GENERATED_LISTINGS, GENERATED_PEOPLE } from "./demo-generated.js";
 
 const UNSPLASH_LICENSE = "Unsplash License";
 const LICENSE_URL = "https://unsplash.com/license";
 const ref = "utm_source=cohabit&utm_medium=referral";
-// photo-… is the image's file on Unsplash's image server; id is its page on unsplash.com.
-const photo = (file, id, by, username, alt) => ({
-  src: `https://images.unsplash.com/${file}`,
-  alt: `Illustrative photo: ${alt}`,
-  credit: by,
-  creditUrl: `https://unsplash.com/@${username}?${ref}`,
-  source: "Unsplash",
-  sourceUrl: `https://unsplash.com/photos/${id}?${ref}`,
-  license: UNSPLASH_LICENSE,
-  licenseUrl: LICENSE_URL,
+
+function photo(key) {
+  const p = PHOTOS[key];
+  if (!p) throw new Error(`Unknown demo photo ${key}`);
+  return {
+    src: `https://images.unsplash.com/${p.file}`,
+    alt: `Illustrative photo: ${p.alt}`,
+    credit: p.by,
+    creditUrl: `https://unsplash.com/@${p.username}?${ref}`,
+    source: "Unsplash",
+    sourceUrl: `https://unsplash.com/photos/${p.id}?${ref}`,
+    license: UNSPLASH_LICENSE,
+    licenseUrl: LICENSE_URL,
+  };
+}
+
+// The stored shapes (demo-base.js, demo-generated.js) as the rest of coHabit sees them.
+export const asListing = (u) => ({
+  ...u,
+  location: { precision: "approximate", lat: u.location[0], lng: u.location[1], radiusM: 500 },
+  photo: photo(u.photo),
+  photoKey: u.photo,
+  demo: true,
+  sample: false,
 });
+export const areaText = (p) => (p.looking_in.length ? `Waltham (${p.looking_in.join(", ")})` : `Waltham (within ${p.max_distance_km} km of Brandeis)`);
+export const asPerson = (p) => ({ ...p, about: p.program, area: areaText(p), demo: true });
 
-// rent_basis: "room" = what one person pays for their room (or bed); "unit" = rent for the whole place (split by
-// whoever moves in together). lease.months is compared with how long the student wants to stay; the label is
-// shown as written. Bike and walking times are rough estimates from the approximate area.
-export const DEMO_LISTINGS = [
-  {
-    id: "demo-01",
-    name: "Private room in a four-bedroom house",
-    kind: "Private room",
-    area: "Waltham, MA (Moody Street)",
-    monthly_rent: 1050, rent_basis: "room", rooms_available: 1, bedrooms: 4,
-    move_in_date: "2027-06-01",
-    lease: { months: 12, label: "12-month lease from June" },
-    utilities: "Heat and hot water included; electricity split four ways",
-    furnished: false,
-    laundry: "Free washer and dryer in the basement",
-    transit: "10-minute walk to the Waltham commuter rail stop; about 10 minutes by bike to campus",
-    description: "Unfurnished room in a quiet house shared with three grad students. Big shared kitchen and a small backyard, a short walk from Moody Street.",
-    location: approx(42.369, -71.2372),
-    photo: photo("photo-1610527003928-47afd5f470c6", "Wj6oZNCAzs4", "Andrea Davis", "andreaedavis", "a small white kitchen with a gas stove"),
-  },
-  {
-    id: "demo-02",
-    name: "Furnished room on the South Side",
-    kind: "Private room",
-    area: "Waltham, MA (South Side)",
-    monthly_rent: 1200, rent_basis: "room", rooms_available: 1, bedrooms: 4,
-    move_in_date: "2027-06-01",
-    lease: { months: 12, label: "12-month lease from June" },
-    utilities: "Utilities and internet split four ways",
-    furnished: true,
-    laundry: "Washer and dryer in the apartment",
-    transit: "MBTA bus on Main Street; about 10 minutes by bike to campus",
-    description: "Comes with a bed, desk and dresser. Three housemates: two grad students and a nurse who works nights.",
-    location: approx(42.3628, -71.2405),
-    photo: photo("photo-1463620910506-d0458143143e", "WuQME0I_oZA", "Gabriel Beaudry", "gbeaudry", "a bedroom with a white desk beside the bed"),
-  },
-  {
-    id: "demo-03",
-    name: "Furnished studio downtown",
-    kind: "Studio",
-    area: "Waltham, MA (Downtown)",
-    monthly_rent: 1650, rent_basis: "unit", rooms_available: 1, bedrooms: 1,
-    move_in_date: "2027-07-01",
-    lease: { months: 12, label: "12-month lease from July" },
-    utilities: "Heat included; electricity and internet extra",
-    furnished: true,
-    laundry: "Coin laundry in the building",
-    transit: "5-minute walk to the Waltham commuter rail stop and Main Street buses; about 12 minutes by bike to campus",
-    description: "Compact studio with a kitchenette, a bed and a small table, on the second floor of a walk-up near the Riverwalk.",
-    location: approx(42.3747, -71.235),
-    photo: photo("photo-1702014862053-946a122b920d", "NoPzk4m4jHc", "Aquilion Property", "aquilionproperty", "a studio with a kitchenette and a small dining table"),
-  },
-  {
-    id: "demo-04",
-    name: "Spring sublet in a four-bedroom",
-    kind: "Sublet",
-    area: "Waltham, MA (The Highlands)",
-    monthly_rent: 950, rent_basis: "room", rooms_available: 1, bedrooms: 4,
-    move_in_date: "2027-01-15",
-    lease: { months: 5, label: "Spring sublet, mid-January to May 2027" },
-    utilities: "Utilities included",
-    furnished: true,
-    laundry: "Washer and dryer in the basement",
-    transit: "About 10 minutes by bike to campus; buses on Main Street",
-    description: "A housemate is studying abroad for the spring, so their furnished room is free. Three easygoing housemates.",
-    location: approx(42.38, -71.248),
-    photo: photo("photo-1550252225-69800809ba78", "26OziLnJHFs", "Emma Dau", "daugirl", "a student's bedroom with a wall map and a guitar"),
-  },
-  {
-    id: "demo-05",
-    name: "Lease takeover in Warrendale",
-    kind: "Lease takeover",
-    area: "Waltham, MA (Warrendale)",
-    monthly_rent: 1100, rent_basis: "room", rooms_available: 1, bedrooms: 3,
-    move_in_date: "2027-02-01",
-    lease: { months: 7, label: "Lease takeover, February to August 2027" },
-    utilities: "Heat included; electricity split three ways",
-    furnished: false,
-    laundry: "Laundromat a few minutes' walk away",
-    transit: "About 15 minutes' walk to campus; MBTA bus on Main Street",
-    description: "The current tenant is moving for a job. Take over their unfurnished room and the rest of the lease; the landlord is open to renewing.",
-    location: approx(42.3735, -71.2575),
-    photo: photo("photo-1692133220749-1c55bb918ad8", "SCbkyJR3QSM", "Brian Wangenheim", "brianwangenheim", "an empty room with white walls and wood floors"),
-  },
-  {
-    id: "demo-06",
-    name: "Whole two-bedroom for two friends",
-    kind: "Whole apartment",
-    area: "Waltham, MA (South Side)",
-    monthly_rent: 2700, rent_basis: "unit", rooms_available: 2, bedrooms: 2,
-    move_in_date: "2027-06-01",
-    lease: { months: 12, label: "12-month lease from June" },
-    utilities: "Heat and hot water included",
-    furnished: false,
-    laundry: "Shared laundry in the basement",
-    transit: "7-minute walk to Moody Street; MBTA bus on Main Street",
-    description: "Unfurnished second-floor apartment with two similar bedrooms, a living room and a porch. Best for two people moving in together.",
-    location: approx(42.3612, -71.237),
-    photo: photo("photo-1789353527986-8ed7c7e75dc8", "nLTk9N2eg2U", "Josh Lemmon", "wolfiex2", "an empty room with grey walls and a window"),
-  },
-  {
-    id: "demo-07",
-    name: "Group house needs a fourth",
-    kind: "Replacing a roommate",
-    area: "Waltham, MA (near Brandeis)",
-    monthly_rent: 975, rent_basis: "room", rooms_available: 1, bedrooms: 4,
-    move_in_date: "2027-06-01",
-    lease: { months: 3, label: "Join the current lease to August 2027, then renew with the group" },
-    utilities: "Utilities split four ways",
-    furnished: false,
-    laundry: "Washer and dryer in the basement",
-    transit: "10-minute walk to campus",
-    description: "Three seniors replacing a housemate who's graduating. They cook together on Sundays and keep a chore chart on the fridge.",
-    location: approx(42.3618, -71.251),
-    photo: photo("photo-1502672260266-1c1ef2d93688", "3wylDrjxH-E", "Patrick Perkins", "patrickperkins", "a living room with a grey loveseat and plants"),
-  },
-  {
-    id: "demo-08",
-    name: "Shared bedroom for budget savers",
-    kind: "Shared room",
-    area: "Waltham, MA (Downtown)",
-    monthly_rent: 700, rent_basis: "room", rooms_available: 1, bedrooms: 3,
-    move_in_date: "2027-09-01",
-    lease: { months: 9, label: "Academic-year lease, September to May" },
-    utilities: "Utilities included",
-    furnished: true,
-    laundry: "Laundry room in the building",
-    transit: "MBTA bus on Main Street; about 12 minutes by bike to campus",
-    description: "One bed in a large bedroom shared with one other student. The price is for one bed.",
-    location: approx(42.3768, -71.238),
-    photo: photo("photo-1578898887155-72e9a7da1fb3", "M6S1WvfW68A", "Febrian Zakaria", "febrianzakaria", "a bedroom with two single beds and a desk"),
-  },
-  {
-    id: "demo-09",
-    name: "Garden-level room near campus",
-    kind: "Private room",
-    area: "Waltham, MA (near Brandeis)",
-    monthly_rent: 1300, rent_basis: "room", rooms_available: 1, bedrooms: 3,
-    move_in_date: "2027-08-15",
-    lease: { months: 12, label: "12-month lease from mid-August" },
-    utilities: "Utilities and internet included",
-    furnished: true,
-    laundry: "Washer and dryer shared with the owners",
-    transit: "8-minute walk to campus; the Brandeis/Roberts commuter rail stop is nearby",
-    description: "Furnished room with a private entrance and bathroom on the garden level. The owners live upstairs and have hosted grad students before.",
-    location: approx(42.3672, -71.2528),
-    photo: photo("photo-1628746234641-28eb583a51b4", "qnYbBALP4dA", "Zac Gudakov", "zacgudakov", "a bedroom with a single bed and a desk"),
-  },
-  {
-    id: "demo-10",
-    name: "Whole three-bedroom near Waltham Common",
-    kind: "Whole apartment",
-    area: "Waltham, MA (Downtown)",
-    monthly_rent: 3450, rent_basis: "unit", rooms_available: 3, bedrooms: 3,
-    move_in_date: "2027-06-01",
-    lease: { months: 12, label: "12-month lease from June" },
-    utilities: "All utilities extra",
-    furnished: false,
-    laundry: "Washer and dryer in the apartment",
-    transit: "Buses on Main Street; about 12 minutes by bike to campus; off-street parking for two cars",
-    description: "Unfurnished three-bedroom with one and a half baths over two floors. For a group of three moving in together.",
-    location: approx(42.3758, -71.2395),
-    photo: photo("photo-1556185781-a47769abb7ee", "2Cc0KnE3lCs", "Dinh Ng.", "dinhnext", "a narrow white kitchen with pans on the wall"),
-  },
-  {
-    id: "demo-11",
-    name: "Room on Prospect Hill",
-    kind: "Private room",
-    area: "Waltham, MA (Prospect Hill)",
-    monthly_rent: 1150, rent_basis: "room", rooms_available: 1, bedrooms: 3,
-    move_in_date: "2027-07-01",
-    lease: { months: 12, label: "12-month lease from July" },
-    utilities: "Utilities split three ways",
-    furnished: false,
-    laundry: "Washer and dryer in the basement",
-    transit: "About 15 minutes by bike to campus, uphill on the way home; street parking with a permit",
-    description: "Unfurnished room in a quiet three-bedroom near the park. Housemates are a grad student and a lab technician.",
-    location: approx(42.385, -71.243),
-    photo: photo("photo-1789353527964-58295ec6abf7", "47c3k8CIKzQ", "Josh Lemmon", "wolfiex2", "an empty room with grey walls"),
-  },
-  {
-    id: "demo-12",
-    name: "Furnished summer sublet off Moody Street",
-    kind: "Sublet",
-    area: "Waltham, MA (Moody Street)",
-    monthly_rent: 900, rent_basis: "room", rooms_available: 1, bedrooms: 3,
-    move_in_date: "2027-06-01",
-    lease: { months: 3, label: "Summer sublet, June to August 2027" },
-    utilities: "Utilities and internet included",
-    furnished: true,
-    laundry: "Washer and dryer in the apartment",
-    transit: "Walk to Moody Street; about 10 minutes by bike to campus",
-    description: "A grad student's furnished room is free for the summer while they do fieldwork. Two housemates who are around all summer.",
-    location: approx(42.3675, -71.2355),
-    photo: photo("photo-1564273795917-fe399b763988", "wD3dur3v9aE", "Jonathan Borba", "jonathanborba", "a bedroom with string lights and a round mirror"),
-  },
-  {
-    id: "demo-13",
-    name: "Small furnished studio in the Highlands",
-    kind: "Studio",
-    area: "Waltham, MA (The Highlands)",
-    monthly_rent: 1450, rent_basis: "unit", rooms_available: 1, bedrooms: 1,
-    move_in_date: "2027-08-01",
-    lease: { months: 12, label: "12-month lease from August" },
-    utilities: "Utilities included",
-    furnished: true,
-    laundry: "Shared laundry in the basement",
-    transit: "About 10 minutes by bike to campus; buses on Main Street",
-    description: "Furnished studio on the first floor of a two-family house, with a kitchenette and its own entrance.",
-    location: approx(42.3815, -71.25),
-    photo: photo("photo-1522708323590-d24dbb6b0267", "gREquCUXQLI", "deborah cortelazzi", "deborah_cortelazzi", "a furnished studio with a table and a sofa"),
-  },
-  {
-    id: "demo-14",
-    name: "Room in a five-bedroom near campus",
-    kind: "Private room",
-    area: "Waltham, MA (near Brandeis)",
-    monthly_rent: 890, rent_basis: "room", rooms_available: 2, bedrooms: 5,
-    move_in_date: "2027-08-01",
-    lease: { months: 12, label: "12-month lease from August" },
-    utilities: "Utilities split five ways",
-    furnished: false,
-    laundry: "Washer and dryer in the basement",
-    transit: "5-minute walk to campus",
-    description: "Two unfurnished rooms open in a house of rising seniors. Close to campus and a bit noisy on weekends.",
-    location: approx(42.3632, -71.2545),
-    photo: photo("photo-1666532937489-331f2f8f4668", "i4WbkwwvRj4", "Evan Wise", "evanthewise", "a shared living room with a sofa and armchairs"),
-  },
-  {
-    id: "demo-15",
-    name: "Whole one-bedroom by Hardy Pond",
-    kind: "Whole apartment",
-    area: "Waltham, MA (Lakeview)",
-    monthly_rent: 1950, rent_basis: "unit", rooms_available: 1, bedrooms: 1,
-    move_in_date: "2027-09-01",
-    lease: { months: 12, label: "12-month lease from September" },
-    utilities: "Heat and hot water included",
-    furnished: false,
-    laundry: "Laundry room in the building",
-    transit: "About 15 minutes by bike to campus; a car helps for groceries",
-    description: "Quiet unfurnished one-bedroom on a residential street near the pond. Good for one person.",
-    location: approx(42.3905, -71.256),
-    photo: photo("photo-1630699376106-d550afb865bd", "fbCqpQreg4Q", "Point3D Commercial Imaging Ltd.", "3dottawa", "an empty room with a large window"),
-  },
-].map((u) => ({ ...u, demo: true, sample: false }));
-
-// Lifestyle answers use the same values as the questionnaire. discoverable: false means this person did not
-// choose to be found, so they are never shown (the demo shows the rule working).
-// avatar: settings for the illustrated picture only (skin and hair colors, hair style, shirt, background,
-// glasses, beard). Matching never reads it.
-const person = (id, firstName, program, intro, interests, area, month, [min, max], [sleep, clean, noise, guests, pets, smoking, chores], avatar, discoverable = true) => ({
-  id: `demo-p${id}`,
-  firstName,
-  about: program,
-  program,
-  intro,
-  interests,
-  area,
-  move_in_month: month,
-  budget_min: min,
-  budget_max: max,
-  sleep_schedule: sleep,
-  cleanliness: clean,
-  noise,
-  guests,
-  pets,
-  smoking,
-  chores,
-  avatar,
-  discoverable,
-});
-const look = (skin, hair, hairColor, shirt, bg, extras = {}) => ({ skin, hair, hairColor, shirt, bg, glasses: !!extras.glasses, beard: !!extras.beard });
-
-export const DEMO_PEOPLE = [
-  person("01", "Ari", "PhD student in neuroscience, 2nd year",
-    "I'm usually up by 6:30 for lab and home by dinner. I like a calm, tidy house and don't mind a friendly pet.",
-    ["Trail running", "Baking bread", "Board games"], "Waltham (near Brandeis)", "2027-06", [950, 1350],
-    ["early", "tidy", "quiet", "sometimes", "ok_with_pets", "no_smoking", "rotating_schedule"],
-    look("#d9a27e", "long", "#2b1d16", "#2f855a", "#e9f6ef", { glasses: true })),
-  person("02", "Bea", "Incoming master's student in global health",
-    "Moving from Ohio in June. I keep shared spaces neat, rarely have guests and like splitting chores by task.",
-    ["Yoga", "Podcasts", "Thrift shopping"], "Waltham (Moody Street)", "2027-06", [1000, 1450],
-    ["early", "average", "quiet", "rarely", "no_pets", "no_smoking", "split_by_task"],
-    look("#f5d0b5", "bob", "#d9b26f", "#9b2c5f", "#f3ecfb")),
-  person("03", "Cam", "Senior in music and computer science",
-    "I play keys in a jazz trio but practice with headphones at home. Looking for a relaxed house near downtown.",
-    ["Jazz piano", "Cooking", "Pickup basketball"], "Waltham (Downtown)", "2027-07", [800, 1200],
-    ["flexible", "tidy", "moderate", "sometimes", "ok_with_pets", "no_smoking", "as_needed"],
-    look("#8a5536", "curly", "#1c1c1c", "#1d4fbf", "#eaf1fb")),
-  person("04", "Dev", "MBA student, 1st year",
-    "Social and up late; friends come over most weekends. I'll keep the kitchen clean if the house is fine with some noise.",
-    ["Soccer", "Hosting dinners", "Startups"], "Waltham (Moody Street)", "2027-06", [1100, 1600],
-    ["late", "relaxed", "lively", "often", "ok_with_pets", "outside_ok", "as_needed"],
-    look("#c68863", "side", "#1c1c1c", "#c05621", "#fdf1e2", { beard: true })),
-  person("05", "Eli", "Senior in environmental studies",
-    "My calm, litter-trained cat comes with me. I'm a night owl but quiet after midnight.",
-    ["Hiking", "Film photography", "Houseplants"], "Waltham (South Side)", "2027-06", [750, 1050],
-    ["late", "average", "moderate", "sometimes", "have_pets", "no_smoking", "split_by_task"],
-    look("#eac0a0", "wavy", "#7a4b2a", "#2c7a7b", "#e9f6ef", { glasses: true })),
-  person("06", "Fern", "PhD student in chemistry, 3rd year",
-    "I bike everywhere and I'm in bed early. Looking for a quiet place with people who also like a tidy kitchen.",
-    ["Cycling", "Rock climbing", "Mystery novels"], "Waltham (The Highlands)", "2027-08", [1100, 1500],
-    ["early", "tidy", "quiet", "rarely", "ok_with_pets", "no_smoking", "rotating_schedule"],
-    look("#f5d0b5", "bun", "#a33d1f", "#2f855a", "#fdf1e2")),
-  person("07", "Gus", "Master's student in sustainable development",
-    "Easygoing and up late. I smoke, always outside on the porch, so I'm looking for housemates who are fine with that.",
-    ["Guitar", "Watching soccer", "Cooking chili"], "Waltham (Downtown)", "2027-06", [900, 1300],
-    ["late", "average", "moderate", "often", "ok_with_pets", "smoker", "as_needed"],
-    look("#eac0a0", "short", "#4a2f1d", "#4a5568", "#eef2f9", { beard: true })),
-  person("08", "Hana", "Master's student in public policy, 2nd year",
-    "Early swimmer and early sleeper. I'd love a calm home with a shared cleaning schedule.",
-    ["Swimming", "Journaling", "Korean cooking"], "Waltham (near Brandeis)", "2027-05", [950, 1350],
-    ["early", "tidy", "quiet", "rarely", "no_pets", "no_smoking", "rotating_schedule"],
-    look("#eac0a0", "long", "#1c1c1c", "#1d4fbf", "#eaf1fb")),
-  person("09", "Ira", "PhD student in English and teaching assistant",
-    "I grade papers at home most evenings, so I like it quiet then. Flexible about when I sleep, strict about dishes.",
-    ["Poetry", "Long walks", "Tea"], "Waltham (Warrendale)", "2027-06", [1000, 1400],
-    ["flexible", "tidy", "quiet", "sometimes", "ok_with_pets", "no_smoking", "split_by_task"],
-    look("#a86b47", "curly", "#2b1d16", "#b7791f", "#fdf1e2", { glasses: true })),
-  person("10", "Jules", "Senior in economics",
-    "Back in September after a summer internship. I'm social, up late and like having friends over.",
-    ["Basketball", "Cooking", "Concerts"], "Waltham (Downtown)", "2027-09", [1000, 1400],
-    ["late", "average", "lively", "often", "ok_with_pets", "no_smoking", "as_needed"],
-    look("#6b4027", "long", "#1c1c1c", "#9b2c5f", "#fdeaea")),
-  person("11", "Kai", "Senior in computer science",
-    "I host a board game night most Fridays and code late. Looking for housemates who like a lively place.",
-    ["Board games", "Video games", "Climbing"], "Waltham (Moody Street)", "2027-06", [800, 1100],
-    ["late", "relaxed", "lively", "often", "ok_with_pets", "outside_ok", "as_needed"],
-    look("#d9a27e", "side", "#1c1c1c", "#1e3a6e", "#eaf1fb", { glasses: true })),
-  person("12", "Lena", "PhD student in history, writing a thesis",
-    "I need a quiet room from January to May while I finish writing. Tidy, early to bed, and no pets, please.",
-    ["Archives", "Running", "Knitting"], "Waltham (Prospect Hill)", "2027-01", [800, 1100],
-    ["early", "tidy", "quiet", "rarely", "no_pets", "no_smoking", "rotating_schedule"],
-    look("#f5d0b5", "long", "#b07a43", "#4a5568", "#f3ecfb", { glasses: true })),
-  person("13", "Milo", "Incoming PhD student in economics",
-    "I cook a lot and like sharing meals. Up early, fine with some noise, happy to split chores by task.",
-    ["Cooking", "Chess", "Soccer"], "Waltham (South Side)", "2027-06", [1000, 1500],
-    ["early", "average", "moderate", "sometimes", "ok_with_pets", "no_smoking", "split_by_task"],
-    look("#f5d0b5", "wavy", "#7a4b2a", "#b7791f", "#fdf1e2", { beard: true })),
-  person("14", "Noor", "Incoming master's student in biotechnology",
-    "Arriving in August. I keep a regular routine and a tidy room, and I'm not used to living with pets.",
-    ["Badminton", "Baking", "Museums"], "Waltham (near Brandeis)", "2027-08", [900, 1300],
-    ["flexible", "tidy", "quiet", "sometimes", "no_pets", "no_smoking", "rotating_schedule"],
-    look("#c68863", "scarf", "#2c7a7b", "#1e3a6e", "#e9f6ef")),
-  person("15", "Omar", "Master's student in computer science",
-    "Starting in September. I'm up early for the gym, like a clean kitchen and don't mind some background noise.",
-    ["Gym", "Photography", "Soccer"], "Waltham (Downtown)", "2027-09", [1100, 1600],
-    ["early", "tidy", "moderate", "sometimes", "ok_with_pets", "no_smoking", "split_by_task"],
-    look("#a86b47", "buzz", "#1c1c1c", "#2f855a", "#eef2f9", { beard: true })),
-  person("16", "Pia", "PhD student in biology",
-    "Chose not to be found, so this profile is never shown.",
-    ["Birding", "Pottery", "Running"], "Waltham (near Brandeis)", "2027-06", [900, 1400],
-    ["early", "tidy", "quiet", "sometimes", "ok_with_pets", "no_smoking", "rotating_schedule"],
-    look("#eac0a0", "bob", "#2b1d16", "#c05621", "#fdeaea"), false),
-  person("17", "Quinn", "Senior in psychology",
-    "Chose not to be found, so this profile is never shown.",
-    ["Theater", "Running", "Podcasts"], "Waltham (Moody Street)", "2027-06", [900, 1300],
-    ["early", "tidy", "quiet", "rarely", "ok_with_pets", "no_smoking", "split_by_task"],
-    look("#d9a27e", "short", "#7a4b2a", "#2c7a7b", "#eaf1fb"), false),
-  person("18", "Rosa", "Senior in sociology",
-    "Two friends and I have a three-bedroom lined up and need a fourth. We're friendly, fairly tidy and share a chore chart.",
-    ["Volleyball", "Cooking together", "Movies"], "Waltham (Lakeview)", "2027-06", [900, 1250],
-    ["flexible", "average", "moderate", "sometimes", "ok_with_pets", "no_smoking", "rotating_schedule"],
-    look("#c68863", "long", "#4a2f1d", "#c05621", "#fdeaea")),
-  person("19", "Sam", "Senior in film and media",
-    "Moving off campus in September. I edit videos late and like a lively house with people around.",
-    ["Filmmaking", "Skateboarding", "Live music"], "Waltham (Moody Street)", "2027-09", [800, 1200],
-    ["late", "average", "lively", "often", "ok_with_pets", "no_smoking", "as_needed"],
-    look("#8a5536", "short", "#1c1c1c", "#2c7a7b", "#eaf1fb")),
-  person("20", "Theo", "Master's student in finance",
-    "Chose not to be found, so this profile is never shown.",
-    ["Tennis", "Investing clubs", "Cooking"], "Waltham (The Highlands)", "2027-07", [1000, 1400],
-    ["early", "tidy", "quiet", "rarely", "no_pets", "no_smoking", "rotating_schedule"],
-    look("#f5d0b5", "side", "#d9b26f", "#1e3a6e", "#eef2f9"), false),
-].map((p) => ({ ...p, demo: true }));
+export const DEMO_LISTINGS = [...HAND_LISTINGS, ...GENERATED_LISTINGS].map(asListing);
+export const DEMO_PEOPLE = [...HAND_PEOPLE, ...GENERATED_PEOPLE].map(asPerson);
+export const DEMO_COUNTS = { listings: DEMO_LISTINGS.length, people: DEMO_PEOPLE.length, shown: DEMO_PEOPLE.filter((p) => p.discoverable).length };
 
 export const isDemoId = (id) => typeof id === "string" && id.startsWith("demo-");
+export const demoListing = (id) => DEMO_LISTINGS.find((u) => u.id === id) || null;
+export const demoPerson = (id) => DEMO_PEOPLE.find((p) => p.id === id && p.discoverable) || null;
+
+// DEMO_DATA=off (a Worker variable) turns Demo mode off everywhere. It's on unless set to "off".
+export const demoDataOn = (env) => String(env?.DEMO_DATA ?? "").trim().toLowerCase() !== "off";

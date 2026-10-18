@@ -123,7 +123,13 @@ function evaluate(memory, u) {
       fit("lease", `${u.lease.label}, close to the ${v.lease_months} months you want`);
     } else miss("lease", `${u.lease.label}, not the ${v.lease_months} months you want`);
   }
-  if ((v.wishes || []).some((w) => /furnish/i.test(w)) && typeof u.furnished === "boolean") (u.furnished ? fit("furnished", "Furnished") : miss("furnished", "Not furnished"));
+  // "unfurnished" (or "not furnished") is a wish too: it used to count as wanting a furnished place.
+  const unfurnished = (w) => /\b(un|not |no )furnish|no furniture/i.test(w);
+  const wishes = v.wishes || [];
+  if (typeof u.furnished === "boolean") {
+    if (wishes.some(unfurnished)) u.furnished ? miss("furnished", "Furnished, and you'd rather bring your own things") : fit("furnished", "Unfurnished");
+    else if (wishes.some((w) => /furnish/i.test(w))) u.furnished ? fit("furnished", "Furnished") : miss("furnished", "Not furnished");
+  }
 
   // The two strongest reasons and the most important mismatch, for the short card; Details shows all of them.
   const pick = (keys, list, order, n) => order.flatMap((k) => keys.flatMap((x, i) => (x === k ? [list[i]] : []))).slice(0, n);
@@ -159,6 +165,19 @@ function relaxOptions(memory) {
   if (v.max_distance_km != null && isRequired(memory, "max_distance_km"))
     options.push({ condition: "distance", change: `Look farther than ${v.max_distance_km} km from Brandeis`, brings: () => true });
   return options;
+}
+
+// For reports and tests: how many listings each must-have hides (one listing can be hidden by several), with the
+// same checks searchRooms uses.
+export function exclusionCounts(memory, listings) {
+  const byCondition = Object.fromEntries(CONDITIONS.map((c) => [c, 0]));
+  let hidden = 0;
+  for (const u of listings) {
+    const failed = CONDITIONS.filter((c) => !evaluate(memory, u).ok[c]);
+    if (failed.length) hidden++;
+    for (const c of failed) byCondition[c]++;
+  }
+  return { hidden, byCondition };
 }
 
 // listings: active units as renters see them (src/listings.js). Samples are left out unless asked for.

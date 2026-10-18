@@ -9,8 +9,11 @@
 //   /api/renter/interests        a renter's own "I'm interested" requests
 //   /api/listings                active units, listing fields only (public)
 //   /api/renter/preferences      a renter's own questionnaire answers
-//   /api/renter/matches          active units ranked against those answers
-//   /api/renter/roommates        other opted-in renters ranked by lifestyle fit (opt-in, limited fields)
+//   /api/renter/matches          active units ranked against those answers (demo listings in Demo mode)
+//   /api/renter/roommates        other opted-in renters ranked by lifestyle fit (opt-in, limited fields; demo
+//                                profiles in Demo mode)
+//   /api/demo/listings, /api/demo/people   the fictional Demo mode data (public; off with DEMO_DATA=off)
+//   /api/admin/demo[/cleanup]    Demo mode status, and removing bookmarks to demo cards (admin only)
 //   /api/roommates/requests[...]  connect with another renter, accept or decline, message once accepted (src/connections.js)
 //   /api/admin/users             read-only user list (admin only)
 //   /api/admin/imports[...]      import external listings from an authorized source; roll back (admin only)
@@ -19,15 +22,17 @@
 //   /api/admin/assistant         assistant usage totals and estimated cost (admin only)
 //   /api/survey                  Quick check-in: optional survey for anyone, coHabit Points once per person (src/survey.js)
 //   /api/admin/survey[.csv]      check-in summary, recent responses and spreadsheet export (admin only)
-import { assistantCleanup, assistantDeleteStatements, assistantUsageReport, handleAssistant } from "./assistant/routes.js";
+import { DEMO_COUNTS, DEMO_LISTINGS, DEMO_PEOPLE, demoDataOn } from "./assistant/demo-data.js";
+import { assistantCleanup, assistantDeleteStatements, assistantUsageReport, demoModeOn, handleAssistant } from "./assistant/routes.js";
+import { BRANDEIS, kmBetween } from "./assistant/search.js";
 import { getAuth } from "./auth.js";
-import { connectionDeleteStatements, handleConnections, personView, requestsByPerson } from "./connections.js";
+import { connectionDeleteStatements, demoPersonView, handleConnections, personView, requestsByPerson } from "./connections.js";
 import { HttpError, MAX_BODY, assertSameOrigin, json, rateLimit, readJson, withSecurityHeaders } from "./http.js";
 import { IMPORT_LIMIT, previewImport } from "./imports.js";
 import { activeListings, listingMapper, LISTING_FIELDS, noSamples, sampleListingsHidden } from "./listings.js";
 import { rankUnits } from "./match.js";
 import { asPrefs, createInterest, loadPreferences, MAX_INTERESTS_PER_RENTER, savePreferences } from "./profile.js";
-import { firstNameOf, rankedMatches } from "./roommates.js";
+import { BLOCKER_TEXT, firstNameOf, rankedMatches, roommateBlockers, scoreRoommate } from "./roommates.js";
 import { handleSurvey, pointsBalance, surveyCsv, surveyDeleteStatements, surveySummary } from "./survey.js";
 import { InvalidInput, isUnitId, parseAccountType, parseEmailOnly, parseInterest, parseNewPassword, parsePreferences, parseSignIn, parseSignup, parseUnit } from "./validate.js";
 import { devOutboxOn, passwordAccountsOn, readOutbox } from "./email.js";
@@ -35,6 +40,27 @@ import { devOutboxOn, passwordAccountsOn, readOutbox } from "./email.js";
 const MAX_IMPORT_BODY = 600 * 1024; // admin CSV imports only
 const MAX_UNITS_PER_LANDLORD = 50;
 const LIMITS = { read: 120, write: 30 }; // requests per minute per user (or per IP when signed out)
+
+// Demo mode data as pages get it. Distances are straight-line from the approximate point, like everywhere else.
+const kmFromBrandeis = (u) => Math.round(kmBetween(u.location, BRANDEIS) * 10) / 10;
+const DEMO_LISTING_VIEWS = DEMO_LISTINGS.map((u) => ({ ...u, km: kmFromBrandeis(u) }));
+const DEMO_SHOWN = DEMO_PEOPLE.filter((p) => p.discoverable);
+const demoOther = (p) => ({ userId: p.id, prefs: p, firstName: p.firstName, about: p.about, email: null, sample: false, demo: true });
+// A demo profile for a page: the whole fictional profile, plus, when the viewer has saved preferences, the same
+// compatibility check as real roommate matching (score, what they share, or why they aren't a match).
+function demoProfileFor(mine, p) {
+  const m = mine ? scoreRoommate(mine, p) : null;
+  const view = demoPersonView(mine, { ...demoOther(p), score: m?.eligible ? m.score : null, fits: m?.eligible ? m.shared : [] });
+  return {
+    ...view,
+    match: m?.eligible ? (m.score >= 90 ? "exact" : "partial") : null,
+    compatible: m ? m.eligible : null,
+    notMatching: m && !m.eligible ? roommateBlockers(mine, p).map((b) => BLOCKER_TEXT[b]) : [],
+    // The answers themselves, for the filters on the demo profile page.
+    answers: Object.fromEntries(["sleep_schedule", "cleanliness", "noise", "guests", "pets", "smoking", "chores", "move_in_month", "budget_min", "budget_max", "lease_months", "rooms_needed", "furnished", "looking_in"].map((k) => [k, p[k]])),
+    program: p.program,
+  };
+}
 
 const hasSessionCookie = (request) => /(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=/.test(request.headers.get("Cookie") || "");
 
@@ -228,7 +254,7 @@ async function handleApi(request, env, url) {
 
   // Public settings for the browser. The map key is a browser key restricted to this site's address.
   if (path === "/api/config" && method === "GET") {
-    return reply({ maptilerKey: env.MAPTILER_KEY || null, passwordSignIn: passwordAccountsOn(env), devInbox: devOutboxOn(env) });
+    return reply({ maptilerKey: env.MAPTILER_KEY || null, passwordSignIn: passwordAccountsOn(env), devInbox: devOutboxOn(env), demoData: demoDataOn(env), demoCounts: DEMO_COUNTS });
   }
 
   // Local development only: emails coHabit would have sent (src/email.js). Not available anywhere else.
@@ -242,6 +268,8 @@ async function handleApi(request, env, url) {
     const u = viewer.user;
     return reply({
       user: u && { name: u.name, email: u.email, accountType: u.accountType, isAdmin: u.role === "admin", points: await pointsBalance(db, u.id), occupation: u.occupation, company: u.company },
+      // Renters' Demo mode switch lives on the server so Listings, My matches and the assistant agree.
+      demo: u?.accountType === "renter" ? await demoModeOn(db, env, u.id) : false,
       sessionExpired: !!viewer.expired,
     });
   }
@@ -434,6 +462,16 @@ async function handleApi(request, env, url) {
     return reply({ listings: results.map(listingMapper(env)).concat(external.map(asExternal)) });
   }
 
+  // Anyone: the fictional Demo mode data. Never mixed into /api/listings or real matches.
+  if (path === "/api/demo/listings" || path === "/api/demo/people") {
+    if (method !== "GET") throw new HttpError(405, "method_not_allowed", "Not allowed.");
+    if (!demoDataOn(env)) throw new HttpError(404, "demo_off", "Demo mode isn't available right now.");
+    if (path === "/api/demo/listings") return reply({ demo: true, total: DEMO_LISTING_VIEWS.length, listings: DEMO_LISTING_VIEWS });
+    const mine = viewer.user?.accountType === "renter" ? await loadPreferences(db, viewer.user.id) : null;
+    const people = DEMO_SHOWN.map((p) => demoProfileFor(mine, p));
+    return reply({ demo: true, total: DEMO_COUNTS.people, shown: DEMO_COUNTS.shown, hidden: DEMO_COUNTS.people - DEMO_COUNTS.shown, compared: !!mine, people });
+  }
+
   // Renter: own preferences only.
   if (path === "/api/renter/preferences") {
     const user = requireType(viewer, "renter");
@@ -450,8 +488,10 @@ async function handleApi(request, env, url) {
 
   if (path === "/api/renter/matches" && method === "GET") {
     const user = requireType(viewer, "renter");
-    const prefs = await loadPreferences(db, user.id);
-    if (!prefs) return reply({ matches: [], needsPreferences: true });
+    const [prefs, demo] = await Promise.all([loadPreferences(db, user.id), demoModeOn(db, env, user.id)]);
+    if (!prefs) return reply({ matches: [], needsPreferences: true, demo });
+    // Demo mode: the same ranking over the demo listings, all of them that fit (not just the top 20), with the total.
+    if (demo) return reply({ demo: true, total: DEMO_LISTINGS.length, matches: rankUnits(prefs, DEMO_LISTINGS, DEMO_LISTINGS.length).map((m) => ({ ...m, km: kmFromBrandeis(m.unit) })) });
     return reply({ matches: rankUnits(prefs, await activeListings(db, env)) });
   }
 
@@ -460,8 +500,14 @@ async function handleApi(request, env, url) {
   // in common, and an email only if that person chose to share it. Never ids or raw answers.
   if (path === "/api/renter/roommates" && method === "GET") {
     const user = requireType(viewer, "renter");
-    const mine = await loadPreferences(db, user.id);
-    if (!mine) return reply({ roommates: [], needsPreferences: true, optedIn: false });
+    const [mine, demo] = await Promise.all([loadPreferences(db, user.id), demoModeOn(db, env, user.id)]);
+    if (!mine) return reply({ roommates: [], needsPreferences: true, optedIn: false, demo });
+    // Demo mode: the same matching over the fictional profiles that chose to be found. Seeing made-up people doesn't
+    // need the renter's own opt-in, and nobody real sees the renter.
+    if (demo) {
+      const roommates = rankedMatches(mine, DEMO_SHOWN.map(demoOther), DEMO_SHOWN.length).map(({ o }) => demoProfileFor(mine, o.prefs));
+      return reply({ demo: true, roommates, optedIn: true, total: DEMO_COUNTS.shown, youShare: true });
+    }
     if (!mine.roommate_visible) return reply({ roommates: [], optedIn: false });
     const { results } = await db
       .prepare(
@@ -632,6 +678,33 @@ async function handleApi(request, env, url) {
     if (user.role !== "admin") throw new HttpError(403, "forbidden", "You don't have access to this page.");
     if (method !== "GET") throw new HttpError(405, "method_not_allowed", "Not allowed.");
     return path.endsWith(".csv") ? surveyCsv(db, url) : reply(await surveySummary(db, url));
+  }
+
+  // Admin: Demo mode status, and removing what renters saved from demo cards (the only demo records in the database:
+  // bookmarks pointing at demo ids). Real saved options, listings and accounts are never touched.
+  if (path === "/api/admin/demo" || path === "/api/admin/demo/cleanup") {
+    const admin = requireUser(viewer);
+    if (admin.role !== "admin") throw new HttpError(403, "forbidden", "You don't have access to this page.");
+    const savedDemo = () => db.prepare(`SELECT COUNT(*) AS n FROM saved_options WHERE target_id LIKE 'demo-%'`).first();
+    if (path === "/api/admin/demo" && method === "GET") {
+      const [{ n }, { m }] = await Promise.all([
+        savedDemo(),
+        db.prepare(`SELECT COUNT(*) AS m FROM assistant_threads WHERE json_extract(last_results, '$.demo') = 1`).first(),
+      ]);
+      return reply({ on: demoDataOn(env), counts: DEMO_COUNTS, savedDemoCards: n, rentersWithDemoOn: m });
+    }
+    if (path === "/api/admin/demo/cleanup" && method === "POST") {
+      const body = await readJson(request);
+      if (body?.confirm !== "REMOVE") throw new InvalidInput("confirm", "Type REMOVE to confirm.");
+      const res = await db.batch([
+        db.prepare(`DELETE FROM saved_options WHERE target_id LIKE 'demo-%'`),
+        db
+          .prepare(`INSERT INTO admin_audit (id, admin_user_id, action, detail, created_at) VALUES (?1, ?2, 'remove_demo_saves', NULL, ?3)`)
+          .bind(crypto.randomUUID(), admin.id, Date.now()),
+      ]);
+      return reply({ removed: res[0].meta.changes });
+    }
+    throw new HttpError(405, "method_not_allowed", "Not allowed.");
   }
 
   // Admin: read-only user list. No questionnaire answers, unit details, sessions or tokens.

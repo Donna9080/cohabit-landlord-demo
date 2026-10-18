@@ -4,13 +4,15 @@
 // Fixture users get signed Better Auth session cookies made with a per-run random secret.
 import { spawn, execFileSync } from "node:child_process";
 import { createHmac, randomBytes } from "node:crypto";
-import { rmSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { allowedNumbers, groundReply } from "../src/assistant/ai.js";
 import { understand } from "../src/assistant/basic.js";
 import { applyUpdates, emptyMemory } from "../src/assistant/memory.js";
 import { DEMO_LISTINGS, DEMO_PEOPLE } from "../src/assistant/demo-data.js";
-import { BRANDEIS, kmBetween, searchRooms } from "../src/assistant/search.js";
+import { BRANDEIS, exclusionCounts, kmBetween, searchRooms } from "../src/assistant/search.js";
+import { build as buildDemo, render as renderDemo } from "../scripts/demo-build.mjs";
+import { coverage as demoCoverage, mutualBlockers, profileMemory } from "../scripts/demo-coverage.mjs";
 import { PHONE, hasAddress } from "../src/validate.js";
 import { rankUnits } from "../src/match.js";
 import { rankRoommates, scoreRoommate } from "../src/roommates.js";
@@ -253,26 +255,46 @@ try {
 
     // Demo data (src/assistant/demo-data.js)
     const demoText = JSON.stringify([DEMO_LISTINGS.map(({ photo, ...u }) => u), DEMO_PEOPLE]);
-    check("Demo data: 15 listings and 20 roommate profiles, every id starting demo-", DEMO_LISTINGS.length === 15 && DEMO_PEOPLE.length === 20 && [...DEMO_LISTINGS, ...DEMO_PEOPLE].every((x) => x.id.startsWith("demo-") && x.demo === true));
+    check("Demo data: 100 listings and 200 roommate profiles, every id starting demo- and unique", DEMO_LISTINGS.length === 100 && DEMO_PEOPLE.length === 200 && [...DEMO_LISTINGS, ...DEMO_PEOPLE].every((x) => x.id.startsWith("demo-") && x.demo === true) && new Set([...DEMO_LISTINGS, ...DEMO_PEOPLE].map((x) => x.id)).size === 300);
+    check("Demo data: the 15 hand-written listings and 20 profiles are kept with their ids", ["demo-01", "demo-15"].every((id) => DEMO_LISTINGS.some((u) => u.id === id)) && DEMO_PEOPLE.slice(0, 20).map((p) => p.firstName).join() === "Ari,Bea,Cam,Dev,Eli,Fern,Gus,Hana,Ira,Jules,Kai,Lena,Milo,Noor,Omar,Pia,Quinn,Rosa,Sam,Theo");
     check("Demo data: no contact details, street addresses or ZIP codes anywhere", !/@|https?:/.test(demoText) && ![...DEMO_LISTINGS.flatMap((u) => [u.name, u.area, u.description, u.transit, u.utilities, u.laundry]), ...DEMO_PEOPLE.flatMap((p) => [p.about, p.area, p.intro, ...p.interests])].some((t) => hasAddress(t) || PHONE.test(t)));
     check("Demo data: profiles have a first name and a town only, never a location", DEMO_PEOPLE.every((p) => /^[A-Z][a-z]+$/.test(p.firstName) && !("location" in p) && !("lat" in p) && !("email" in p)));
     check("Demo data: every listing is an approximate area in a Waltham neighborhood (within 4 km of Brandeis)", DEMO_LISTINGS.every((u) => /^Waltham, MA \((near Brandeis|Moody Street|South Side|Downtown|The Highlands|Prospect Hill|Warrendale|Lakeview)\)$/.test(u.area) && u.location.precision === "approximate" && kmBetween(u.location, BRANDEIS) < 4));
     check("Demo data: every listing says rent basis, utilities, lease, furnishing, laundry and transport", DEMO_LISTINGS.every((u) => ["room", "unit"].includes(u.rent_basis) && u.utilities && u.lease?.label && u.lease.months > 0 && typeof u.furnished === "boolean" && u.laundry && u.transit && u.description.length <= 200));
-    check("Demo data: every listing has its own illustrative Unsplash photo with credit and license", DEMO_LISTINGS.every((u) => /^https:\/\/images\.unsplash\.com\/photo-[0-9a-f]+-[0-9a-f]+$/.test(u.photo?.src) && u.photo.alt.startsWith("Illustrative photo: ") && u.photo.license === "Unsplash License" && u.photo.licenseUrl === "https://unsplash.com/license" && /^https:\/\/unsplash\.com\/photos\/[\w-]+\?utm_source=cohabit/.test(u.photo.sourceUrl) && /^https:\/\/unsplash\.com\/@[\w-]+\?utm_source=cohabit/.test(u.photo.creditUrl) && u.photo.credit) && new Set(DEMO_LISTINGS.map((u) => u.photo.src)).size === 15);
+    check("Demo data: every listing has its own illustrative Unsplash photo with credit and license", DEMO_LISTINGS.every((u) => /^https:\/\/images\.unsplash\.com\/photo-[0-9a-f]+-[0-9a-f]+$/.test(u.photo?.src) && u.photo.alt.startsWith("Illustrative photo: ") && u.photo.license === "Unsplash License" && u.photo.licenseUrl === "https://unsplash.com/license" && /^https:\/\/unsplash\.com\/photos\/[\w-]+\?utm_source=cohabit/.test(u.photo.sourceUrl) && /^https:\/\/unsplash\.com\/@[\w-]+\?utm_source=cohabit/.test(u.photo.creditUrl) && u.photo.credit));
+    const photoUses = DEMO_LISTINGS.reduce((m, u) => m.set(u.photo.src, (m.get(u.photo.src) || 0) + 1), new Map());
+    check("Demo data: 41 different photos, none on more than 3 listings; unfurnished places never get a furnished bedroom photo", photoUses.size === 41 && Math.max(...photoUses.values()) <= 3 && DEMO_LISTINGS.every((u) => u.furnished || !/bed(room)?\b|bunk/i.test(u.photo.alt) || u.kind === "Studio"));
     check("Demo data: every profile is a senior or grad student in Waltham with a program, a short intro, 3 interests and an illustrated avatar", DEMO_PEOPLE.every((p) => /^Waltham \(/.test(p.area) && /Senior|PhD|master's|MBA/i.test(p.program) && p.intro.length >= 40 && p.intro.length <= 160 && p.interests.length === 3 && ["skin", "hair", "hairColor", "shirt", "bg"].every((k) => typeof p.avatar[k] === "string")));
     check("Demo data: no gender field anywhere, and names or avatars never change a score", !/gender|pronoun|"sex"/i.test(demoText) && DEMO_PEOPLE.every((p) => scoreRoommate(DEMO_PEOPLE[0], p).score === scoreRoommate(DEMO_PEOPLE[0], { ...p, firstName: "X", avatar: DEMO_PEOPLE[1].avatar }).score));
     const kinds = new Set(DEMO_LISTINGS.map((u) => u.kind));
     check("Demo data: shared rooms, studios, sublets, lease takeovers, whole places and replacing a roommate; furnished and not; per-room and whole-place rent", ["Shared room", "Studio", "Sublet", "Lease takeover", "Whole apartment", "Replacing a roommate", "Private room"].every((k) => kinds.has(k)) && DEMO_LISTINGS.some((u) => u.furnished) && DEMO_LISTINGS.some((u) => !u.furnished) && DEMO_LISTINGS.some((u) => u.rent_basis === "unit") && DEMO_LISTINGS.some((u) => u.rent_basis === "room"));
     check("Demo data: some profiles chose not to be found", DEMO_PEOPLE.filter((p) => !p.discoverable).length === 3);
-    const pair = searchRooms(mem({ budget_max: 1400, rooms_needed: 2 }), DEMO_LISTINGS, { limit: 20 }).results.find((r) => r.unitId === "demo-06");
+    const pair = searchRooms(mem({ budget_max: 1400, rooms_needed: 2 }), DEMO_LISTINGS, { limit: 200 }).results.find((r) => r.unitId === "demo-06");
     check("Rent for a whole place is split between the people moving in together", pair?.fits.includes("$2,700 a month for the whole place, $1,350 each for 2, within your $1,400 budget") && pair.you_would_pay === 1350, JSON.stringify(pair?.fits));
-    const solo = searchRooms(mem({ budget_max: 1500 }, { budget_max: false }), DEMO_LISTINGS, { limit: 20 }).results.find((r) => r.unitId === "demo-03");
+    const solo = searchRooms(mem({ budget_max: 1500 }, { budget_max: false }), DEMO_LISTINGS, { limit: 200 }).results.find((r) => r.unitId === "demo-03");
     check("One person pays the whole rent of a studio, and the mismatch says so", solo?.misses.includes("$1,650 a month for the whole place, $150 over your $1,500 budget"), JSON.stringify(solo?.misses));
-    const sublet = searchRooms(mem({ budget_max: 1100, move_in_month: "2027-01", rooms_needed: 1, lease_months: 5 }), DEMO_LISTINGS, { limit: 20 });
-    check("A spring-sublet search finds the spring sublet first, with its lease", sublet.results[0]?.unitId === "demo-04" && sublet.results[0].fits.some((f) => f.startsWith("Spring sublet")));
-    const strong = searchRooms(mem({ budget_max: 1300, move_in_month: "2027-06", areas: ["Waltham"], rooms_needed: 1 }), DEMO_LISTINGS, { limit: 20 });
+    const sublet = searchRooms(mem({ budget_max: 1100, move_in_month: "2027-01", rooms_needed: 1, lease_months: 5 }), DEMO_LISTINGS, { limit: 200 });
+    check("A spring-sublet search finds the spring sublets, each with its lease", sublet.results.filter((r) => !r.misses.length).some((r) => r.unitId === "demo-04") && sublet.results[0].fits.some((f) => /Spring sublet|lease/i.test(f)));
+    const strong = searchRooms(mem({ budget_max: 1300, move_in_month: "2027-06", areas: ["Waltham"], rooms_needed: 1 }), DEMO_LISTINGS, { limit: 200 });
     check("Demo data covers strong and partial matches for a typical Waltham search", strong.results[0].misses.length === 0 && strong.results.some((r) => r.misses.length > 0));
     check("Demo data covers no-match cases (a $600 budget finds nothing)", searchRooms(mem({ budget_max: 600, move_in_month: "2027-06", areas: ["Waltham"], rooms_needed: 1 }), DEMO_LISTINGS).results.length === 0);
+    // Coverage targets, checked with the matching code itself (scripts/demo-coverage.mjs)
+    const cov = demoCoverage(DEMO_LISTINGS, DEMO_PEOPLE);
+    check("Demo coverage: every profile has 3+ rooms matching everything and 3+ mutually compatible roommates; every room suits 3+ visible renters", cov.failures.length === 0, cov.failures.slice(0, 5).join("; "));
+    const roomCounts = [...cov.perPerson.values()].map((c) => c.rooms.length);
+    const mateCounts = [...cov.perPerson.values()].map((c) => c.mates.length);
+    check("Demo coverage: realistic variation, nobody matches everything or everyone", Math.max(...roomCounts) < 40 && Math.max(...mateCounts) < 100 && (cov.pairReasons.month || 0) > 0 && (cov.pairReasons.pets || 0) > 0 && (cov.pairReasons.smoking || 0) > 0);
+    const ari = DEMO_PEOPLE[0];
+    check("Demo coverage: a suitable room really matches everything for that profile, must-haves included", cov.perPerson.get(ari.id).rooms.every((id) => searchRooms(profileMemory(ari), DEMO_LISTINGS.filter((u) => u.id === id)).results[0]?.misses.length === 0));
+    check("Demo coverage: roommates are compatible both ways (the rules are symmetric)", DEMO_PEOPLE.slice(0, 40).every((a) => DEMO_PEOPLE.slice(0, 40).every((b) => mutualBlockers(a, b).length === mutualBlockers(b, a).length)));
+    check("Demo data is repeatable: the generator writes exactly the committed file", renderDemo(buildDemo()) === readFileSync("src/assistant/demo-generated.js", "utf8").replace(/\r\n/g, "\n"));
+    const ex = exclusionCounts(mem({ budget_max: 1000, move_in_month: "2027-06", rooms_needed: 1 }), DEMO_LISTINGS);
+    check("Exclusion counts say how many rooms each must-have hides", ex.byCondition.budget > 0 && ex.hidden === DEMO_LISTINGS.length - searchRooms(mem({ budget_max: 1000, move_in_month: "2027-06", rooms_needed: 1 }), DEMO_LISTINGS, { limit: 200 }).totalMatching);
+    // Bugs fixed while building the demo data
+    const unf = searchRooms(mem({ wishes: ["unfurnished"] }), [unit({ id: "f", furnished: true }), unit({ id: "uf", furnished: false })], { limit: 5 });
+    check("Search: a wish for an unfurnished place no longer counts as wanting furnished", unf.results[0].unitId === "uf" && unf.results[0].fits.includes("Unfurnished") && unf.results[1].misses.some((m) => m.startsWith("Furnished, and you'd rather")));
+    const whole = rankUnits({ budget_max: 1400, move_in_month: "2027-06", area: "Waltham", rooms_needed: 2 }, DEMO_LISTINGS, 100).find((m) => m.unit.id === "demo-06");
+    check("My matches: a whole two-bedroom is split between the two renters, not compared whole with one budget", whole?.reasons.includes("Within your budget") && !rankUnits({ budget_max: 1400, move_in_month: "2027-06", area: "Waltham", rooms_needed: 1 }, DEMO_LISTINGS, 100).some((m) => m.unit.id === "demo-06"));
     check("Real listings without these details are matched exactly as before", searchRooms(mem({ budget_max: 1000, lease_months: 5, wishes: ["furnished"] }), [unit({ monthly_rent: 900 })]).results[0].fits.join() === "1 room available,$900 a month, within your $1,000 budget");
   }
 
@@ -1087,9 +1109,9 @@ try {
     }
     let demoRooms = r.data.results.rooms;
     check("Demo mode: room results are demo listings only, each labeled demo", r.data.results.demo === true && demoRooms.status === "ok" && demoRooms.items.length >= 3 && demoRooms.items.every((c) => c.unit.id.startsWith("demo-") && c.unit.demo === true));
-    check("Demo mode: strong and partial matches, with scores never shown for rooms", demoRooms.items[0].misses.length === 0 && demoRooms.items.some((c) => c.misses.length) && demoRooms.items.every((c) => !("score" in c)));
+    check("Demo mode: strong and partial matches (counted; the best are shown first), with scores never shown for rooms", demoRooms.items[0].misses.length === 0 && demoRooms.exact > 0 && demoRooms.total > demoRooms.exact && demoRooms.items.every((c) => !("score" in c)));
     r = await api("/api/assistant/saved", { method: "POST", as: chatFresh, body: { kind: "room", unitId: demoRooms.items[0].unit.id } });
-    check("Demo mode: demo listings can't be saved (409)", r.status === 409 && r.data.error === "demo");
+    check("Demo mode: demo listings can be saved, and show under Saved in Demo mode", r.status === 201 && r.data.saved.some((x) => x.unit?.id === demoRooms.items[0].unit.id && x.unit.demo === true));
     r = await api("/api/listings");
     check("Demo listings never appear in public listings", !JSON.stringify(r.data).includes("demo-"));
     r = await say(chatFresh, "show rooms");
@@ -1113,6 +1135,52 @@ try {
     check("Assistant: Clear chat deletes the messages and what it learned; saved options stay", r.status === 200 && cleared.data.messages.length === 0 && cleared.data.memory.length === 0 && keptSaved && cleared.data.saved.length === 1);
 
     d1(`UPDATE "user" SET role='admin' WHERE id='t_admin'`);
+
+    // ── Demo mode across the site: public demo data, one switch, My matches, saves, cleanup ──
+    {
+      const n = (sqlText) => d1rows(sqlText)[0].n;
+      r = await api("/api/demo/listings");
+      const pub = await api("/api/listings");
+      check("Demo listings endpoint: all 100, public, approximate areas with distances, never in real listings", r.status === 200 && r.data.total === 100 && r.data.listings.length === 100 && r.data.listings.every((u) => u.demo && u.id.startsWith("demo-") && u.location.precision === "approximate" && typeof u.km === "number" && !("address" in u)) && !JSON.stringify(pub.data).includes('"demo-'));
+      r = await api("/api/demo/people");
+      check("Demo profiles endpoint: 197 who chose to be found (3 hidden), no contact details, not compared for guests", r.status === 200 && r.data.total === 200 && r.data.shown === 197 && r.data.hidden === 3 && r.data.people.length === 197 && r.data.compared === false && r.data.people.every((p) => p.demo && p.email === null && p.handle === null && p.score === null) && !r.data.people.some((p) => ["Pia", "Quinn", "Theo"].includes(p.firstName)));
+      const prefsA = (await api("/api/renter/preferences", { as: renterA })).data.preferences;
+      const realMatches = await api("/api/renter/matches", { as: renterA });
+      const realMates = await api("/api/renter/roommates", { as: renterA });
+      r = await api("/api/me", { as: renterA });
+      check("Demo mode: off by default, and real My matches say so", r.data.demo === false && !realMatches.data.demo && realMatches.data.matches.every((m) => !String(m.unit.id).startsWith("demo-")));
+      await api("/api/assistant/demo", { method: "POST", as: renterA, body: { on: true } });
+      const meA = await api("/api/me", { as: renterA });
+      const dm = await api("/api/renter/matches", { as: renterA });
+      const dr = await api("/api/renter/roommates", { as: renterA });
+      const dp = await api("/api/demo/people", { as: renterA });
+      check("Demo mode is one switch: /api/me, My matches rooms and roommates all switch to demo data", meA.data.demo === true && dm.data.demo === true && dm.data.total === 100 && dm.data.matches.length > 0 && dm.data.matches.every((m) => m.unit.id.startsWith("demo-")) && dr.data.demo === true && dr.data.total === 197 && dr.data.roommates.length > 0 && dr.data.roommates.every((p) => p.demo && p.id.startsWith("demo-p") && p.email === null && p.handle === null && p.compatible === true));
+      check("My matches in Demo mode: the same room rules over the demo listings (nothing loosened), with every match counted", JSON.stringify(dm.data.matches.map((m) => m.unit.id)) === JSON.stringify(rankUnits(prefsA, DEMO_LISTINGS, 100).map((m) => m.unit.id)));
+      check("My matches in Demo mode: the same roommate rules; the profile page agrees on who's compatible and says why the others aren't", dr.data.roommates.length === DEMO_PEOPLE.filter((p) => p.discoverable && scoreRoommate(prefsA, p).eligible).length && dp.data.compared === true && dp.data.people.filter((p) => p.compatible).length === dr.data.roommates.length && dp.data.people.filter((p) => p.compatible === false).every((p) => p.notMatching.length > 0));
+      const sr = await api("/api/assistant/saved", { method: "POST", as: renterA, body: { kind: "room", unitId: "demo-20" } });
+      const sp = await api("/api/assistant/saved", { method: "POST", as: renterA, body: { kind: "person", demoId: dr.data.roommates[0].id } });
+      const hidden = await api("/api/assistant/saved", { method: "POST", as: renterA, body: { kind: "person", demoId: "demo-p16" } });
+      const unknown = await api("/api/assistant/saved", { method: "POST", as: renterA, body: { kind: "room", unitId: "demo-999" } });
+      const ids = await api("/api/assistant/saved", { as: renterA });
+      const page = await api("/api/assistant", { as: renterA });
+      check("Demo cards can be saved from any page (rooms and people); hidden or unknown demo ids can't", sr.status === 201 && sp.status === 201 && hidden.status === 404 && unknown.status === 404 && ids.data.saved.filter((x) => x.demo).length === 2);
+      check("Saved demo cards show in Demo mode with the same details as elsewhere (photo, avatar, intro)", page.data.saved.length === 2 && page.data.saved.every((x) => x.available) && page.data.saved.find((x) => x.kind === "room")?.unit.photo.src && page.data.saved.find((x) => x.kind === "person")?.intro && page.data.saved.find((x) => x.kind === "person")?.avatar);
+      await api("/api/assistant/demo", { method: "POST", as: renterA, body: { on: false } });
+      const off = await api("/api/assistant", { as: renterA });
+      const offMatches = await api("/api/renter/matches", { as: renterA });
+      const offMates = await api("/api/renter/roommates", { as: renterA });
+      check("Demo mode off: demo saves are hidden (kept), and My matches is exactly as before", off.data.demo === false && !off.data.saved.some((x) => (x.unit?.id || x.id || "").startsWith("demo-") || x.demo) && JSON.stringify(offMatches.data) === JSON.stringify(realMatches.data) && JSON.stringify(offMates.data) === JSON.stringify(realMates.data));
+      const realSaved = n(`SELECT COUNT(*) AS n FROM saved_options WHERE target_id NOT LIKE 'demo-%'`);
+      const demoSaved = n(`SELECT COUNT(*) AS n FROM saved_options WHERE target_id LIKE 'demo-%'`);
+      r = await api("/api/admin/demo", { as: admin });
+      const notAdmin = await api("/api/admin/demo", { as: renterA });
+      check("Admin: Demo mode status counts demo saves, and only admins see it", r.status === 200 && r.data.on === true && r.data.savedDemoCards === demoSaved && demoSaved >= 3 && r.data.counts.listings === 100 && notAdmin.status === 403);
+      const noConfirm = await api("/api/admin/demo/cleanup", { method: "POST", as: admin, body: {} });
+      r = await api("/api/admin/demo/cleanup", { method: "POST", as: admin, body: { confirm: "REMOVE" } });
+      check("Admin: removing saved demo cards deletes only bookmarks to demo ids (real saved options stay), and is recorded", noConfirm.status === 400 && r.status === 200 && r.data.removed === demoSaved && n(`SELECT COUNT(*) AS n FROM saved_options WHERE target_id LIKE 'demo-%'`) === 0 && n(`SELECT COUNT(*) AS n FROM saved_options WHERE target_id NOT LIKE 'demo-%'`) === realSaved && n(`SELECT COUNT(*) AS n FROM admin_audit WHERE action = 'remove_demo_saves'`) === 1);
+      r = await api("/api/survey", { method: "POST", body: { id: randomBytes(16).toString("hex"), answers: { options_work: "enough" }, demo: true } });
+      check("Check-in: a guest's answers in Demo mode (set in their browser) are labeled demo", r.status === 201 && n(`SELECT COUNT(*) AS n FROM survey_responses WHERE demo = 1 AND user_id IS NULL`) === 1);
+    }
     r = await api("/api/admin/assistant", { as: admin });
     check("Admin sees AI use today with an estimated cost, and no chats", r.status === 200 && r.data.aiConfigured === true && r.data.model === "claude-opus-5-5" && r.data.today?.replies >= 10 && r.data.today.estimatedUsd > 0 && !JSON.stringify(r.data).includes("TEST note"));
     d1(`UPDATE "user" SET role='user' WHERE id='t_admin'`);
@@ -1382,7 +1450,7 @@ try {
       process.execPath,
       [...WRANGLER, "dev", "--port", String(PORT2), "--persist-to", STATE2, "--var", `BETTER_AUTH_URL:${BASE2}`, "--var", `BETTER_AUTH_SECRET:${SECRET}`,
         "--var", "GOOGLE_CLIENT_ID:local-test-client.apps.googleusercontent.com", "--var", "GOOGLE_CLIENT_SECRET:local-test-only", "--var", "MAPTILER_KEY:test-browser-key",
-        "--var", "DEV_EMAIL_OUTBOX:0", "--var", "PASSWORD_ACCOUNTS:on"],
+        "--var", "DEV_EMAIL_OUTBOX:0", "--var", "PASSWORD_ACCOUNTS:on", "--var", "DEMO_DATA:off"],
       { stdio: "ignore" }
     );
     try {
@@ -1401,6 +1469,8 @@ try {
       check("Google only: Google sign-in works, even right after a rejected request on a fresh server", crossSite.status === 403 && google.status === 200 && /^https:\/\/accounts\.google\.com\//.test(google.data?.url || ""), `${crossSite.status} ${google.status}`);
       const cfg = await call("/api/config");
       check("Google only: the site reports no email and password sign-in and no test inbox (PASSWORD_ACCOUNTS=on alone isn't enough)", cfg.data?.passwordSignIn === false && cfg.data?.devInbox === false);
+      const demoOff = [(await call("/api/demo/listings")).status, (await call("/api/demo/people")).status];
+      check("DEMO_DATA=off: the site reports no Demo mode and the demo data isn't served", cfg.data?.demoData === false && demoOff.every((x) => x === 404), demoOff.join(","));
       const off = [];
       for (const [path, body] of [
         ["/api/auth/sign-up/email", { signupAs: "renter", name: "Ann", email: "ann@example.test", password: "correct horse battery" }],

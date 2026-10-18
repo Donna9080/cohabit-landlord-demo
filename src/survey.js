@@ -8,6 +8,7 @@
 //   GET  /api/admin/survey.csv   every response as a spreadsheet (admin only)
 import { HttpError, SECURITY_HEADERS, rateLimit, readJson } from "./http.js";
 import { EMAIL, InvalidInput, PHONE, SSN, STREET } from "./validate.js";
+import { demoDataOn } from "./assistant/demo-data.js";
 
 export const SURVEY_ID = "checkin-2026-10";
 export const SURVEY_POINTS = 100;
@@ -122,9 +123,11 @@ async function earnedSurveyPoints(db, userId) {
   return !!(await db.prepare(`SELECT 1 FROM points_awards WHERE user_id = ?1 AND reason = ?2`).bind(userId, REASON).first());
 }
 
-// Demo mode is a renter's assistant setting; submissions made while it's on are labeled for analysis.
-async function demoModeOn(db, user) {
-  if (user?.accountType !== "renter") return false;
+// Submissions made while Demo mode is on are labeled, so they can be left out of real results. A renter's Demo mode
+// is a server setting; anyone else's lives in their browser, so the page says (demo: true). It's only a label.
+async function demoModeOn(db, env, user, said) {
+  if (!demoDataOn(env)) return false;
+  if (user?.accountType !== "renter") return said === true;
   const row = await db.prepare(`SELECT last_results FROM assistant_threads WHERE user_id = ?1`).bind(user.id).first();
   try {
     return JSON.parse(row?.last_results || "{}").demo === true;
@@ -147,7 +150,8 @@ export async function handleSurvey({ request, env, db, user, path, method, ip, r
 
   if (path === "/api/survey" && method === "POST") {
     await rateLimit(env, `s:${user ? "u:" + user.id : "ip:" + ip}`, PER_MINUTE, "You've sent a few check-ins just now. Wait a minute and try again.");
-    const s = parseSurvey(await readJson(request));
+    const body = await readJson(request);
+    const s = parseSurvey(body);
     const now = Date.now();
     const statements = [
       db
@@ -155,7 +159,7 @@ export async function handleSurvey({ request, env, db, user, path, method, ip, r
           `INSERT INTO survey_responses (id, survey, user_id, respondent, demo, page, answers, comment, created_at)
            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) ON CONFLICT (id) DO NOTHING`
         )
-        .bind(s.id, SURVEY_ID, user?.id ?? null, respondentOf(user), (await demoModeOn(db, user)) ? 1 : 0, s.page, JSON.stringify(s.answers), s.comment, now),
+        .bind(s.id, SURVEY_ID, user?.id ?? null, respondentOf(user), (await demoModeOn(db, env, user, body.demo)) ? 1 : 0, s.page, JSON.stringify(s.answers), s.comment, now),
     ];
     if (user) {
       // One transaction: the award only if this response is saved and theirs, and only if they have no award for

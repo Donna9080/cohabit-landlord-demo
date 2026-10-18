@@ -101,10 +101,21 @@ export async function personView(env, viewerId, mine, p, requests) {
   };
 }
 
+// What a demo profile is looking for, in words (fictional people only; real renters' searches aren't shown).
+const ROOMS_WANTED = { 1: "A room of their own", 2: "A two-bedroom shared with one roommate", 3: "A three-bedroom shared with two roommates" };
+const demoSearchDetails = (p) => ({
+  lease: `${p.lease_months} months`,
+  rooms: ROOMS_WANTED[p.rooms_needed] || `${p.rooms_needed} rooms`,
+  furnished: p.furnished ? "Wants a furnished place" : "No preference",
+  distance: p.max_distance_km != null ? `Within ${p.max_distance_km} km of Brandeis (must-have)` : null,
+});
+
 // Demo profiles are made up, so everything is shown; they have no handle and can't be sent a real request.
+// id: the made-up demo id (safe to show), used to save the card.
 export function demoPersonView(mine, p) {
   const diffs = roommateDifferences(mine || {}, p.prefs);
   return {
+    id: p.prefs.id,
     handle: null,
     demo: true,
     firstName: p.firstName,
@@ -119,7 +130,7 @@ export function demoPersonView(mine, p) {
     mainMiss: majorDifferences(mine || {}, p.prefs)[0] || null,
     sample: false,
     email: null,
-    details: profileDetails(p.prefs),
+    details: { ...profileDetails(p.prefs), ...demoSearchDetails(p.prefs) },
     differences: diffs,
     differenceCount: diffs.length,
     theyShare: true,

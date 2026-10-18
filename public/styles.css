@@ -847,3 +847,24 @@ p.interest { display: block; }
   .auth-card { padding: 20px 16px; border: 0; margin-top: 0; }
   .auth-path button { font-size: 13px; }
 }
+
+/* Demo mode across the site: filters, dashed pins and cards */
+.filters { display: grid; gap: 10px 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); align-items: end; }
+.filter { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 13px; font-weight: 600; color: var(--sub); }
+.filter input, .filter select {
+  width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--white); color: var(--text); font: inherit; font-size: 14px; font-weight: 500;
+}
+.filter input:focus, .filter select:focus { outline: none; border-color: var(--blue); box-shadow: var(--focus); }
+.filter-wide { grid-column: span 2; }
+.filter-check { flex-direction: row; align-items: center; gap: 8px; min-height: 38px; color: var(--text); }
+.filter-check input { width: 18px; min-height: 18px; }
+.map-pin-demo { background: var(--white); border: 3px dashed var(--navy); }
+.map-pin-demo:hover, .map-pin-demo:focus-visible { background: var(--amber-bg); }
+.mini-card.is-demo { border-style: dashed; border-color: #d9c39a; }
+.mini-card .avatar-pic.avatar-sm { width: 28px; height: 28px; }
+.details-body .mini-actions { margin-top: 4px; }
+@media (max-width: 520px) {
+  .filters { grid-template-columns: 1fr 1fr; }
+  .filter-wide { grid-column: 1 / -1; }
+}
