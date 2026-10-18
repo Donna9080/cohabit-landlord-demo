@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-10-18 (connected demo data: 100 rooms and 200 profiles; local only)
+# coHabit project checkpoint: 2026-10-18 (connected demo data: 100 rooms and 200 profiles; live)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -26,11 +26,24 @@ No real listings were imported because no authorized data source exists yet (see
 
 ## Deployment status
 
-**Not deployed: connected demo data (2026-10-18)** (below) is committed locally only. It needs no database change, and
-nothing was sent to Cloudflare or the live database.
-
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `05be52b1-a9aa-4485-8d33-3b94b38e6e02`, deployed 2026-10-17 with the owner's approval: the homepage paths, the account
+- **Live version:** `df357d7e-73f7-4255-8104-1a7b6de9da29`, deployed 2026-10-18 with the owner's approval: the connected demo data (100 demo
+  rooms, 200 demo profiles, Demo mode across Listings, My matches, the assistant and `/demo/people`; commit `f5d39e4`,
+  tag `checkpoint-2026-10-18-demo-100`). No database change (none needed), so no restore point or migration. Bundle
+  517 KiB compressed, startup 53 ms. Checked live, signed out:
+  - Pages return 200 (home, listings, `/demo/people`, My matches, assistant, admin, privacy) and serve the new code.
+  - `/api/config` reports Demo mode on with 100 listings and 200 profiles (197 shown); password sign-in still off.
+  - `/api/demo/listings` returns 100 demo listings (94 ms), `/api/demo/people` 197 profiles with no contact details
+    (112 ms); real `/api/listings` (4 listings) contains no demo ids.
+  - All 41 photo addresses answer 200 with an image (checked without downloading).
+  - Signed out, My matches, roommates, saved and admin demo APIs return 401; a cross-site Demo mode request returns 403;
+    the admin cleanup returns 401.
+  - Google sign-in still answers with a Google link (0.5 s).
+  - In a browser as a guest: Listings in Demo mode showed 100 cards, 100 dashed pins, photos, the banner and no Save
+    (renters only); switched back off afterwards (it's stored in that browser only).
+  - Not checked: Demo mode signed in as a renter (My matches, Save, the assistant); that needs a real account.
+
+  Before it: `05be52b1-a9aa-4485-8d33-3b94b38e6e02`, deployed 2026-10-17 with the owner's approval: the homepage paths, the account
   pages (Google only on the live site), and the sign-in freeze fix (commits `3fc6c9d`…`89e8e4d`, tag
   `checkpoint-2026-10-17-accounts`). Order used: restore point, migration 0009, deploy. Password accounts stay off:
   the Worker has no email sender and no `PASSWORD_ACCOUNTS` setting (secrets: names checked only). Checked live:
@@ -119,10 +132,10 @@ nothing was sent to Cloudflare or the live database.
 | Import tool | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | Yes (2026-10-12) |
 | **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
 | **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
-| **Connected demo data** | 100 demo rooms and 200 demo profiles in Waltham, one Demo mode switch across Listings, My matches, the assistant and a demo profile page; coverage checked with the matching code (details below) | No (local, 2026-10-18) |
+| **Connected demo data** | 100 demo rooms and 200 demo profiles in Waltham, one Demo mode switch across Listings, My matches, the assistant and a demo profile page; coverage checked with the matching code (details below) | Yes (2026-10-18) |
 | **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | Yes (2026-10-13) |
 
-### Connected demo data (2026-10-18, local only)
+### Connected demo data (2026-10-18, live as `df357d7e…`)
 
 - **Data:** 100 fictional rooms and 200 fictional roommate profiles, all in Waltham. The 15 listings and 20 profiles
   that existed are kept with their ids (`src/assistant/demo-base.js`); the other 85 and 180 are written by
@@ -390,7 +403,8 @@ Earlier runs:
 - [ ] Run part 11 of the manual test (Quick check-in) on the live site. It adds real responses; that's expected.
 - [x] Deploy and push the demo data refresh (2026-10-14, version `c35940b7…`, no database change).
 - [ ] Try Demo mode on the live site as a renter: a room search, a roommate search, Details on each.
-- [ ] Approve: deploy the connected demo data (no database change). Then try Demo mode on the live site as a renter.
+- [x] Deploy the connected demo data (2026-10-18, version `df357d7e…`, no database change).
+- [ ] Try Demo mode on the live site as a renter: My matches, Save on a demo card, the assistant, `/demo/people`.
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
 - [ ] Decide whether to use a dedicated Gmail account for coHabit's emails (the only $0 option found). If yes: create
@@ -427,7 +441,7 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
 | Database before migration 0009 | Time Travel bookmark `000000a0-00000000-00005107-945d11084f9aa143232ee332dac64224` (only added two empty columns, so rolling back the code alone is usually enough) |
 | Database before migration 0008 | Time Travel bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0007 | Time Travel bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c` (only added a column and tables, so rolling back the code alone is usually enough) |
@@ -441,7 +455,7 @@ one of these is needed:
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-13-checkin` |
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-14-demo-data` |
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-17-accounts` |
-| This checkpoint (local only) | Git tag `checkpoint-2026-10-18-demo-100` |
+| This checkpoint (live) | Git tag `checkpoint-2026-10-18-demo-100` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 
