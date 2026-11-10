@@ -27,7 +27,11 @@ No real listings were imported because no authorized data source exists yet (see
 ## Deployment status
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `ec3aef29-2490-481e-a5f8-99c5482359dd`, deployed 2026-11-10 22:33 UTC with the owner's approval: the
+- **Live version:** `ce127f77-8c0e-4613-82cf-6791b424e69f`, deployed 2026-11-10 22:43 UTC with the owner's approval: the
+  busy-provider fix (commit `3e5d33f`), AI still switched off; signed-out checks repeated (all as before). Model check
+  scheduled for just after 00:00 UTC, when the wrongly set pause and the admin share reset.
+
+  Before it: `ec3aef29-2490-481e-a5f8-99c5482359dd`, deployed 2026-11-10 22:33 UTC with the owner's approval: the
   model-check fix (commit `7972d8a`), AI still switched off. Signed-out checks repeated (pages 200, helpers off, AI
   endpoints 401, cross-site 403, no key anywhere). **Second model check (22:34 UTC):** Nemotron 3.5 Super worked (correct
   tool call, 1 s); Gemma 4 31B got "Provider returned error" (429 from Google AI Studio's free capacity, not the
@@ -465,8 +469,8 @@ Earlier runs:
 - [x] Deploy the OpenRouter build with AI off (2026-11-10, version `ff28f64e…`, no database change).
 - [x] Redeploy the model-check fix (2026-11-10, version `ec3aef29…`); second check: Nemotron 3.5 Super works, Gemma 4 31B's
       provider was busy, 2 models not checked yet.
-- [ ] Approve: redeploy the busy-provider fix (still with AI off), then run Check models again after 00:00 UTC
-      (the pause and today's admin share both reset then).
+- [x] Redeploy the busy-provider fix (2026-11-10 22:43 UTC, version `ce127f77…`).
+- [ ] Run Check models again after 00:00 UTC (the pause and the admin share reset then).
 - [ ] Approve: the privacy wording, then switch on the assistant chat; later the helpers.
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
@@ -504,7 +508,7 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `ff28f64e-a2b8-4b97-99a3-d4a4cd209778` (first OpenRouter deploy), `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `ec3aef29-2490-481e-a5f8-99c5482359dd` (model-check fix), `ff28f64e-a2b8-4b97-99a3-d4a4cd209778` (first OpenRouter deploy), `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
 | Database before migration 0009 | Time Travel bookmark `000000a0-00000000-00005107-945d11084f9aa143232ee332dac64224` (only added two empty columns, so rolling back the code alone is usually enough) |
 | Database before migration 0008 | Time Travel bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0007 | Time Travel bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c` (only added a column and tables, so rolling back the code alone is usually enough) |
