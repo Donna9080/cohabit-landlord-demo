@@ -35,7 +35,13 @@ No real listings were imported because no authorized data source exists yet (see
   - `/api/config` reports the AI helpers off; the key appears nowhere in it.
   - Signed out, `/api/ai/help`, `/api/admin/ai`, the model check and the assistant return 401; from another site,
     the helpers and the admin switch return 403.
-  - Not done yet: the admin model check (it needs the owner signed in as admin).
+  - **Admin model check, run 2026-11-10 22:03 UTC (owner signed in as admin):** the key works (OpenRouter answered:
+    free tier, 0 of 50 free requests used, key credit limit $5, $0 spent). All 4 models were refused in 0.1 s with
+    "no provider", before reaching any model (OpenRouter's free counter stayed at 0). Cause, a bug in coHabit's
+    requests: they sent `parallel_tool_calls`, which none of these free models support, together with "only
+    providers that support every option". Fixed locally (not sent any more; a stand-in check now refuses unsupported
+    options like OpenRouter does; refused requests no longer count toward coHabit's daily share; the check shows
+    OpenRouter's own message). Needs a redeploy (owner's approval), then the check again.
 
   Before it: `df357d7e-73f7-4255-8104-1a7b6de9da29`, deployed 2026-10-18 with the owner's approval: the connected demo data (100 demo
   rooms, 200 demo profiles, Demo mode across Listings, My matches, the assistant and `/demo/people`; commit `f5d39e4`,
@@ -448,7 +454,8 @@ Earlier runs:
 - [ ] In OpenRouter (owner): set a credit limit on the `openrouter-api-key` key (lowest allowed) and decide on the
       free-models privacy setting (providers may use prompts for training).
 - [x] Deploy the OpenRouter build with AI off (2026-11-10, version `ff28f64e…`, no database change).
-- [ ] Run Admin → AI → Check models on the live site (4 free requests; needs the owner signed in as admin).
+- [ ] Approve: redeploy the model-check fix (still with AI off), then run Admin → AI → Check models again (4 free
+      requests; coHabit counted the 4 refused ones on 2026-11-10, so before 00:00 UTC only 2 models fit today's admin share).
 - [ ] Approve: the privacy wording, then switch on the assistant chat; later the helpers.
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).

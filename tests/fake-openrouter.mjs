@@ -33,6 +33,9 @@ export function startFakeOpenRouter(port) {
     state.requests.push({ headers: req.headers, body, raw });
     if (!authed) return send(401, { error: { code: 401, message: "No auth credentials found" } });
     if (state.mode === "429") return send(429, { error: { code: 429, message: "Rate limit exceeded: free-models-per-day", metadata: { error_type: "rate_limit_exceeded" } } });
+    const SUPPORTED = ["models", "messages", "max_tokens", "temperature", "tools", "tool_choice", "response_format", "provider"];
+    if (body.provider?.require_parameters && Object.keys(body).some((k) => !SUPPORTED.includes(k)))
+      return send(404, { error: { code: 404, message: "No endpoints found that can handle the requested parameters." } });
     state.freeUsed++;
     const models = body.models || [body.model];
     const model = models[0];

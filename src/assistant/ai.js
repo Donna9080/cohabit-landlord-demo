@@ -8,7 +8,7 @@
 // tools below, and the Worker runs every tool: it checks each value, searches the database, and
 // turns "save" or "contact" into a confirmation card that only the renter can approve.
 import Anthropic from "@anthropic-ai/sdk";
-import { OpenRouterError, chatCompletion, modelsFor, openRouterConfigured, replyText } from "../ai/openrouter.js";
+import { OpenRouterError, chatCompletion, modelsFor, openRouterConfigured, refusedBeforeModel, replyText } from "../ai/openrouter.js";
 import { STRICTNESS_FIELDS } from "./memory.js";
 
 // Models this code is written and tested for. Choose with the ASSISTANT_MODEL variable.
@@ -305,6 +305,8 @@ async function runOpenRouterTurn({ env, history, text, note, tools }) {
       requests++;
       out = await chatCompletion(env, { use: "chat", messages, tools: OPENROUTER_TOOLS, toolChoice: last ? "none" : "auto", maxTokens: 900, temperature: 0.3 });
     } catch (e) {
+      // A request refused before reaching any model isn't one of the day's free requests.
+      if (refusedBeforeModel(e)) requests--;
       if (e instanceof OpenRouterError) throw fail(e.reason, e);
       throw e;
     }

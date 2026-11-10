@@ -2722,7 +2722,7 @@
       ? check.results
           .map(
             (r) =>
-              `<tr><td>${esc(r.model)}</td><td data-label="Worked">${r.ok ? "Yes" : "No"}</td><td data-label="Tool call">${r.toolCall ? "Correct" : r.ok ? "No" : "-"}</td><td data-label="Time">${r.seconds}s</td><td data-label="Problem">${esc(r.problem || "")}</td></tr>`
+              `<tr><td>${esc(r.model)}</td><td data-label="Worked">${r.ok ? "Yes" : "No"}</td><td data-label="Tool call">${r.toolCall ? "Correct" : r.ok ? "No" : "-"}</td><td data-label="Time">${r.seconds}s</td><td data-label="Problem">${esc(r.problem || "")}${r.detail ? `<br /><span class="small muted">${esc(r.detail)}</span>` : ""}</td></tr>`
           )
           .join("")
       : "";

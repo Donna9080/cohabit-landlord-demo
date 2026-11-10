@@ -19,7 +19,7 @@ import { applyUpdates, emptyMemory } from "../assistant/memory.js";
 import { HttpError, rateLimit, readJson } from "../http.js";
 import { EMAIL, InvalidInput, PHONE, hasAddress } from "../validate.js";
 import { aiBlock, aiBudget, aiSettings, countHelperUse, countRequests, helperUsesToday, pauseStatement, setSetting } from "./budget.js";
-import { OpenRouterError, chatCompletion, isFreeModel, keyStatus, modelsFor, openRouterConfigured, replyText } from "./openrouter.js";
+import { OpenRouterError, chatCompletion, isFreeModel, keyStatus, modelsFor, openRouterConfigured, refusedBeforeModel, replyText } from "./openrouter.js";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const HOOD_NAMES = Object.values(HOODS).map((h) => h.name);
@@ -94,7 +94,7 @@ async function helperCall(env, db, user, args) {
     writes.push(countRequests(db, "helper", 1, out.usage));
     return out;
   } catch (e) {
-    writes.push(countRequests(db, "helper", 1));
+    if (!refusedBeforeModel(e)) writes.push(countRequests(db, "helper", 1));
     if (e instanceof OpenRouterError) {
       console.error("AI helper unavailable:", e.reason, e.status || "", e.detail);
       if (e.reason === "rate_limited") writes.push(pauseStatement(db, e.retryAfter));
@@ -246,7 +246,7 @@ async function adminCall(env, db, args) {
     await countRequests(db, "admin", 1, out.usage).run();
     return { out };
   } catch (e) {
-    await countRequests(db, "admin", 1).run();
+    if (!refusedBeforeModel(e)) await countRequests(db, "admin", 1).run();
     if (e instanceof OpenRouterError) {
       if (e.reason === "rate_limited") await pauseStatement(db, e.retryAfter).run();
       return { error: e };
@@ -323,6 +323,8 @@ export async function handleAdminAi({ request, env, db, admin, path, method, rep
         toolCall: call?.function?.name === "record_budget" && Number(args?.budget) === 1200,
         seconds: Math.round((Date.now() - t) / 100) / 10,
         problem: error ? error.reason : !call ? "answered without using the tool" : null,
+        // OpenRouter's own explanation (for example a privacy setting to change), without the key.
+        detail: error?.detail ? error.detail.slice(0, 200) : null,
       });
     }
     const check = { at: new Date().toISOString(), results, skipped: ids.length - results.length };

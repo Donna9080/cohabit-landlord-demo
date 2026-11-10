@@ -47,7 +47,7 @@ function apiBase(env) {
 }
 
 // reason: key | rate_limited | no_credits | no_provider | bad_request | unreachable | timeout | service_error |
-// not_configured | bad_output. retryAfter: seconds, when OpenRouter says.
+// not_configured | bad_output. retryAfter: seconds, when OpenRouter says. detail: OpenRouter's own message (no key).
 export class OpenRouterError extends Error {
   constructor(reason, { status = null, detail = "", retryAfter = null } = {}) {
     super(reason);
@@ -57,6 +57,9 @@ export class OpenRouterError extends Error {
     this.retryAfter = retryAfter;
   }
 }
+
+// Refused by OpenRouter before reaching any model, so not one of the day's free requests.
+export const refusedBeforeModel = (e) => e instanceof OpenRouterError && ["not_configured", "key", "no_credits", "no_provider", "bad_request"].includes(e.reason);
 
 const reasonFor = (status) =>
   status === 401 || status === 403 ? "key" : status === 429 ? "rate_limited" : status === 402 ? "no_credits" : status === 404 || status === 503 ? "no_provider" : status === 400 || status === 422 ? "bad_request" : "service_error";
@@ -86,9 +89,10 @@ export async function chatCompletion(env, { use, models, messages, tools, toolCh
     messages,
     max_tokens: maxTokens,
     temperature,
-    ...(tools?.length
-      ? { tools, tool_choice: toolChoice || "auto", parallel_tool_calls: false, provider: { require_parameters: true } }
-      : {}),
+    // Only options every chosen free model supports: with require_parameters, OpenRouter skips any provider that
+    // doesn't support all of them (parallel_tool_calls isn't supported by these models, so it's never sent; the
+    // Worker runs at most three tool calls a step, one after another).
+    ...(tools?.length ? { tools, tool_choice: toolChoice || "auto", provider: { require_parameters: true } } : {}),
     ...(json ? { response_format: { type: "json_object" } } : {}),
   };
   let res;
