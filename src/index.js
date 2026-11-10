@@ -14,6 +14,8 @@
 //                                profiles in Demo mode)
 //   /api/demo/listings, /api/demo/people   the fictional Demo mode data (public; off with DEMO_DATA=off)
 //   /api/admin/demo[/cleanup]    Demo mode status, and removing bookmarks to demo cards (admin only)
+//   /api/ai/help                 AI helpers on OpenRouter's free models: form filling, drafts (src/ai/features.js)
+//   /api/admin/ai[/check|/themes]  AI switches, free-request budget, model check, check-in themes (admin only)
 //   /api/roommates/requests[...]  connect with another renter, accept or decline, message once accepted (src/connections.js)
 //   /api/admin/users             read-only user list (admin only)
 //   /api/admin/imports[...]      import external listings from an authorized source; roll back (admin only)
@@ -23,6 +25,7 @@
 //   /api/survey                  Quick check-in: optional survey for anyone, coHabit Points once per person (src/survey.js)
 //   /api/admin/survey[.csv]      check-in summary, recent responses and spreadsheet export (admin only)
 import { DEMO_COUNTS, DEMO_LISTINGS, DEMO_PEOPLE, demoDataOn } from "./assistant/demo-data.js";
+import { handleAdminAi, handleAiHelp, helpersAvailable } from "./ai/features.js";
 import { assistantCleanup, assistantDeleteStatements, assistantUsageReport, demoModeOn, handleAssistant } from "./assistant/routes.js";
 import { BRANDEIS, kmBetween } from "./assistant/search.js";
 import { getAuth } from "./auth.js";
@@ -254,7 +257,7 @@ async function handleApi(request, env, url) {
 
   // Public settings for the browser. The map key is a browser key restricted to this site's address.
   if (path === "/api/config" && method === "GET") {
-    return reply({ maptilerKey: env.MAPTILER_KEY || null, passwordSignIn: passwordAccountsOn(env), devInbox: devOutboxOn(env), demoData: demoDataOn(env), demoCounts: DEMO_COUNTS });
+    return reply({ maptilerKey: env.MAPTILER_KEY || null, passwordSignIn: passwordAccountsOn(env), devInbox: devOutboxOn(env), demoData: demoDataOn(env), demoCounts: DEMO_COUNTS, aiHelpers: await helpersAvailable(env, db) });
   }
 
   // Local development only: emails coHabit would have sent (src/email.js). Not available anywhere else.
@@ -663,6 +666,20 @@ async function handleApi(request, env, url) {
   if (path === "/api/assistant" || path.startsWith("/api/assistant/")) {
     const user = requireType(viewer, "renter");
     return handleAssistant({ request, env, db, user, path, method, reply });
+  }
+
+  // Signed in: AI help (drafts and form filling). Nothing is saved or sent by it; checked in src/ai/features.js.
+  if (path === "/api/ai/help") {
+    const user = requireUser(viewer);
+    if (method !== "POST") throw new HttpError(405, "method_not_allowed", "Not allowed.");
+    return reply(await handleAiHelp({ request, env, db, user }));
+  }
+
+  // Admin: AI switches, today's free requests, the model check and check-in themes.
+  if (path === "/api/admin/ai" || path.startsWith("/api/admin/ai/")) {
+    const admin = requireUser(viewer);
+    if (admin.role !== "admin") throw new HttpError(403, "forbidden", "You don't have access to this page.");
+    return handleAdminAi({ request, env, db, admin, path, method, reply });
   }
 
   // Admin: AI assistant use today and over the last 7 days, with an estimated cost. Totals only, no chats.

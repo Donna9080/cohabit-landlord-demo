@@ -841,10 +841,11 @@
         </ul>
 
         <h2>How we use it</h2>
-        <p>Only to run coHabit: to sign you in, show your units or preferences back to you, and match renters to active units. We don't sell or share your information, show ads, or use tracking or analytics cookies. Search and matching run inside coHabit. If you use the AI assistant, your chat is sent to an AI service to write replies, as described below.</p>
+        <p>Only to run coHabit: to sign you in, show your units or preferences back to you, and match renters to active units. We don't sell or share your information, show ads, or use tracking or analytics cookies. Search and matching run inside coHabit. If you use an AI feature, what it needs is sent to an AI service, as described below.</p>
 
-        <h2 id="assistant">The AI assistant</h2>
-        <p>When the AI assistant is on, coHabit sends your chat messages, the answers the assistant has learned, and the search results it is explaining to Anthropic, the company that makes the Claude AI model, so it can write a reply. Listings are sent with their public details only. Other renters are sent only as a label (P1, P2…), a compatibility score and what you have in common: their names and email addresses are never sent, and neither are yours. Under its commercial terms, Anthropic doesn't use this data to train its models. In basic mode, nothing is sent outside coHabit.</p>
+        <h2 id="assistant">AI features</h2>
+        <p>AI features are optional, and the coHabit admin switches them on. They use free AI models through OpenRouter, a service that passes requests to AI model providers: the assistant's replies; filling in the questionnaire or the listing filters from a sentence you write; a draft introduction to a possible roommate; and a clearer listing description for landlords. The admin can also group anonymous Quick check-in comments into themes.</p>
+        <p>When you use one, coHabit sends only what it needs to OpenRouter and the model's provider: your chat messages, the answers the assistant has learned and the search results it is explaining, or the sentence or text you asked it to work on. Listings are sent with their public details only. Other renters are sent only as a label (P1, P2…), a compatibility score and what you have in common, and a draft introduction uses a placeholder instead of their name. Names, email addresses and account ids are never sent, yours included. <strong>Free models' providers may keep what they receive and use it to improve their models</strong>, so please don't type personal details. Nothing an AI writes is saved or sent until you confirm it. With AI off, everything works as before and nothing is sent outside coHabit.</p>
         <p>The assistant can't change your saved profile or contact anyone. Those only happen when you click Confirm on a card. Messages containing phone numbers, email addresses, ID or card numbers, or street addresses are refused before they are saved or sent. Your chat is deleted when you clear it or delete your account, or after 90 days without use.</p>
 
         <h2>Where it is kept</h2>
@@ -1982,6 +1983,7 @@
             ${field("status", "Status", select("status", [["active", "Active: shown to renters"], ["inactive", "Inactive: hidden"]], u.status))}
           </div>
           ${field("description", "Short description (optional)", `<textarea id="f-description" name="description" maxlength="1000" rows="4" aria-describedby="h-description e-description">${esc(u.description)}</textarea>`, "Up to 1,000 characters. Leave out phone numbers and addresses.")}
+          ${aiHelpOn() ? `<div class="ai-row"><button class="btn btn-small btn-quiet" type="button" data-action="ai-polish">Polish my description (AI)</button><button class="link-button small" type="button" id="undo-description" data-action="ai-undo-description" hidden>Undo</button><span class="hint">A free AI model rewrites it from the details above. Check it before saving.</span></div>` : ""}
         </fieldset>
         <fieldset>
           <legend>Location (optional)</legend>
@@ -2179,6 +2181,7 @@
       </div>
       ${demo ? demoBannerHtml("Matching rooms and possible roommates below are made-up demo listings and profiles, matched to your real preferences with the same rules. Your preferences, requests and contacts stay real and unchanged.") : ""}
       ${p ? prefsSummary(p) : ""}
+      ${isRenter() ? aiDescribeBox("ai-prefs", "Up to $1,200 from June near Moody Street, early bird, no pets", "questionnaire") : ""}
       <form class="form" id="prefs-form" novalidate${p ? " hidden" : ""}>
         <fieldset>
           <legend>The basics</legend>
@@ -2455,6 +2458,7 @@
         ${demoSwitchHtml()}
       </div>
       ${demoBannerHtml(`These ${d.total} listings, their photos and map spots are made up. Photos are illustrative stock photos of similar rooms.`)}
+      ${aiDescribeBox("ai-listings", "Furnished room near campus under $1,100 from August", "filters")}
       <form class="filters" id="demo-filters" role="search" aria-label="Filter demo listings" novalidate>
         <label class="filter filter-wide"><span>Search</span><input type="search" name="q" value="${esc(f.q)}" placeholder="Porch, furnished, near campus…" autocomplete="off" /></label>
         ${filterSelect("hood", "Neighborhood", HOOD_NAMES.map((h) => [h, h]), f.hood)}
@@ -2611,6 +2615,169 @@
     }
   }
 
+  // ── AI help on OpenRouter's free models (src/ai/features.js) ──
+  // Buttons only show while the admin has switched helpers on (cfg.aiHelpers). The AI only fills in or drafts:
+  // nothing is saved or sent until the person does it, and every result can be edited.
+  const aiHelpOn = () => !!cfg.aiHelpers && !!me.user;
+  async function aiHelp(body, button) {
+    const label = button ? button.textContent : "";
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Working…";
+    }
+    try {
+      return await api("/api/ai/help", { method: "POST", body });
+    } catch (e) {
+      if (e.status === 401) showView(errorView(e));
+      else toast(e.message);
+      if (e.code === "ai_unavailable") cfg.aiHelpers = false;
+      return null;
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = label;
+      }
+    }
+  }
+  const aiDescribeBox = (id, placeholder, note) =>
+    aiHelpOn()
+      ? `<form class="ai-describe" id="${id}" novalidate>
+          <label class="small" for="${id}-text"><strong>Describe what you want</strong> <span class="muted">· AI fills in the ${note}; check them before you use them</span></label>
+          <div class="ai-describe-row"><input id="${id}-text" name="text" type="text" maxlength="300" placeholder="${esc(placeholder)}" autocomplete="off" /><button class="btn btn-small" type="submit">Fill in</button></div>
+          <p class="hint">Written by a free AI model. Don't include names, phone numbers or addresses.</p>
+        </form>`
+      : "";
+
+  // My matches: a sentence -> questionnaire values (checked like the form). Nothing is saved until Save.
+  async function describePreferences(form) {
+    const text = form.elements.text.value.trim();
+    if (!text) return;
+    const d = await aiHelp({ task: "preferences", text }, form.querySelector("[type=submit]"));
+    if (!d) return;
+    const prefs = document.getElementById("prefs-form");
+    if (!prefs) return;
+    const filled = [];
+    for (const [k, v] of Object.entries(d.fields)) {
+      const el = prefs.elements[k];
+      if (!el) continue;
+      el.value = v;
+      el.classList.add("ai-filled");
+      filled.push(k);
+    }
+    if (prefs.hidden) togglePrefsForm();
+    toast(filled.length ? "Filled in from your sentence. Check the answers, then Save." : "Nothing to fill in from that.");
+  }
+
+  // Demo listings: a sentence -> filters (only listed values are kept).
+  async function describeListings(form) {
+    const text = form.elements.text.value.trim();
+    if (!text) return;
+    const d = await aiHelp({ task: "listing_filters", text }, form.querySelector("[type=submit]"));
+    const filters = document.getElementById("demo-filters");
+    if (!d || !filters) return;
+    for (const k of Object.keys(DEMO_FILTERS0)) if (k !== "sort" && k !== "q" && filters.elements[k]) filters.elements[k].value = d.filters[k] ?? "";
+    readDemoFilters(filters);
+    toast("Filters set from your sentence. Change any of them below.");
+  }
+
+  // Connect: a draft introduction from what the two have in common (the name is filled in by coHabit).
+  async function draftIntro(button) {
+    const dialog = document.getElementById("connect");
+    const c = chatCards.get(dialog.dataset.key);
+    if (!c) return;
+    const shared = (c.fits || c.highlights || []).filter((f) => !/^Both looking in|^Moving within|^Budgets overlap/.test(f)).slice(0, 6);
+    const d = await aiHelp({ task: "intro", firstName: c.firstName, shared }, button);
+    if (d) {
+      const box = document.getElementById("connect-intro");
+      box.value = d.text;
+      box.focus();
+      toast("Draft written by a free AI model. Edit it before you send.");
+    }
+  }
+
+  // Landlords: a clearer description from the unit's own facts; Undo puts the previous text back.
+  let undoDescription = null;
+  async function polishDescription(button) {
+    const form = document.getElementById("unit-form");
+    if (!form) return;
+    const body = { task: "unit_description", ...Object.fromEntries(["name", "area", "monthly_rent", "rooms_available", "move_in_date", "description"].map((k) => [k, form.elements[k].value])) };
+    const d = await aiHelp(body, button);
+    if (!d) return;
+    const box = form.elements.description;
+    undoDescription = box.value;
+    box.value = d.text;
+    const undo = document.getElementById("undo-description");
+    if (undo) undo.hidden = false;
+    toast("Rewritten by a free AI model. Check it, then save.");
+  }
+
+  // Admin: switches, today's free requests, models and the model check.
+  function aiAdminHtml(ai) {
+    const or = ai.openRouter && ai.openRouter.ok ? ai.openRouter : null;
+    const free = or && or.freeToday && or.freeToday.limit != null ? `${or.freeToday.used ?? "?"} of ${or.freeToday.limit}` : "Unknown";
+    const sw = (which, on, label) =>
+      `<button class="btn btn-small ${on ? "" : "btn-quiet"}" type="button" data-action="ai-switch" data-which="${which}" data-on="${!on}" aria-pressed="${on}">${label}: ${on ? "On" : "Off"}</button>`;
+    const check = ai.lastCheck;
+    const checkRows = check
+      ? check.results
+          .map(
+            (r) =>
+              `<tr><td>${esc(r.model)}</td><td data-label="Worked">${r.ok ? "Yes" : "No"}</td><td data-label="Tool call">${r.toolCall ? "Correct" : r.ok ? "No" : "-"}</td><td data-label="Time">${r.seconds}s</td><td data-label="Problem">${esc(r.problem || "")}</td></tr>`
+          )
+          .join("")
+      : "";
+    const models = (list) => list.map((m) => `<code>${esc(m)}</code>`).join(" → ");
+    return `
+      <section class="summary" aria-labelledby="ai-heading">
+        <div class="heading-row">
+          <div class="section-heading"><h2 id="ai-heading">AI (OpenRouter, free models only)</h2><span class="muted small">${ai.pausedUntil ? `Paused until ${esc(ai.pausedUntil.slice(11, 16))} UTC: free limit reached` : ai.switches.chat || ai.switches.helpers ? "On" : "Off: renters get the guided chat"}</span></div>
+          <div class="actions">${sw("chat", ai.switches.chat, "Assistant chat")}${sw("helpers", ai.switches.helpers, "Helpers")}${ai.pausedUntil ? `<button class="btn btn-small btn-quiet" type="button" data-action="ai-resume">Resume now</button>` : ""}</div>
+        </div>
+        <dl class="tiles">
+          ${tile("Free requests today (OpenRouter)", free, or ? `whole account; resets 00:00 UTC${or.freeToday.limit === 50 ? " · 1,000 a day after $10 of credits" : ""}` : "couldn't read the counter")}
+          ${tile("coHabit's requests today", `${ai.requestsToday.chat + ai.requestsToday.helper + ai.requestsToday.admin}`, `chat ${ai.requestsToday.chat}/${ai.budget.chat} · helpers ${ai.requestsToday.helper}/${ai.budget.helper} · admin ${ai.requestsToday.admin}/${ai.budget.admin}`)}
+          ${tile("AI chat replies today", ai.today ? ai.today.replies : 0, `${ai.limits.perUserDaily} per renter a day`)}
+          ${tile("Cost", "$0", or ? (or.creditLimit == null ? "no credit limit on the key: set one in OpenRouter" : `key credit limit $${or.creditLimit}`) : "free models only")}
+        </dl>
+        <p class="small">Chat: ${models(ai.models.chat)}<br />Helpers: ${models(ai.models.helper)}<br />Summaries: ${models(ai.models.summary)}${ai.lastModel ? `<br />Last chat reply by <code>${esc(ai.lastModel)}</code>` : ""}</p>
+        <div class="heading-row"><h3 class="details-h">Model check${check ? ` <span class="muted small">${esc(fmtJoined(check.at))}</span>` : ""}</h3><button class="btn btn-small btn-quiet" type="button" data-action="ai-check">Check models (one free request each)</button></div>
+        ${check ? `<table class="tenants"><thead><tr><th scope="col">Model</th><th scope="col">Worked</th><th scope="col">Tool call</th><th scope="col">Time</th><th scope="col">Problem</th></tr></thead><tbody>${checkRows}</tbody></table>${check.skipped ? `<p class="small muted">${plural(check.skipped, "model", "models")} skipped: today's admin share is used up.</p>` : ""}` : `<p class="small muted">Not checked yet. It sends one short test to each model above and says whether it works with your key and settings.</p>`}
+        <p class="hint">Only free models are ever called. Change them with the Worker variables AI_MODELS_CHAT, AI_MODELS_HELPER and AI_MODELS_SUMMARY (comma-separated); anything that isn't free is ignored.</p>
+      </section>`;
+  }
+  async function aiAdminAction(action, button) {
+    button.disabled = true;
+    const label = button.textContent;
+    if (action === "ai-check") button.textContent = "Checking…";
+    try {
+      if (action === "ai-switch") await api("/api/admin/ai", { method: "POST", body: { [button.dataset.which]: button.dataset.on === "true" } });
+      else if (action === "ai-resume") await api("/api/admin/ai", { method: "POST", body: { resume: true } });
+      else if (action === "ai-check") await api("/api/admin/ai/check", { method: "POST", body: {} });
+      await loadConfig();
+      render(false);
+    } catch (e) {
+      toast(e.message);
+      button.disabled = false;
+      button.textContent = label;
+    }
+  }
+  async function findThemes(button) {
+    const box = document.getElementById("ai-themes");
+    const label = button.textContent;
+    button.disabled = true;
+    button.textContent = "Reading comments…";
+    try {
+      const d = await api("/api/admin/ai/themes", { method: "POST", body: {} });
+      box.innerHTML = `<h3 class="details-h">Themes in ${plural(d.comments, "comment", "comments")} <span class="muted small">grouped by a free AI model; counts are approximate</span></h3>
+        <ul class="themes">${d.themes.map((t) => `<li><strong>${esc(t.title)}</strong> <span class="count">${t.count}</span><br /><span class="small">${esc(t.summary)}</span></li>`).join("")}</ul>`;
+    } catch (e) {
+      box.innerHTML = `<p class="small muted">${esc(e.message)}</p>`;
+    } finally {
+      button.disabled = false;
+      button.textContent = label;
+    }
+  }
+
   // ── Assistant: results on the left, guided chat on the right (Chat / Results tabs on phones) ──
   // Results come from /api/assistant, worked out by code from the renter's answers every time they change. The chat
   // asks the questions. Nothing is saved to the profile or sent to a landlord until the renter clicks Confirm.
@@ -2619,6 +2786,7 @@
     user_limit: "You've used today's AI replies, so the chat is guided until tomorrow (UTC). Your answers are kept.",
     site_limit: "The AI assistant has reached today's limit for coHabit, so the chat is guided until tomorrow (UTC).",
     unavailable: "The AI assistant isn't available right now, so the chat is guided. Try again in a little while.",
+    busy: "The AI assistant is busy right now, so the chat is guided. Try again in a minute.",
   };
   const STRICT_FIELDS = ["budget_max", "move_in_month", "areas", "max_distance_km"];
   const BRANDEIS_LNGLAT = [-71.2589, 42.3656];
@@ -3312,7 +3480,7 @@
               ? `<p>An AI model writes the replies. Results and reasons come from coHabit's own search, never from the AI.</p>`
               : `<p>This free chat follows a set of questions. Tap an answer, or type something short like a budget, a month, a town or a distance. It can't answer open-ended questions.</p>`
           }
-          <p>Your chat and answers stay on your account so you can pick up later, until you clear the chat, delete your account, or leave it unused for ${chat.keepDays} days. ${ai ? "Messages go to Anthropic (the company behind Claude) to write replies; other students' names and contact details never do. " : ""}Please don't share phone numbers or addresses. <a href="/privacy">Privacy policy</a></p>
+          <p>Your chat and answers stay on your account so you can pick up later, until you clear the chat, delete your account, or leave it unused for ${chat.keepDays} days. ${ai ? (chat.aiProvider === "openrouter" ? "Replies are written by a free AI model through OpenRouter. Your messages go to OpenRouter and the model's provider, which may keep them to improve their models; other students' names and contact details never do. " : "Messages go to Anthropic (the company behind Claude) to write replies; other students' names and contact details never do. ") : ""}Please don't share phone numbers or addresses. <a href="/privacy">Privacy policy</a></p>
         </div>
       </details>`;
   }
@@ -3631,6 +3799,7 @@
       : `${c.firstName} will see your first name, this note, and what you have in common. Nothing is sent until you click Send request.`;
     document.getElementById("connect-intro").value = `Hi ${c.firstName}! ${common.length ? `I saw we have a few things in common (${common.join("; ")}). ` : ""}Want to talk about rooming together?`;
     document.getElementById("connect-send").textContent = c.demo ? "Preview send" : "Send request";
+    document.getElementById("connect-help").hidden = !(aiHelpOn() && isRenter());
     document.getElementById("connect-error").textContent = "";
     dialog.dataset.key = key;
     dialog.showModal();
@@ -3836,7 +4005,7 @@
         ${tile("Renters", real.filter((u) => u.accountType === "renter").length)}
         ${samples ? tile("Sample accounts", samples, "fictional, not counted") : ""}
       </dl>
-      ${ai ? assistantUsageHtml(ai) : ""}
+      ${ai ? (ai.provider === "openrouter" ? aiAdminHtml(ai) : assistantUsageHtml(ai)) : ""}
       ${demo ? adminDemoHtml(demo) : ""}
       <table class="tenants users">
         <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Account type</th><th scope="col">Joined</th><th scope="col">Activity</th></tr></thead>
@@ -3900,6 +4069,8 @@
         <div class="heading">
           <h1 tabindex="-1">Quick check-in results</h1>
           <p class="muted">Every question is optional. Shown without names or emails. Responses sent while Demo mode was on are labeled.</p>
+          <p><button class="btn btn-small btn-quiet" type="button" data-action="ai-themes">Find themes in the comments (AI)</button></p>
+          <div id="ai-themes"></div>
         </div>
         <a class="btn btn-quiet" href="/api/admin/survey.csv${filter === "all" ? "" : `?demo=${filter}`}" download>Download CSV</a>
       </div>
@@ -4373,6 +4544,15 @@
       else if (a === "demo-save") toggleDemoSave(action);
       else if (a === "demo-on-map") showOnListingMap(action.dataset.id);
       else if (a === "demo-cleanup") cleanupDemo();
+      else if (a === "ai-switch" || a === "ai-resume" || a === "ai-check") aiAdminAction(a, action);
+      else if (a === "ai-themes") findThemes(action);
+      else if (a === "connect-help") draftIntro(action);
+      else if (a === "ai-polish") polishDescription(action);
+      else if (a === "ai-undo-description") {
+        const box = document.querySelector("#unit-form [name=description]");
+        if (box && undoDescription != null) box.value = undoDescription;
+        action.hidden = true;
+      }
       else if (a === "demo-filters-clear") {
         Object.assign(demoFilters, DEMO_FILTERS0);
         render(false);
@@ -4470,6 +4650,12 @@
     } else if (e.target.id === "delete-account-form") {
       e.preventDefault();
       submitDeleteAccount(e.target);
+    } else if (e.target.id === "ai-prefs") {
+      e.preventDefault();
+      describePreferences(e.target);
+    } else if (e.target.id === "ai-listings") {
+      e.preventDefault();
+      describeListings(e.target);
     } else if (e.target.classList.contains("interest-form")) {
       e.preventDefault();
       sendInterest(e.target);

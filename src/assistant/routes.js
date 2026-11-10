@@ -19,7 +19,9 @@ import { LISTING_FIELDS, activeListings, listingMapper } from "../listings.js";
 import { createInterest, loadPreferences, savePreferences } from "../profile.js";
 import { firstNameOf, scoreRoommate } from "../roommates.js";
 import { InvalidInput, isUnitId, parseChatText, parseInterest, parsePreferences } from "../validate.js";
-import { AiUnavailable, MODELS, aiConfigured, allowedNumbers, groundReply, modelFor, runAiTurn } from "./ai.js";
+import { AiUnavailable, MODELS, aiConfigured, aiProvider, allowedNumbers, groundReply, modelFor, runAiTurn } from "./ai.js";
+import { CHAT_REQUESTS_PER_REPLY, aiBlock, aiBudget, aiSettings, countRequests, pauseStatement, requestsToday, setSetting } from "../ai/budget.js";
+import { keyStatus, modelsFor } from "../ai/openrouter.js";
 import { BASIC_INTRO, CONSIDERATIONS, describeAnswer, describeRoommates, describeRooms, nextQuestion, question, understand } from "./basic.js";
 import { LABELS, STRICTNESS_FIELDS, applyUpdates, displayValue, isRequired, memoryFacts, mergedPreferences, missingBasics, parseMemory, profileChanges } from "./memory.js";
 import { demoPersonView, personView, requestsByPerson } from "../connections.js";
@@ -34,8 +36,9 @@ const KEEP_MESSAGES = 100; // older messages are deleted
 export const INACTIVE_DAYS = 90; // chats untouched this long are deleted by the daily cleanup
 
 const posInt = (v, d) => (Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : d);
+// With OpenRouter's free models the whole site shares 50 requests a day, so each renter gets a few AI replies.
 export const limitsFor = (env) => ({
-  perUserDaily: posInt(env.ASSISTANT_DAILY_PER_USER, 40),
+  perUserDaily: posInt(env.ASSISTANT_DAILY_PER_USER, aiProvider(env) === "openrouter" ? 6 : 40),
   siteDaily: posInt(env.ASSISTANT_DAILY_SITE, 300),
   perMinute: posInt(env.ASSISTANT_PER_MINUTE, 10), // AI replies only; basic mode has the site-wide write limit
 });
@@ -108,6 +111,12 @@ const addUsage = (db, userId, replies, usage) =>
 // Why the AI is off right now, or null when it can answer.
 async function basicReason(env, db, userId) {
   if (!aiConfigured(env)) return "not_configured";
+  if (aiProvider(env) === "openrouter") {
+    // Off until the admin switches it on; then only while today's free requests last.
+    const block = await aiBlock(env, db, "chat", CHAT_REQUESTS_PER_REPLY);
+    if (block === "not_configured" || block === "off") return "not_configured";
+    if (block) return "site_limit";
+  }
   const limits = limitsFor(env);
   const used = await usageToday(db, userId);
   if (used.user >= limits.perUserDaily) return "user_limit";
@@ -118,6 +127,7 @@ const BASIC_NOTICES = {
   user_limit: (env) => `You've used today's ${limitsFor(env).perUserDaily} AI replies, so this is the guided chat until tomorrow (UTC).`,
   site_limit: () => "The AI assistant has hit today's limit for coHabit, so this is the guided chat until tomorrow (UTC).",
   unavailable: () => "The AI assistant isn't available right now, so this is the guided chat.",
+  busy: () => "The AI assistant is busy right now, so this is the guided chat. Try again in a minute.",
 };
 
 // Statements that remove everything the assistant stored about a user (used when an account is deleted).
@@ -126,7 +136,7 @@ export const assistantDeleteStatements = (db, userId) => [
   db.prepare(`DELETE FROM assistant_actions WHERE user_id = ?1`).bind(userId),
   db.prepare(`DELETE FROM assistant_threads WHERE user_id = ?1`).bind(userId),
   db.prepare(`DELETE FROM saved_options WHERE user_id = ?1 OR (kind = 'person' AND target_id = ?1)`).bind(userId),
-  db.prepare(`DELETE FROM assistant_usage WHERE user_id = ?1`).bind(userId),
+  db.prepare(`DELETE FROM assistant_usage WHERE user_id IN (?1, ?2)`).bind(userId, `h:${userId}`),
   db.prepare(`DELETE FROM app_rate_limits WHERE key = ?1`).bind(`a:u:${userId}`),
 ];
 
@@ -262,6 +272,7 @@ async function pageState(db, env, user) {
     roommateMatching: !!prefs?.roommate_visible,
     mode: reason ? "basic" : "ai",
     basicReason: reason,
+    aiProvider: reason === "not_configured" ? null : aiProvider(env),
     usage: { usedToday: used.user, perUserDaily: limitsFor(env).perUserDaily },
     keepDays: INACTIVE_DAYS,
   };
@@ -625,8 +636,17 @@ async function handleMessage({ request, env, db, user }) {
     basicReason(env, db, user.id),
     db.prepare(`SELECT kind FROM assistant_actions WHERE user_id = ?1 AND status = 'pending'`).bind(user.id).all(),
   ]);
-  // A per-minute cap on AI replies (they cost money); basic mode is only under the site-wide write limit.
+  // A per-minute cap on AI replies (they cost money or free requests); basic mode is only under the site-wide write limit.
   if (!reason) await rateLimit(env, `a:u:${user.id}`, limits.perMinute, "You're sending messages quickly. Wait a moment and try again.");
+  // OpenRouter's free models allow 20 requests a minute for the whole account: past the site's share, the guided chat answers.
+  let busy = false;
+  if (!reason && aiProvider(env) === "openrouter") {
+    try {
+      await rateLimit(env, "or:site", aiBudget(env).perMinute);
+    } catch {
+      busy = true;
+    }
+  }
   const now = Date.now();
   const userMsg = { id: crypto.randomUUID(), role: "user", content: text, cards: null, mode: null, created_at: now };
   await db
@@ -638,10 +658,11 @@ async function handleMessage({ request, env, db, user }) {
   const ctx = { db, env, user, saved, turn, assistantId: crypto.randomUUID() };
   const writes = [];
   let mode = "basic";
-  let notice = reason && reason !== "not_configured" ? BASIC_NOTICES[reason](env) : null;
+  let notice = reason && reason !== "not_configured" ? BASIC_NOTICES[reason](env) : busy ? BASIC_NOTICES.busy() : null;
   let reply;
+  const openRouter = aiProvider(env) === "openrouter";
 
-  if (!reason) {
+  if (!reason && !busy) {
     // Replay earlier messages as plain text; the history must start with the student.
     const history = recentDesc.reverse().map((m) => ({ role: m.role, content: m.content }));
     while (history.length && history[0].role !== "user") history.shift();
@@ -656,10 +677,16 @@ async function handleMessage({ request, env, db, user }) {
       turn.state.asked = null;
       turn.state.welcomed = true;
       writes.push(...addUsage(db, user.id, 1, out.usage));
+      if (openRouter) writes.push(countRequests(db, "chat", out.requests, out.usage), setSetting(db, "ai_last_model", out.model));
     } catch (e) {
       if (!(e instanceof AiUnavailable)) throw e;
-      console.error("Assistant AI unavailable:", e.reason, e.cause?.status || "", e.cause?.message || "");
+      console.error("Assistant AI unavailable:", e.reason, e.cause?.status || "", e.cause?.detail || e.cause?.message || "");
       if (e.usage?.input || e.usage?.output) writes.push(...addUsage(db, user.id, 0, e.usage));
+      if (openRouter) {
+        writes.push(countRequests(db, "chat", e.requests || 0, e.usage));
+        // OpenRouter's free limit for the day was reached: pause AI everywhere until it resets.
+        if (e.reason === "rate_limited") writes.push(pauseStatement(db, e.retryAfter));
+      }
       notice = BASIC_NOTICES.unavailable();
     }
   }
@@ -680,7 +707,7 @@ async function handleMessage({ request, env, db, user }) {
 
   const { results: savedRows } = await db.prepare(`SELECT id, kind, target_id, note FROM saved_options WHERE user_id = ?1 ORDER BY created_at DESC LIMIT 30`).bind(user.id).all();
   const { messages, saved: savedList } = await hydrate(db, env, user, [userMsg, assistantMsg], savedForMode(savedRows, turn.state.demo));
-  const nowReason = mode === "ai" ? await basicReason(env, db, user.id) : reason || "unavailable";
+  const nowReason = mode === "ai" ? await basicReason(env, db, user.id) : reason || (busy ? "busy" : "unavailable");
   return {
     messages,
     saved: savedList,
@@ -688,6 +715,7 @@ async function handleMessage({ request, env, db, user }) {
     memory: memoryFacts(turn.memory),
     mode: nowReason ? "basic" : "ai",
     basicReason: nowReason,
+    aiProvider: nowReason === "not_configured" ? null : aiProvider(env),
     usage: { usedToday: (await usageToday(db, user.id)).user, perUserDaily: limits.perUserDaily },
   };
 }
@@ -868,8 +896,38 @@ export async function handleAssistant({ request, env, db, user, path, method, re
   throw new HttpError(404, "not_found", "Not found.");
 }
 
-// For the admin page: today's and the last 7 days' AI use, with an estimated cost.
+// For the admin page: today's and the last 7 days' AI use, with an estimated cost ($0 for OpenRouter's free models),
+// and for OpenRouter its switches, today's free requests (coHabit's count and OpenRouter's) and the models in use.
 export async function assistantUsageReport(env, db) {
+  const provider = aiProvider(env);
+  if (provider === "openrouter") {
+    const [{ results }, settings, today_, key] = await Promise.all([
+      db
+        .prepare(`SELECT day, replies, input_tokens, output_tokens FROM assistant_usage WHERE user_id = '*' AND day >= ?1 ORDER BY day DESC`)
+        .bind(new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10))
+        .all(),
+      aiSettings(db),
+      requestsToday(db),
+      keyStatus(env, { fresh: true }),
+    ]);
+    const days = results.map((r) => ({ ...r, estimatedUsd: 0 }));
+    return {
+      aiConfigured: true,
+      provider,
+      model: settings.lastModel || modelsFor(env, "chat")[0],
+      models: { chat: modelsFor(env, "chat"), helper: modelsFor(env, "helper"), summary: modelsFor(env, "summary") },
+      switches: { chat: settings.chat, helpers: settings.helpers },
+      pausedUntil: settings.pausedUntil,
+      lastModel: settings.lastModel,
+      lastCheck: settings.lastCheck,
+      budget: aiBudget(env),
+      requestsToday: today_,
+      openRouter: key,
+      limits: limitsFor(env),
+      today: days.find((d) => d.day === today()) || null,
+      last7Days: days,
+    };
+  }
   const model = modelFor(env);
   const [inPrice, outPrice] = MODELS[model].price;
   const { results } = await db
@@ -877,5 +935,5 @@ export async function assistantUsageReport(env, db) {
     .bind(new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10))
     .all();
   const days = results.map((r) => ({ ...r, estimatedUsd: Math.round(((r.input_tokens * inPrice + r.output_tokens * outPrice) / 1e6) * 100) / 100 }));
-  return { aiConfigured: aiConfigured(env), model, limits: limitsFor(env), today: days.find((d) => d.day === today()) || null, last7Days: days };
+  return { aiConfigured: aiConfigured(env), provider, model, limits: limitsFor(env), today: days.find((d) => d.day === today()) || null, last7Days: days };
 }

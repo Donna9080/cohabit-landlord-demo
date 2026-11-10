@@ -868,3 +868,14 @@ p.interest { display: block; }
   .filters { grid-template-columns: 1fr 1fr; }
   .filter-wide { grid-column: 1 / -1; }
 }
+
+/* AI help (OpenRouter free models) */
+.ai-describe { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--subtle); }
+.ai-describe-row { display: flex; gap: 8px; }
+.ai-describe-row input { flex: 1; min-width: 0; min-height: 38px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); font: inherit; font-size: 14px; background: var(--white); }
+.ai-describe-row input:focus { outline: none; border-color: var(--blue); box-shadow: var(--focus); }
+.ai-describe .hint { margin: 0; }
+.ai-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ai-filled { border-color: var(--blue) !important; background: var(--blue-bg) !important; }
+.themes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.themes li { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); }

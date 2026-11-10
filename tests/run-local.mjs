@@ -21,6 +21,9 @@ import { majorDifferences, roommateDifferences } from "../src/roommates.js";
 import { authOptions } from "../src/auth.js";
 import { devOutboxOn } from "../src/email.js";
 import { startFakeAnthropic } from "./fake-anthropic.mjs";
+import { FAKE_OPENROUTER_KEY, startFakeOpenRouter } from "./fake-openrouter.mjs";
+import { DEFAULT_MODELS, isFreeModel, modelsFor } from "../src/ai/openrouter.js";
+import { OPENROUTER_TOOLS, aiProvider } from "../src/assistant/ai.js";
 
 const PORT = 8788;
 const BASE = `http://localhost:${PORT}`;
@@ -28,6 +31,7 @@ const STATE = ".wrangler/test-state";
 const SECRET = randomBytes(32).toString("base64url");
 const WRANGLER = ["node_modules/wrangler/bin/wrangler.js"];
 const FAKE_AI_PORT = 8799; // stand-in for the AI service (tests/fake-anthropic.mjs)
+const FAKE_OR_PORT = 8797; // stand-in for OpenRouter (tests/fake-openrouter.mjs), used by the second local Worker
 const AI_DAILY_PER_USER = 20;
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
@@ -278,6 +282,14 @@ try {
     const strong = searchRooms(mem({ budget_max: 1300, move_in_month: "2027-06", areas: ["Waltham"], rooms_needed: 1 }), DEMO_LISTINGS, { limit: 200 });
     check("Demo data covers strong and partial matches for a typical Waltham search", strong.results[0].misses.length === 0 && strong.results.some((r) => r.misses.length > 0));
     check("Demo data covers no-match cases (a $600 budget finds nothing)", searchRooms(mem({ budget_max: 600, move_in_month: "2027-06", areas: ["Waltham"], rooms_needed: 1 }), DEMO_LISTINGS).results.length === 0);
+    // OpenRouter (src/ai/openrouter.js): only free models can ever be called
+    check("OpenRouter: only free model ids are accepted (\":free\" or the free router)", isFreeModel("google/gemma-4-31b-it:free") && isFreeModel("openrouter/free") && !isFreeModel("anthropic/claude-opus-5-5") && !isFreeModel("openrouter/auto") && !isFreeModel("google/gemma-4-31b-it") && !isFreeModel("x:free extra"));
+    check("OpenRouter: the default model lists are free, at most 3 each", Object.values(DEFAULT_MODELS).every((l) => l.length <= 3 && l.every(isFreeModel)));
+    check("OpenRouter: a model list from a variable drops anything that isn't free", JSON.stringify(modelsFor({ AI_MODELS_CHAT: "anthropic/claude-opus-5-5, google/gemma-4-26b-a4b-it:free,openai/gpt-5" }, "chat")) === '["google/gemma-4-26b-a4b-it:free"]' && JSON.stringify(modelsFor({ AI_MODELS_CHAT: "openai/gpt-5" }, "chat")) === JSON.stringify(DEFAULT_MODELS.chat));
+    check("OpenRouter: the assistant's tools in OpenAI's format, with no anyOf schemas", OPENROUTER_TOOLS.length === 4 && OPENROUTER_TOOLS.every((t) => t.type === "function" && t.function.parameters.type === "object") && !JSON.stringify(OPENROUTER_TOOLS).includes("anyOf"));
+    const key = "x".repeat(30);
+    check("AI provider: OpenRouter when its key is set, Anthropic otherwise, AI_PROVIDER to choose", aiProvider({ "openrouter-api-key": key, ANTHROPIC_API_KEY: key }) === "openrouter" && aiProvider({ ANTHROPIC_API_KEY: key }) === "anthropic" && aiProvider({ "openrouter-api-key": key, ANTHROPIC_API_KEY: key, AI_PROVIDER: "anthropic" }) === "anthropic" && aiProvider({}) === null);
+
     // Coverage targets, checked with the matching code itself (scripts/demo-coverage.mjs)
     const cov = demoCoverage(DEMO_LISTINGS, DEMO_PEOPLE);
     check("Demo coverage: every profile has 3+ rooms matching everything and 3+ mutually compatible roommates; every room suits 3+ visible renters", cov.failures.length === 0, cov.failures.slice(0, 5).join("; "));
@@ -1446,11 +1458,32 @@ try {
     const STATE2 = ".wrangler/test-state-google-only";
     rmSync(STATE2, { recursive: true, force: true });
     wrangler(["d1", "migrations", "apply", "DB", "--local", "--persist-to", STATE2]);
+    // People on this Worker (same signing secret), and three anonymous check-in comments for the themes.
+    const t2 = {
+      renter: { id: "t2_renter", name: "Rae Renter", email: "rae@example.test", type: "renter" },
+      landlord: { id: "t2_landlord", name: "Lee Landlord", email: "lee@example.test", type: "landlord" },
+      admin: { id: "t2_admin", name: "Ada Admin", email: "ada@example.test", type: null, role: "admin" },
+    };
+    let sql2 = "";
+    for (const p of Object.values(t2)) {
+      const token = randomBytes(24).toString("base64url");
+      p.cookie = cookieFor(token);
+      sql2 += `INSERT INTO "user" (id,name,email,"emailVerified","createdAt","updatedAt",role,account_type) VALUES (${q(p.id)},${q(p.name)},${q(p.email)},1,${q(now)},${q(now)},${q(p.role || "user")},${q(p.type)});\n`;
+      sql2 += `INSERT INTO "session" (id,"expiresAt",token,"createdAt","updatedAt","userId") VALUES (${q("s_" + p.id)},${q(future)},${q(token)},${q(now)},${q(now)},${q(p.id)});\n`;
+    }
+    ["Finding a roommate who keeps the same hours is hard.", "Rents near campus are high for students.", "I'd like to meet possible roommates before signing a lease."].forEach((c, i) => {
+      sql2 += `INSERT INTO survey_responses (id, survey, user_id, respondent, demo, page, answers, comment, created_at) VALUES ('sr_${i}', 'checkin-2026-10', NULL, 'guest', 0, '/', '{}', ${q(c)}, ${Date.now() - i});\n`;
+    });
+    writeFileSync(`${STATE2}/fixtures.sql`, sql2);
+    wrangler(["d1", "execute", "DB", "--local", "--persist-to", STATE2, "--file", `${STATE2}/fixtures.sql`]);
+    const fakeOr = startFakeOpenRouter(FAKE_OR_PORT);
     const dev2 = spawn(
       process.execPath,
       [...WRANGLER, "dev", "--port", String(PORT2), "--persist-to", STATE2, "--var", `BETTER_AUTH_URL:${BASE2}`, "--var", `BETTER_AUTH_SECRET:${SECRET}`,
         "--var", "GOOGLE_CLIENT_ID:local-test-client.apps.googleusercontent.com", "--var", "GOOGLE_CLIENT_SECRET:local-test-only", "--var", "MAPTILER_KEY:test-browser-key",
-        "--var", "DEV_EMAIL_OUTBOX:0", "--var", "PASSWORD_ACCOUNTS:on", "--var", "DEMO_DATA:off"],
+        "--var", "DEV_EMAIL_OUTBOX:0", "--var", "PASSWORD_ACCOUNTS:on", "--var", "DEMO_DATA:off",
+        "--var", `openrouter-api-key:${FAKE_OPENROUTER_KEY}`, "--var", `OPENROUTER_BASE_URL:http://127.0.0.1:${FAKE_OR_PORT}/api/v1`,
+        "--var", "AI_MODELS_HELPER:google/gemma-4-26b-a4b-it:free,anthropic/claude-opus-5-5,openrouter/free"],
       { stdio: "ignore" }
     );
     try {
@@ -1460,10 +1493,10 @@ try {
         } catch {}
         await sleep(500);
       }
-      const call = (path, { method = "GET", body, origin = BASE2 } = {}) =>
-        fetch(BASE2 + path, { method, redirect: "manual", headers: body ? { "Content-Type": "application/json", Origin: origin } : {}, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(8000) })
-          .then(async (x) => ({ status: x.status, data: await x.json().catch(() => null) }))
-          .catch((e) => ({ status: e.name, data: null }));
+      const call = (path, { method = "GET", body, origin = BASE2, as, timeout = 8000 } = {}) =>
+        fetch(BASE2 + path, { method, redirect: "manual", headers: { ...(body ? { "Content-Type": "application/json", Origin: origin } : {}), ...(as ? { Cookie: as.cookie } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeout) })
+          .then(async (x) => { const t = await x.text(); let data = null; try { data = JSON.parse(t); } catch {} return { status: x.status, data, text: t }; })
+          .catch((e) => ({ status: e.name, data: null, text: "" }));
       const crossSite = await call("/api/auth/sign-out", { method: "POST", body: {}, origin: "https://evil.example" });
       const google = await call("/api/auth/sign-in/social", { method: "POST", body: { provider: "google", callbackURL: "/welcome" } });
       check("Google only: Google sign-in works, even right after a rejected request on a fresh server", crossSite.status === 403 && google.status === 200 && /^https:\/\/accounts\.google\.com\//.test(google.data?.url || ""), `${crossSite.status} ${google.status}`);
@@ -1471,6 +1504,67 @@ try {
       check("Google only: the site reports no email and password sign-in and no test inbox (PASSWORD_ACCOUNTS=on alone isn't enough)", cfg.data?.passwordSignIn === false && cfg.data?.devInbox === false);
       const demoOff = [(await call("/api/demo/listings")).status, (await call("/api/demo/people")).status];
       check("DEMO_DATA=off: the site reports no Demo mode and the demo data isn't served", cfg.data?.demoData === false && demoOff.every((x) => x === 404), demoOff.join(","));
+
+      // ── AI through OpenRouter (the stand-in): off until switched on, free models only, inside the free budget ──
+      const say2 = (text) => call("/api/assistant/messages", { method: "POST", as: t2.renter, body: { text }, timeout: 20000 });
+      const lastReply = (r) => r.data?.messages?.at(-1);
+      let r2 = await say2("Hi, I need a room");
+      check("OpenRouter: with its key set but AI switched off, the assistant uses the guided chat and calls nothing", r2.status === 200 && lastReply(r2)?.mode === "basic" && r2.data.mode === "basic" && fakeOr.state.requests.length === 0, JSON.stringify(r2.data?.mode));
+      r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "preferences", text: "Up to $1,200 from June near Moody Street" } });
+      check("OpenRouter: helpers are off until switched on (409), and the site says so", r2.status === 409 && r2.data?.error === "ai_unavailable" && cfg.data?.aiHelpers === false && fakeOr.state.requests.length === 0);
+      const notAdmin = await call("/api/admin/ai", { method: "POST", as: t2.renter, body: { chat: true } });
+      r2 = await call("/api/admin/ai", { method: "POST", as: t2.admin, body: { chat: true, helpers: true } });
+      check("OpenRouter: only an admin can switch AI on; the switch is recorded", notAdmin.status === 403 && r2.status === 200 && r2.data.switches.chat === true && r2.data.switches.helpers === true && r2.data.configured === true && (await call("/api/config")).data.aiHelpers === true);
+      check("OpenRouter: the admin sees the free counter from OpenRouter, never the key or its label", r2.data.openRouter?.ok === true && r2.data.openRouter.freeToday.limit === 50 && r2.data.openRouter.creditLimit === 0 && !r2.text.includes(FAKE_OPENROUTER_KEY) && !r2.text.includes("sk-or-v1"));
+
+      r2 = await say2('I can pay up to $1,200 a month [[update_memory {"budget_max": 1200, "looking_for": "room"}]] [[invented_price]]');
+      const sent = fakeOr.state.requests.filter((x) => x.body.tools?.length);
+      check("OpenRouter chat: a free model answers through the assistant's tools (2 requests), and the answer is recorded", r2.status === 200 && lastReply(r2)?.mode === "ai" && r2.data.memory.some((m) => m.field === "budget_max" && m.raw === 1200) && sent.length === 2, JSON.stringify(lastReply(r2)?.text));
+      check("OpenRouter chat: invented numbers are removed, as with Claude", lastReply(r2)?.text.includes("$1,200") && !lastReply(r2)?.text.includes("7,777"), lastReply(r2)?.text);
+      check("OpenRouter chat: every request lists free models only, sends the key only in the Authorization header, and the format rules", sent.every((x) => x.body.models.every(isFreeModel) && !("model" in x.body) && x.headers.authorization === `Bearer ${FAKE_OPENROUTER_KEY}` && !x.raw.includes(FAKE_OPENROUTER_KEY) && x.body.messages[0].role === "system" && x.body.messages[0].content.includes("Format rules") && x.body.provider?.require_parameters === true));
+      check("OpenRouter chat: names and emails never reach the model", sent.every((x) => !/Rae|rae@example|t2_renter/.test(x.raw)));
+      r2 = await say2("[[tool_text]]");
+      check("OpenRouter chat: a tool call written out as text isn't shown; the guided chat answers instead", r2.status === 200 && lastReply(r2)?.mode === "basic" && !/update_memory/.test(lastReply(r2)?.text || ""), lastReply(r2)?.text);
+      r2 = await call("/api/admin/ai", { as: t2.admin });
+      check("OpenRouter: coHabit counts its own requests per use and the model that answered", r2.data && (await call("/api/admin/assistant", { as: t2.admin })).data.requestsToday.chat === 3 && r2.data.lastModel === "google/gemma-4-31b-it:free");
+
+      // Helpers: everything the model returns is checked before it reaches the page.
+      const before = fakeOr.state.requests.length;
+      r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "preferences", text: "Up to $1,200 from June near Moody Street, no pets please" } });
+      check("AI help (questionnaire): values checked like the form; unknown answers and wrong types dropped", r2.status === 200 && r2.data.fields.budget_max === 1200 && r2.data.fields.move_in_month === "2027-06" && r2.data.fields.area === "Moody Street" && r2.data.fields.pets === "no_pets" && !("sleep_schedule" in r2.data.fields) && !("rooms_needed" in r2.data.fields), JSON.stringify(r2.data));
+      check("AI help: requests use the helper models, with anything that isn't free removed", fakeOr.state.requests.slice(before).every((x) => JSON.stringify(x.body.models) === '["google/gemma-4-26b-a4b-it:free","openrouter/free"]'));
+      r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "listing_filters", text: "a furnished studio in the Highlands under $1,500" } });
+      check("AI help (listing filters): only listed values are kept", r2.status === 200 && JSON.stringify(r2.data.filters) === JSON.stringify({ hood: "The Highlands", kind: "Studio", maxRent: 1500, furnished: "true" }), JSON.stringify(r2.data));
+      r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "intro", firstName: "Mia", shared: ["Both like a quiet home", "Both very tidy"] } });
+      check("AI help (intro): the name is filled in by coHabit and a phone number is removed", r2.status === 200 && r2.data.text.startsWith("Hi Mia!") && !/617|Call me/.test(r2.data.text) && fakeOr.state.requests.at(-1).raw.includes("{name}") && !fakeOr.state.requests.at(-1).raw.includes("Mia"), JSON.stringify(r2.data));
+      r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "preferences", text: "June, near campus" } });
+      check("AI help: three uses per person a day, then a clear message", r2.status === 409 && /today's AI help/.test(r2.data?.message || ""));
+      r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "unit_description", description: "Nice room" } });
+      const r3 = await call("/api/ai/help", { method: "POST", as: t2.landlord, body: { task: "unit_description", name: "Sunny room", area: "Waltham, MA", monthly_rent: 1150, rooms_available: 1, move_in_date: "2027-06-01", description: "Big window, shared kitchen, quiet house." } });
+      check("AI help (listing description): landlords only; invented prices, addresses and emails removed", r2.status === 403 && r3.status === 200 && r3.data.text.includes("Bright, quiet room") && !/999|Elm|owner@|Email me/.test(r3.data.text), JSON.stringify(r3.data));
+      r2 = await call("/api/ai/help", { method: "POST", as: t2.landlord, body: { task: "unit_description", description: "Call 617-555-0100 for a tour" } });
+      check("AI help: what people type is checked too (no phone numbers or addresses sent)", r2.status === 400);
+
+      // Admin: model check and check-in themes.
+      r2 = await call("/api/admin/ai/check", { method: "POST", as: t2.admin, body: {}, timeout: 30000 });
+      const res2 = r2.data?.check?.results || [];
+      check("Admin model check: one test per chosen model (not the free router), each sent to that model only", r2.status === 200 && res2.map((x) => x.model).join() === "google/gemma-4-31b-it:free,nvidia/nemotron-3.5-super-vl:free,google/gemma-4-26b-a4b-it:free" && fakeOr.state.requests.filter((x) => x.body.tools?.[0]?.function?.name === "record_budget").every((x) => x.body.models.length === 1), JSON.stringify(res2));
+      check("Admin model check: says which models used the tool correctly", res2[0]?.toolCall === true && res2[1]?.toolCall === false && res2[1]?.problem === "answered without using the tool");
+      r2 = await call("/api/admin/ai/themes", { method: "POST", as: t2.admin, body: {}, timeout: 30000 });
+      check("Admin check-in themes: themes with counts kept within the number of comments, contact details removed", r2.status === 200 && r2.data.comments === 3 && r2.data.themes.length === 2 && r2.data.themes[1].count === 3 && !/y\.test|@/.test(JSON.stringify(r2.data.themes)), JSON.stringify(r2.data));
+
+      // OpenRouter's free limit reached: AI pauses everywhere until the next UTC day, and nothing else is called.
+      fakeOr.state.mode = "429";
+      r2 = await say2("[[reply Hello]]");
+      const callsAt429 = fakeOr.state.requests.length;
+      const paused = await call("/api/admin/ai", { as: t2.admin });
+      const next = await say2("[[reply Hello again]]");
+      const helpPaused = await call("/api/ai/help", { method: "POST", as: t2.landlord, body: { task: "unit_description", description: "Quiet room near the park." } });
+      check("OpenRouter 429: the guided chat answers, AI pauses until 00:00 UTC, and nothing more is sent", lastReply(r2)?.mode === "basic" && paused.data.pausedUntil?.endsWith("T00:00:00.000Z") && lastReply(next)?.mode === "basic" && helpPaused.status === 409 && fakeOr.state.requests.length === callsAt429 && (await call("/api/config")).data.aiHelpers === false);
+      fakeOr.state.mode = "ok";
+      r2 = await call("/api/admin/ai", { method: "POST", as: t2.admin, body: { resume: true } });
+      check("Admin: AI can be resumed after a pause, and switched off again", r2.data.pausedUntil === null && (await call("/api/admin/ai", { method: "POST", as: t2.admin, body: { chat: false, helpers: false } })).data.switches.chat === false);
+      check("OpenRouter: the key never appears in any response or in the stand-in's request bodies", ![cfg.text, r2.text].some((t) => t.includes(FAKE_OPENROUTER_KEY)) && fakeOr.state.requests.every((x) => !x.raw.includes(FAKE_OPENROUTER_KEY)));
       const off = [];
       for (const [path, body] of [
         ["/api/auth/sign-up/email", { signupAs: "renter", name: "Ann", email: "ann@example.test", password: "correct horse battery" }],
@@ -1486,6 +1580,7 @@ try {
       check("Google only: every email and password endpoint and the test inbox answer 404, and nothing is created", off.every((x) => x === 404) && (await call("/api/auth/request-password-reset", { method: "POST", body: { email: "a@example.test" } })).data?.error === "not_available", off.join(","));
     } finally {
       dev2.kill();
+      fakeOr.close();
     }
   }
 } catch (err) {

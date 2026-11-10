@@ -517,7 +517,45 @@ source and license are in [docs/DEMO_DATA.md](docs/DEMO_DATA.md) (written from t
     in Details; they never show the listing itself. They load from `images.unsplash.com` (named on the privacy
     page); if one can't load, a drawing shows instead.
 
-### Turning the AI on (the owner's decision: it can cost money)
+### AI on OpenRouter's free models (built 2026-11-10; off until the admin switches it on)
+
+The plan and the model audit: [docs/OPENROUTER_PLAN.md](docs/OPENROUTER_PLAN.md). Code: `src/ai/openrouter.js`
+(requests), `src/ai/budget.js` (free-request budget, switches), `src/ai/features.js` (helpers, admin tools), and
+the OpenRouter turn in `src/assistant/ai.js`.
+
+- **Key:** the Worker secret `openrouter-api-key` (the owner added it; only the name was ever checked). It's sent
+  only to OpenRouter and never logged, stored or shown. When it's set, OpenRouter is the assistant's provider
+  (`AI_PROVIDER=anthropic` would choose Claude instead, if that key existed).
+- **Free models only:** every model id must end in `:free` or be `openrouter/free`; anything else is dropped before a
+  request is made. Defaults (each request lists up to three; OpenRouter tries the next if one fails):
+  - Chat: `google/gemma-4-31b-it:free`, `nvidia/nemotron-3.5-super-vl:free`, `openrouter/free`.
+  - Helpers: `google/gemma-4-26b-a4b-it:free`, `nvidia/nemotron-3.5-lightning:free`, `openrouter/free`.
+  - Summaries: `nvidia/nemotron-3.5-super-vl:free`, `google/gemma-4-31b-it:free`, `openrouter/free`.
+  - Change them without a code change with the variables `AI_MODELS_CHAT`, `AI_MODELS_HELPER`, `AI_MODELS_SUMMARY`
+    (comma-separated).
+- **Switches (Admin page → AI):** "Assistant chat" and "Helpers", both off until switched on; each change is recorded
+  in `admin_audit`. With chat off, renters get the guided chat exactly as before.
+- **Free budget:** OpenRouter allows 50 free requests a day for the whole account (20 a minute). coHabit's daily
+  share: chat 34 requests (a reply is 2-3), helpers 10, admin 6; per renter 6 AI chat replies and 3 helper uses a
+  day; 6 AI chat replies a minute for the site. Variables: `AI_DAILY_CHAT`, `AI_DAILY_HELPERS`, `AI_DAILY_ADMIN`,
+  `AI_HELPER_PER_USER`, `AI_SITE_PER_MINUTE`, `ASSISTANT_DAILY_PER_USER`. Requests are counted in `assistant_usage`
+  (`or:chat`, `or:helper`, `or:admin`; helper uses as `h:<user id>`). OpenRouter's own counter shows on the admin
+  page. After OpenRouter answers 429, AI pauses until 00:00 UTC ("Resume now" on the admin page). No database
+  change.
+- **What people get:** AI replies in the assistant; "Describe what you want" on My matches (fills the questionnaire)
+  and on Listings in Demo mode (sets the filters); "Help me write this" in Connect (a draft intro; the other person's
+  name is filled in by coHabit, never sent); "Polish my description (AI)" for landlords; "Find themes in the comments
+  (AI)" on the admin check-in page. Nothing is saved or sent until the person does it; outputs are checked (only
+  listed values, no invented numbers, no emails, phone numbers, links or addresses).
+- **Admin "Check models":** one short tool-calling test per chosen model (4 free requests with the default models): whether the key,
+  the OpenRouter privacy settings and tool calls work, and how long each took.
+- **Owner's OpenRouter settings (in OpenRouter, not here):** set a credit limit on the key (the lowest allowed) so
+  it can never spend money; decide on the privacy setting that lets free models' providers use prompts for training
+  (free models may need it on; the model check shows whether they work).
+- **Local testing:** `npm test` uses a stand-in (`tests/fake-openrouter.mjs`) on the second local Worker; it never
+  calls OpenRouter.
+
+### Turning the AI on with Anthropic's Claude (not used; it can cost money)
 
 Until a key is added, the assistant runs in basic mode and costs nothing.
 

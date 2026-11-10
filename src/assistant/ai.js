@@ -1,10 +1,14 @@
-// The AI side of the assistant: Claude, called from the Worker with the official Anthropic SDK.
-// The API key is a Cloudflare secret (ANTHROPIC_API_KEY) and never reaches the browser.
+// The AI side of the assistant. Two providers, both called from the Worker with keys that are Cloudflare secrets
+// and never reach the browser:
+//   - OpenRouter (free models only; secret "openrouter-api-key", src/ai/openrouter.js). Used when that key is set.
+//   - Anthropic's Claude (secret ANTHROPIC_API_KEY, official SDK). Used only when it's the one configured, or
+//     when AI_PROVIDER=anthropic.
 //
 // Division of work: the model talks, asks questions and explains. It can only act through the
 // tools below, and the Worker runs every tool: it checks each value, searches the database, and
 // turns "save" or "contact" into a confirmation card that only the renter can approve.
 import Anthropic from "@anthropic-ai/sdk";
+import { OpenRouterError, chatCompletion, modelsFor, openRouterConfigured, replyText } from "../ai/openrouter.js";
 import { STRICTNESS_FIELDS } from "./memory.js";
 
 // Models this code is written and tested for. Choose with the ASSISTANT_MODEL variable.
@@ -16,7 +20,16 @@ export const MODELS = {
 };
 export const DEFAULT_MODEL = "claude-opus-5-5";
 export const modelFor = (env) => (MODELS[env.ASSISTANT_MODEL] ? env.ASSISTANT_MODEL : DEFAULT_MODEL);
-export const aiConfigured = (env) => typeof env.ANTHROPIC_API_KEY === "string" && env.ANTHROPIC_API_KEY.length > 20;
+const anthropicConfigured = (env) => typeof env.ANTHROPIC_API_KEY === "string" && env.ANTHROPIC_API_KEY.length > 20;
+// Which provider answers: AI_PROVIDER when that one is configured, otherwise OpenRouter if its key is set, then
+// Anthropic. null = no AI (the guided chat only).
+export function aiProvider(env) {
+  const want = String(env.AI_PROVIDER || "").toLowerCase();
+  if (want === "anthropic" && anthropicConfigured(env)) return "anthropic";
+  if (want === "openrouter" && openRouterConfigured(env)) return "openrouter";
+  return openRouterConfigured(env) ? "openrouter" : anthropicConfigured(env) ? "anthropic" : null;
+}
+export const aiConfigured = (env) => !!aiProvider(env);
 
 const MAX_STEPS = 5; // model calls per renter message (tool rounds included)
 const MAX_TOKENS = 4000; // per call; replies are short, and this caps the cost of a runaway answer
@@ -169,10 +182,23 @@ function client(env) {
   });
 }
 
+// Runs one tool the model asked for. Errors go back to the model as a short message it can act on.
+async function runTool(tools, name, input) {
+  try {
+    if (!tools[name]) throw new Error(`Unknown tool ${name}.`);
+    return { result: await tools[name](input && typeof input === "object" && !Array.isArray(input) ? input : {}), isError: false };
+  } catch (e) {
+    if (!e?.publicMessage) console.error("Assistant tool failed", name, e?.stack || e);
+    return { result: { error: e?.publicMessage || "That didn't work. Continue without it." }, isError: true };
+  }
+}
+
 // Runs one renter message through the model, letting it call tools until it answers in text.
 // history: earlier { role, content } text messages (oldest first); note: this turn's system note.
 // tools: { name: async (input) => result object } run by the Worker.
+// Returns { reply, usage, toolLog, model, requests }; throws AiUnavailable (with usage and requests so far).
 export async function runAiTurn({ env, history, text, note, tools }) {
+  if (aiProvider(env) === "openrouter") return runOpenRouterTurn({ env, history, text, note, tools });
   const model = modelFor(env);
   const anthropic = client(env);
   // History is replayed as plain text only (earlier thinking and tool calls are not), so each turn
@@ -222,28 +248,92 @@ export async function runAiTurn({ env, history, text, note, tools }) {
     if (!calls.length) {
       const reply = response.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
       if (!reply) throw fail("empty");
-      return { reply, usage, toolLog, model: response.model || model };
+      return { reply, usage, toolLog, model: response.model || model, requests: step + 1 };
     }
 
     // Keep the model's turn exactly as returned (thinking blocks included), then answer every call.
     messages.push({ role: "assistant", content: response.content });
     const results = [];
     for (const call of calls) {
-      let result;
-      let isError = false;
-      try {
-        if (!tools[call.name]) throw new Error(`Unknown tool ${call.name}.`);
-        const input = call.input && typeof call.input === "object" && !Array.isArray(call.input) ? call.input : {};
-        result = await tools[call.name](input);
-      } catch (e) {
-        isError = true;
-        result = { error: e?.publicMessage || "That didn't work. Continue without it." };
-        if (!e?.publicMessage) console.error("Assistant tool failed", call.name, e?.stack || e);
-      }
+      const { result, isError } = await runTool(tools, call.name, call.input);
       toolLog.push({ name: call.name, result });
       results.push({ type: "tool_result", tool_use_id: call.id, content: JSON.stringify(result), ...(isError ? { is_error: true } : {}) });
     }
     messages.push({ role: "user", content: results });
+  }
+  throw fail("too_many_steps");
+}
+
+// ── OpenRouter (free models) ─────────────────────────────────────────────────
+// Same instructions and tools, in OpenAI's format. Free models are smaller, so a few rules are spelled out, and a
+// turn has fewer steps (each step is one of the day's free requests).
+const OPENROUTER_STEPS = 3;
+const OPENROUTER_EXTRA = `Format rules for this chat
+- Write plain sentences. No markdown headings, tables or bold text.
+- Use the tools only through function calls. Never write a tool name, JSON or code in your reply to the student.
+- After a search, answer in the same reply; don't promise to search later.`;
+
+// "Value or null" fields become the plain type here (some providers reject anyOf); the Worker still accepts null.
+const plainSchema = (s) => (s?.anyOf ? { ...s.anyOf.find((x) => x.type !== "null") } : s);
+export const OPENROUTER_TOOLS = TOOLS.map((t) => ({
+  type: "function",
+  function: {
+    name: t.name,
+    description: t.description,
+    parameters: { ...t.input_schema, properties: Object.fromEntries(Object.entries(t.input_schema.properties).map(([k, v]) => [k, plainSchema(v)])) },
+  },
+}));
+// A reply that is really a tool call written out as text (smaller models do this) can't be shown to the student.
+const TOOL_AS_TEXT = /\b(update_memory|search_rooms|search_roommates|propose_action)\b|^\s*[[{][\s\S]*[\]}]\s*$|```/;
+
+async function runOpenRouterTurn({ env, history, text, note, tools }) {
+  const messages = [
+    { role: "system", content: `${SYSTEM_PROMPT}\n\n${OPENROUTER_EXTRA}\n\n${note}` },
+    ...history.map((m) => ({ role: m.role, content: String(m.content) })),
+    { role: "user", content: text },
+  ];
+  const usage = { input: 0, output: 0 };
+  const toolLog = [];
+  let requests = 0;
+  let model = modelsFor(env, "chat")[0];
+  const fail = (reason, cause) => Object.assign(new AiUnavailable(reason, cause), { usage, requests, model, retryAfter: cause?.retryAfter ?? null });
+
+  for (let step = 0; step < OPENROUTER_STEPS; step++) {
+    const last = step === OPENROUTER_STEPS - 1;
+    let out;
+    try {
+      requests++;
+      out = await chatCompletion(env, { use: "chat", messages, tools: OPENROUTER_TOOLS, toolChoice: last ? "none" : "auto", maxTokens: 900, temperature: 0.3 });
+    } catch (e) {
+      if (e instanceof OpenRouterError) throw fail(e.reason, e);
+      throw e;
+    }
+    usage.input += out.usage.input;
+    usage.output += out.usage.output;
+    model = out.model;
+    if (out.finish === "length") throw fail("too_long");
+    if (out.finish === "content_filter") throw fail("refusal");
+
+    const calls = (Array.isArray(out.message.tool_calls) ? out.message.tool_calls : []).filter((c) => c?.function?.name);
+    if (!calls.length || last) {
+      const reply = replyText(out.message);
+      if (!reply) throw fail("empty");
+      if (TOOL_AS_TEXT.test(reply)) throw fail("bad_output");
+      return { reply, usage, toolLog, model, requests };
+    }
+    const asked = calls.slice(0, 3).map((c, i) => ({ id: String(c.id || `call_${step}_${i}`), name: c.function.name, args: c.function.arguments }));
+    messages.push({ role: "assistant", content: replyText(out.message) || "", tool_calls: asked.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: typeof c.args === "string" ? c.args : JSON.stringify(c.args || {}) } })) });
+    for (const c of asked) {
+      let input;
+      try {
+        input = typeof c.args === "string" ? (c.args.trim() ? JSON.parse(c.args) : {}) : c.args || {};
+      } catch {
+        input = null;
+      }
+      const { result } = input === null ? { result: { error: "The arguments weren't valid JSON. Try again with a JSON object." } } : await runTool(tools, c.name, input);
+      toolLog.push({ name: c.name, result });
+      messages.push({ role: "tool", tool_call_id: c.id, content: JSON.stringify(result) });
+    }
   }
   throw fail("too_many_steps");
 }
