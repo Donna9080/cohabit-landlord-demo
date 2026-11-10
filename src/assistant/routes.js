@@ -684,8 +684,9 @@ async function handleMessage({ request, env, db, user }) {
       if (e.usage?.input || e.usage?.output) writes.push(...addUsage(db, user.id, 0, e.usage));
       if (openRouter) {
         writes.push(countRequests(db, "chat", e.requests || 0, e.usage));
-        // OpenRouter's free limit for the day was reached: pause AI everywhere until it resets.
-        if (e.reason === "rate_limited") writes.push(pauseStatement(db, e.retryAfter));
+        // OpenRouter's free limit for the day was reached: pause AI everywhere until it resets. (A busy provider or
+        // the per-minute limit only affects this reply.)
+        if (e.daily) writes.push(pauseStatement(db, e.retryAfter));
       }
       notice = BASIC_NOTICES.unavailable();
     }

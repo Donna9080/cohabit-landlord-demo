@@ -97,7 +97,7 @@ async function helperCall(env, db, user, args) {
     if (!refusedBeforeModel(e)) writes.push(countRequests(db, "helper", 1));
     if (e instanceof OpenRouterError) {
       console.error("AI helper unavailable:", e.reason, e.status || "", e.detail);
-      if (e.reason === "rate_limited") writes.push(pauseStatement(db, e.retryAfter));
+      if (e.daily) writes.push(pauseStatement(db, e.retryAfter));
       throw unavailable("failed");
     }
     throw e;
@@ -248,7 +248,7 @@ async function adminCall(env, db, args) {
   } catch (e) {
     if (!refusedBeforeModel(e)) await countRequests(db, "admin", 1).run();
     if (e instanceof OpenRouterError) {
-      if (e.reason === "rate_limited") await pauseStatement(db, e.retryAfter).run();
+      if (e.daily) await pauseStatement(db, e.retryAfter).run();
       return { error: e };
     }
     throw e;

@@ -9,7 +9,7 @@
 //   - Helpers and admin requests: canned answers chosen by what the system prompt asks for, including values a
 //     careless model might add (unknown choices, invented prices, a phone number, an address), so the tests can
 //     check that coHabit drops them.
-//   state.mode "429" answers every chat request with a rate-limit error.
+//   state.mode "429": the account's daily free limit; "provider_busy": a model's provider is busy (also a 429).
 import { createServer } from "node:http";
 
 export const FAKE_OPENROUTER_KEY = "test-openrouter-key-for-local-tests-only";
@@ -33,6 +33,8 @@ export function startFakeOpenRouter(port) {
     state.requests.push({ headers: req.headers, body, raw });
     if (!authed) return send(401, { error: { code: 401, message: "No auth credentials found" } });
     if (state.mode === "429") return send(429, { error: { code: 429, message: "Rate limit exceeded: free-models-per-day", metadata: { error_type: "rate_limit_exceeded" } } });
+    if (state.mode === "provider_busy")
+      return send(429, { error: { code: 429, message: "Provider returned error", metadata: { provider_name: "Google AI Studio", raw: "free tier capacity reached" } } });
     const SUPPORTED = ["models", "messages", "max_tokens", "temperature", "tools", "tool_choice", "response_format", "provider"];
     if (body.provider?.require_parameters && Object.keys(body).some((k) => !SUPPORTED.includes(k)))
       return send(404, { error: { code: 404, message: "No endpoints found that can handle the requested parameters." } });

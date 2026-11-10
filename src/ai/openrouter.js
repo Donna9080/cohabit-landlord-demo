@@ -46,15 +46,18 @@ function apiBase(env) {
   return local && env.OPENROUTER_BASE_URL ? env.OPENROUTER_BASE_URL.replace(/\/+$/, "") : API;
 }
 
-// reason: key | rate_limited | no_credits | no_provider | bad_request | unreachable | timeout | service_error |
+// reason: key | rate_limited (the account's free limit) | provider_busy (a model's provider is busy; another model
+// or a later try can work) | no_credits | no_provider | bad_request | unreachable | timeout | service_error |
 // not_configured | bad_output. retryAfter: seconds, when OpenRouter says. detail: OpenRouter's own message (no key).
+// daily: the account's free requests for the day are used up (only then does coHabit pause AI until 00:00 UTC).
 export class OpenRouterError extends Error {
-  constructor(reason, { status = null, detail = "", retryAfter = null } = {}) {
+  constructor(reason, { status = null, detail = "", retryAfter = null, daily = false } = {}) {
     super(reason);
     this.reason = reason;
     this.status = status;
     this.detail = String(detail).slice(0, 300);
     this.retryAfter = retryAfter;
+    this.daily = daily;
   }
 }
 
@@ -105,7 +108,14 @@ export async function chatCompletion(env, { use, models, messages, tools, toolCh
   if (!res.ok || data?.error) {
     const status = res.ok ? Number(data?.error?.code) || 502 : res.status;
     const retry = Number(res.headers.get("retry-after"));
-    throw new OpenRouterError(reasonFor(status), { status, detail: data?.error?.message || res.statusText, retryAfter: Number.isFinite(retry) && retry > 0 ? retry : null });
+    const detail = data?.error?.message || res.statusText;
+    // A 429 from a model's provider (its own free capacity) isn't the account's limit: OpenRouter names the provider
+    // ("Provider returned error"). The account's limits say which: free-models-per-min or free-models-per-day.
+    const meta = data?.error?.metadata || {};
+    const upstream = !!(meta.provider_name || meta.provider_code) || /provider returned error/i.test(detail);
+    const daily = status === 429 && !upstream && /per-day|per day|daily/i.test(`${detail} ${meta.error_type || ""}`);
+    const reason = status === 429 && upstream ? "provider_busy" : reasonFor(status);
+    throw new OpenRouterError(reason, { status, detail, retryAfter: Number.isFinite(retry) && retry > 0 ? retry : null, daily });
   }
   const choice = data?.choices?.[0];
   if (!choice?.message) throw new OpenRouterError("bad_output", { detail: "No message in the reply." });

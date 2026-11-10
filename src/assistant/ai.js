@@ -296,7 +296,7 @@ async function runOpenRouterTurn({ env, history, text, note, tools }) {
   const toolLog = [];
   let requests = 0;
   let model = modelsFor(env, "chat")[0];
-  const fail = (reason, cause) => Object.assign(new AiUnavailable(reason, cause), { usage, requests, model, retryAfter: cause?.retryAfter ?? null });
+  const fail = (reason, cause) => Object.assign(new AiUnavailable(reason, cause), { usage, requests, model, retryAfter: cause?.retryAfter ?? null, daily: !!cause?.daily });
 
   for (let step = 0; step < OPENROUTER_STEPS; step++) {
     const last = step === OPENROUTER_STEPS - 1;

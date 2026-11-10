@@ -1553,6 +1553,12 @@ try {
       r2 = await call("/api/admin/ai/themes", { method: "POST", as: t2.admin, body: {}, timeout: 30000 });
       check("Admin check-in themes: themes with counts kept within the number of comments, contact details removed", r2.status === 200 && r2.data.comments === 3 && r2.data.themes.length === 2 && r2.data.themes[1].count === 3 && !/y\.test|@/.test(JSON.stringify(r2.data.themes)), JSON.stringify(r2.data));
 
+      // A model's provider is busy (a 429 that names the provider): only this reply falls back; AI isn't paused.
+      fakeOr.state.mode = "provider_busy";
+      r2 = await say2("[[reply Hello]]");
+      const busyStatus = await call("/api/admin/ai", { as: t2.admin });
+      check("OpenRouter: a busy provider (429 naming the provider) gives the guided chat for that reply, without pausing AI", lastReply(r2)?.mode === "basic" && busyStatus.data.pausedUntil === null);
+
       // OpenRouter's free limit reached: AI pauses everywhere until the next UTC day, and nothing else is called.
       fakeOr.state.mode = "429";
       r2 = await say2("[[reply Hello]]");

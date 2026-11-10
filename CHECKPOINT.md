@@ -27,7 +27,16 @@ No real listings were imported because no authorized data source exists yet (see
 ## Deployment status
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `ff28f64e-a2b8-4b97-99a3-d4a4cd209778`, deployed 2026-11-10 with the owner's approval: AI on OpenRouter's
+- **Live version:** `ec3aef29-2490-481e-a5f8-99c5482359dd`, deployed 2026-11-10 22:33 UTC with the owner's approval: the
+  model-check fix (commit `7972d8a`), AI still switched off. Signed-out checks repeated (pages 200, helpers off, AI
+  endpoints 401, cross-site 403, no key anywhere). **Second model check (22:34 UTC):** Nemotron 3.5 Super worked (correct
+  tool call, 1 s); Gemma 4 31B got "Provider returned error" (429 from Google AI Studio's free capacity, not the
+  account: OpenRouter's free counter stayed at 0 of 50); the other 2 models were skipped (today's admin share, after
+  the 4 refused requests of the first run). Found: coHabit treated that provider 429 as the account's daily limit and
+  paused AI until 00:00 UTC (no effect while AI is off). Fixed locally: only the account's per-day limit pauses AI; a
+  busy provider only affects that reply (the chat's fallback list then tries the next model). Needs a redeploy.
+
+  Before it: `ff28f64e-a2b8-4b97-99a3-d4a4cd209778`, deployed 2026-11-10 with the owner's approval: AI on OpenRouter's
   free models with **every AI feature switched off** (commit `6e68a2e`, tag `checkpoint-2026-11-10-openrouter`). No
   database change. Bundle 527 KiB compressed, startup 60 ms. Checked live, signed out:
   - Pages return 200 (home, listings, My matches, assistant, admin, admin survey, privacy) and serve the new code,
@@ -454,8 +463,10 @@ Earlier runs:
 - [ ] In OpenRouter (owner): set a credit limit on the `openrouter-api-key` key (lowest allowed) and decide on the
       free-models privacy setting (providers may use prompts for training).
 - [x] Deploy the OpenRouter build with AI off (2026-11-10, version `ff28f64e…`, no database change).
-- [ ] Approve: redeploy the model-check fix (still with AI off), then run Admin → AI → Check models again (4 free
-      requests; coHabit counted the 4 refused ones on 2026-11-10, so before 00:00 UTC only 2 models fit today's admin share).
+- [x] Redeploy the model-check fix (2026-11-10, version `ec3aef29…`); second check: Nemotron 3.5 Super works, Gemma 4 31B's
+      provider was busy, 2 models not checked yet.
+- [ ] Approve: redeploy the busy-provider fix (still with AI off), then run Check models again after 00:00 UTC
+      (the pause and today's admin share both reset then).
 - [ ] Approve: the privacy wording, then switch on the assistant chat; later the helpers.
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
@@ -493,7 +504,7 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `ff28f64e-a2b8-4b97-99a3-d4a4cd209778` (first OpenRouter deploy), `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
 | Database before migration 0009 | Time Travel bookmark `000000a0-00000000-00005107-945d11084f9aa143232ee332dac64224` (only added two empty columns, so rolling back the code alone is usually enough) |
 | Database before migration 0008 | Time Travel bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0007 | Time Travel bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c` (only added a column and tables, so rolling back the code alone is usually enough) |
