@@ -1,4 +1,4 @@
-# coHabit project checkpoint: 2026-11-10 (AI on OpenRouter's free models: built, switched off, local only)
+# coHabit project checkpoint: 2026-11-10 (AI on OpenRouter's free models: live, switched off)
 
 A snapshot of where the project stands: what's built, how it was tested, what's live, and what's left.
 Details live in [ACCOUNTS_SETUP.md](ACCOUNTS_SETUP.md) (how things work, commands) and
@@ -26,11 +26,18 @@ No real listings were imported because no authorized data source exists yet (see
 
 ## Deployment status
 
-**Not deployed: AI on OpenRouter's free models (2026-11-10)** (below) is committed locally only, with every AI feature
-switched off. It needs no database change. The live site still runs `df357d7e…` with no AI.
-
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `df357d7e-73f7-4255-8104-1a7b6de9da29`, deployed 2026-10-18 with the owner's approval: the connected demo data (100 demo
+- **Live version:** `ff28f64e-a2b8-4b97-99a3-d4a4cd209778`, deployed 2026-11-10 with the owner's approval: AI on OpenRouter's
+  free models with **every AI feature switched off** (commit `6e68a2e`, tag `checkpoint-2026-11-10-openrouter`). No
+  database change. Bundle 527 KiB compressed, startup 60 ms. Checked live, signed out:
+  - Pages return 200 (home, listings, My matches, assistant, admin, admin survey, privacy) and serve the new code,
+    including the new privacy wording for AI.
+  - `/api/config` reports the AI helpers off; the key appears nowhere in it.
+  - Signed out, `/api/ai/help`, `/api/admin/ai`, the model check and the assistant return 401; from another site,
+    the helpers and the admin switch return 403.
+  - Not done yet: the admin model check (it needs the owner signed in as admin).
+
+  Before it: `df357d7e-73f7-4255-8104-1a7b6de9da29`, deployed 2026-10-18 with the owner's approval: the connected demo data (100 demo
   rooms, 200 demo profiles, Demo mode across Listings, My matches, the assistant and `/demo/people`; commit `f5d39e4`,
   tag `checkpoint-2026-10-18-demo-100`). No database change (none needed), so no restore point or migration. Bundle
   517 KiB compressed, startup 53 ms. Checked live, signed out:
@@ -135,11 +142,11 @@ switched off. It needs no database change. The live site still runs `df357d7e…
 | Import tool | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | Yes (2026-10-12) |
 | **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
 | **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
-| **AI on OpenRouter (free models)** | Assistant replies, form filling, intro and description drafts, check-in themes, admin switches, budget and model check; all off until switched on (details below) | No (local, 2026-11-10) |
+| **AI on OpenRouter (free models)** | Assistant replies, form filling, intro and description drafts, check-in themes, admin switches, budget and model check; all off until switched on (details below) | Deployed, switched off (2026-11-10) |
 | **Connected demo data** | 100 demo rooms and 200 demo profiles in Waltham, one Demo mode switch across Listings, My matches, the assistant and a demo profile page; coverage checked with the matching code (details below) | Yes (2026-10-18) |
 | **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | Yes (2026-10-13) |
 
-### AI on OpenRouter's free models (2026-11-10, local only, switched off)
+### AI on OpenRouter's free models (2026-11-10, live as `ff28f64e…`, switched off)
 
 - **Plan and model audit:** [docs/OPENROUTER_PLAN.md](docs/OPENROUTER_PLAN.md), approved by the owner on 2026-11-10.
   16 of OpenRouter's 469 models are free; chat uses Gemma 4 31B, then Nemotron 3.5 Super, then the free router.
@@ -440,7 +447,8 @@ Earlier runs:
 - [ ] Try Demo mode on the live site as a renter: My matches, Save on a demo card, the assistant, `/demo/people`.
 - [ ] In OpenRouter (owner): set a credit limit on the `openrouter-api-key` key (lowest allowed) and decide on the
       free-models privacy setting (providers may use prompts for training).
-- [ ] Approve: deploy the OpenRouter build with AI off, then run Admin → AI → Check models (4 free requests).
+- [x] Deploy the OpenRouter build with AI off (2026-11-10, version `ff28f64e…`, no database change).
+- [ ] Run Admin → AI → Check models on the live site (4 free requests; needs the owner signed in as admin).
 - [ ] Approve: the privacy wording, then switch on the assistant chat; later the helpers.
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
@@ -478,7 +486,7 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
 | Database before migration 0009 | Time Travel bookmark `000000a0-00000000-00005107-945d11084f9aa143232ee332dac64224` (only added two empty columns, so rolling back the code alone is usually enough) |
 | Database before migration 0008 | Time Travel bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0007 | Time Travel bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c` (only added a column and tables, so rolling back the code alone is usually enough) |
@@ -493,7 +501,7 @@ one of these is needed:
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-14-demo-data` |
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-17-accounts` |
 | Previous checkpoint (live code) | Git tag `checkpoint-2026-10-18-demo-100` |
-| This checkpoint (local only) | Git tag `checkpoint-2026-11-10-openrouter` |
+| This checkpoint (live, AI off) | Git tag `checkpoint-2026-11-10-openrouter` |
 | Database before the sample accounts were deleted | Bookmark `00000056-00000000-000050fc-5835b9375b54a515988fe0a4d11150dd` |
 | Database before the sample units were deleted | Bookmark `00000052-00000000-000050fc-3869841560ffed16fa9f4732df169900`, or re-run `scripts/sample-data.sql` (adds them back exactly) |
 
