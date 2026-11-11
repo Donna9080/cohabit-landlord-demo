@@ -177,7 +177,7 @@ No real listings were imported because no authorized data source exists yet (see
 | Import tool | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | Yes (2026-10-12) |
 | **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
 | **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
-| **AI on OpenRouter (free models)** | Assistant replies, form filling, intro and description drafts, check-in themes, admin switches, budget and model check; all off until switched on (details below) | Deployed; assistant chat switched on 2026-11-11, helpers off |
+| **AI on OpenRouter (free models)** | Assistant replies, form filling, intro and description drafts, check-in themes, admin switches, budget and model check; all off until switched on (details below) | Deployed; assistant chat and helpers switched on 2026-11-11 |
 | **Connected demo data** | 100 demo rooms and 200 demo profiles in Waltham, one Demo mode switch across Listings, My matches, the assistant and a demo profile page; coverage checked with the matching code (details below) | Yes (2026-10-18) |
 | **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | Yes (2026-10-13) |
 
@@ -509,7 +509,10 @@ Earlier runs:
       (first choice), stopped normally, 1 request, 342 output tokens of which 298 were thinking (so 900 was tight;
       1,500 leaves room). The next 5 messages got the guided chat with "You've used today's 6 AI replies", as
       designed. Today: 13 of the chat's 34 requests used.
-- [ ] Later (owner's decision): switch the helpers on.
+- [x] Helpers switched on by the owner (2026-11-11 04:52 UTC, Admin → AI; recorded in the audit log). Checked: the
+      public config now says helpers are on; chat still on; not paused. No helper used yet.
+- [ ] Try a helper on the live site (a renter: "Describe it" on My matches or Listings, or the Connect intro draft; a
+      landlord: polish a unit description), then check the helper counter (10 a day for everyone, 3 per person).
 - [ ] To turn the chat off at any time: Admin page → AI → "Assistant chat: On" (renters then get the guided chat).
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
