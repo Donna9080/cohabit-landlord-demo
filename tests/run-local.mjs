@@ -1535,12 +1535,20 @@ try {
       r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "preferences", text: "Up to $1,200 from June near Moody Street, no pets please" } });
       check("AI help (questionnaire): values checked like the form; unknown answers and wrong types dropped", r2.status === 200 && r2.data.fields.budget_max === 1200 && r2.data.fields.move_in_month === "2027-06" && r2.data.fields.area === "Moody Street" && r2.data.fields.pets === "no_pets" && !("sleep_schedule" in r2.data.fields) && !("rooms_needed" in r2.data.fields), JSON.stringify(r2.data));
       check("AI help: requests use the helper models, with anything that isn't free removed", fakeOr.state.requests.slice(before).every((x) => JSON.stringify(x.body.models) === '["google/gemma-4-26b-a4b-it:free","openrouter/free"]'));
+      check("AI help: each helper request leaves room for thinking (1,500 tokens)", fakeOr.state.requests.slice(before).every((x) => x.body.max_tokens === 1500));
       r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "listing_filters", text: "a furnished studio in the Highlands under $1,500" } });
       check("AI help (listing filters): only listed values are kept", r2.status === 200 && JSON.stringify(r2.data.filters) === JSON.stringify({ hood: "The Highlands", kind: "Studio", maxRent: 1500, furnished: "true" }), JSON.stringify(r2.data));
       r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "intro", firstName: "Mia", shared: ["Both like a quiet home", "Both very tidy"] } });
       check("AI help (intro): the name is filled in by coHabit and a phone number is removed", r2.status === 200 && r2.data.text.startsWith("Hi Mia!") && !/617|Call me/.test(r2.data.text) && fakeOr.state.requests.at(-1).raw.includes("{name}") && !fakeOr.state.requests.at(-1).raw.includes("Mia"), JSON.stringify(r2.data));
       r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "preferences", text: "June, near campus" } });
-      check("AI help: three uses per person a day, then a clear message", r2.status === 409 && /today's AI help/.test(r2.data?.message || ""));
+      check("AI help: three usable results per person a day, then a clear message", r2.status === 409 && /today's AI help/.test(r2.data?.message || ""));
+      // A cut-off answer (a model that spent its tokens thinking) is a failed try: a clear message, and it doesn't use
+      // up one of the person's 3 helper uses (only the free request is counted).
+      fakeOr.state.helperMode = "length";
+      const cutOff = await call("/api/ai/help", { method: "POST", as: t2.landlord, body: { task: "unit_description", name: "Sunny room", description: "Big window, shared kitchen." } });
+      fakeOr.state.helperMode = null;
+      const landlordUses = JSON.parse(wrangler(["d1", "execute", "DB", "--local", "--persist-to", STATE2, "--json", "--command", "SELECT COUNT(*) AS n FROM assistant_usage WHERE user_id = 'h:t2_landlord'"]))[0].results[0].n;
+      check("AI help: an answer cut off at the token limit gives a clear message and doesn't use up one of the person's helper uses", cutOff.status === 409 && /didn't work this time/.test(cutOff.data?.message || "") && landlordUses === 0, JSON.stringify({ cutOff: cutOff.data, landlordUses }));
       r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "unit_description", description: "Nice room" } });
       const r3 = await call("/api/ai/help", { method: "POST", as: t2.landlord, body: { task: "unit_description", name: "Sunny room", area: "Waltham, MA", monthly_rent: 1150, rooms_available: 1, move_in_date: "2027-06-01", description: "Big window, shared kitchen, quiet house." } });
       check("AI help (listing description): landlords only; invented prices, addresses and emails removed", r2.status === 403 && r3.status === 200 && r3.data.text.includes("Bright, quiet room") && !/999|Elm|owner@|Email me/.test(r3.data.text), JSON.stringify(r3.data));

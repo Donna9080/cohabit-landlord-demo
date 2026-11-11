@@ -10,6 +10,7 @@
 //     careless model might add (unknown choices, invented prices, a phone number, an address), so the tests can
 //     check that coHabit drops them.
 //   state.mode "429": the account's daily free limit; "provider_busy": a model's provider is busy (also a 429).
+//   state.helperMode "length": helper answers come back empty and cut off (finish_reason "length").
 import { createServer } from "node:http";
 
 export const FAKE_OPENROUTER_KEY = "test-openrouter-key-for-local-tests-only";
@@ -67,6 +68,7 @@ export function startFakeOpenRouter(port) {
       return reply({ content: "", tool_calls: [{ id: `call_${state.requests.length}`, type: "function", function: { name: d.name, arguments: d.arg || "{}" } }] }, "tool_calls");
     }
     // Helpers
+    if (state.helperMode === "length") return reply({ content: "" }, "length");
     if (/housing questionnaire/.test(system)) return text('```json\n{"budget_max": 1200, "move_in_month": "2027-06", "area": "Moody Street", "pets": "no_pets", "sleep_schedule": "sideways", "rooms_needed": "two"}\n```');
     if (/search filters/.test(system)) return text('{"hood": "the highlands", "kind": "studio", "max_rent": 1500, "furnished": true, "lease": "forever", "rooms": 7}');
     if (/first message from one university student/.test(system)) return text("Hi {name}! I saw we both like a quiet home and keep things tidy. Call me at 617-555-0100. Want to talk about rooming together?");

@@ -86,30 +86,49 @@ function cleanWriting(text, sources, max) {
   return t.length >= 20 ? t : null;
 }
 
-// One helper request: counted against today's free requests and the person's helper uses.
-async function helperCall(env, db, user, args) {
-  const writes = [countHelperUse(db, user.id)];
+// Room for each helper's answer and any thinking a model does first (Nemotron spends most of its output thinking:
+// at 300-500 tokens the live helpers were cut off before writing anything). Answers stay short: the instructions and
+// the checks below limit them.
+export const HELPER_MAX_TOKENS = 1500;
+
+// One line in the Worker's logs per helper request: which helper, model, why it stopped, tokens. Never the text.
+const helperLog = (task, out, extra = "") =>
+  console.log(
+    `AI helper reply: task=${task} model=${out.model} finish=${out.finish ?? "?"} tokens_in=${out.usage.input} tokens_out=${out.usage.output}${out.usage.reasoning ? ` reasoning=${out.usage.reasoning}` : ""}${extra}`
+  );
+// An answer coHabit can't use (cut off, empty, or nothing left after the checks).
+function unusable(task, out, why) {
+  helperLog(task, out, ` unusable=${why}`);
+  return unavailable("failed");
+}
+
+// One helper request, counted against today's free requests. The person's helper uses are counted only when they get
+// a usable result (see handleAiHelp): a failed try doesn't use one up.
+async function helperCall(env, db, user, task, args) {
+  const writes = [];
   try {
-    const out = await chatCompletion(env, { use: "helper", maxTokens: 500, temperature: 0.4, timeoutMs: 20_000, ...args });
+    const out = await chatCompletion(env, { use: "helper", maxTokens: HELPER_MAX_TOKENS, temperature: 0.4, timeoutMs: 20_000, ...args });
     writes.push(countRequests(db, "helper", 1, out.usage));
+    if (out.finish === "length") throw unusable(task, out, "cut_off");
+    helperLog(task, out);
     return out;
   } catch (e) {
-    if (!refusedBeforeModel(e)) writes.push(countRequests(db, "helper", 1));
     if (e instanceof OpenRouterError) {
-      console.error("AI helper unavailable:", e.reason, e.status || "", e.detail);
+      if (!refusedBeforeModel(e)) writes.push(countRequests(db, "helper", 1));
+      console.error("AI helper unavailable:", `task=${task}`, e.reason, e.status || "", e.detail);
       if (e.daily) writes.push(pauseStatement(db, e.retryAfter));
       throw unavailable("failed");
     }
     throw e;
   } finally {
-    await db.batch(writes);
+    if (writes.length) await db.batch(writes);
   }
 }
 
 const TASKS = {
   async preferences({ env, db, user, body }) {
     const text = shortText(body, "text", { max: 300, required: true });
-    const out = await helperCall(env, db, user, {
+    const out = await helperCall(env, db, user, "preferences", {
       json: true,
       messages: [
         {
@@ -128,13 +147,16 @@ const TASKS = {
     const v = r.memory.v;
     const fields = { ...Object.fromEntries(["budget_max", "budget_min", "move_in_month", "rooms_needed", ...Object.keys(LIFESTYLE)].filter((k) => v[k] != null).map((k) => [k, v[k]])) };
     if (v.areas?.length) fields.area = v.areas.join(", ").slice(0, 80);
-    if (!Object.keys(fields).length) throw new HttpError(422, "nothing_found", "Couldn't find a budget, month, area or lifestyle answer in that. Try saying it another way.");
+    if (!Object.keys(fields).length) {
+      helperLog("preferences", out, " unusable=nothing_found");
+      throw new HttpError(422, "nothing_found", "Couldn't find a budget, month, area or lifestyle answer in that. Try saying it another way.");
+    }
     return { fields, model: out.model };
   },
 
   async listing_filters({ env, db, user, body }) {
     const text = shortText(body, "text", { max: 300, required: true });
-    const out = await helperCall(env, db, user, {
+    const out = await helperCall(env, db, user, "listing_filters", {
       json: true,
       messages: [
         {
@@ -158,7 +180,10 @@ const TASKS = {
     if (["short", "academic", "year"].includes(j.lease)) f.lease = j.lease;
     if (typeof j.furnished === "boolean") f.furnished = String(j.furnished);
     if ([2, 3].includes(Number(j.rooms))) f.rooms = String(Number(j.rooms));
-    if (!Object.keys(f).length) throw new HttpError(422, "nothing_found", "Couldn't turn that into filters. Try naming a neighborhood, a rent or a month.");
+    if (!Object.keys(f).length) {
+      helperLog("listing_filters", out, " unusable=nothing_found");
+      throw new HttpError(422, "nothing_found", "Couldn't turn that into filters. Try naming a neighborhood, a rent or a month.");
+    }
     return { filters: f, model: out.model };
   },
 
@@ -167,8 +192,7 @@ const TASKS = {
     if (!/^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ' -]{0,29}$/.test(first)) throw new InvalidInput("firstName", "A first name is needed.");
     const shared = (Array.isArray(body?.shared) ? body.shared : []).slice(0, 6).map((s) => (typeof s === "string" ? s.replace(/\s+/g, " ").trim().slice(0, 80) : "")).filter((s) => s && !EMAIL.test(s) && !PHONE.test(s));
     const note = shortText(body, "note", { max: 200 });
-    const out = await helperCall(env, db, user, {
-      maxTokens: 300,
+    const out = await helperCall(env, db, user, "intro", {
       messages: [
         {
           role: "system",
@@ -179,7 +203,7 @@ const TASKS = {
       ],
     });
     let text = cleanWriting(replyText(out.message), [...shared, note], 500);
-    if (!text) throw unavailable("failed");
+    if (!text) throw unusable("intro", out, replyText(out.message) ? "removed_by_checks" : "empty");
     text = text.replace(/\{name\}/gi, first);
     if (!text.includes(first)) text = `Hi ${first}! ${text}`.slice(0, 500);
     return { text, model: out.model };
@@ -195,8 +219,7 @@ const TASKS = {
       description: shortText(body, "description", { max: 1000 }),
     };
     if (!facts.description && !facts.name) throw new InvalidInput("description", "Write a few words about the place first.");
-    const out = await helperCall(env, db, user, {
-      maxTokens: 400,
+    const out = await helperCall(env, db, user, "unit_description", {
       messages: [
         {
           role: "system",
@@ -207,7 +230,7 @@ const TASKS = {
       ],
     });
     const text = cleanWriting(replyText(out.message), [JSON.stringify(facts)], 1000);
-    if (!text) throw unavailable("failed");
+    if (!text) throw unusable("unit_description", out, replyText(out.message) ? "removed_by_checks" : "empty");
     return { text, model: out.model };
   },
 };
@@ -225,7 +248,10 @@ export async function handleAiHelp({ request, env, db, user }) {
   if (block) throw unavailable(block);
   if ((await helperUsesToday(db, user.id)) >= aiBudget(env).helperPerUser) throw unavailable("person_limit");
   await rateLimit(env, `h:u:${user.id}`, 3, "Wait a moment before asking again.");
-  return task({ env, db, user, body });
+  const result = await task({ env, db, user, body });
+  // Only a usable result uses up one of the person's helper uses for the day.
+  await countHelperUse(db, user.id).run();
+  return result;
 }
 
 // ── Admin ────────────────────────────────────────────────────────────────────
