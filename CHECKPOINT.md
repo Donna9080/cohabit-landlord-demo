@@ -505,13 +505,13 @@ Earlier runs:
 - [x] Apply migrations 0005 and 0006 to the live database (2026-10-12, restore point taken first).
 - [x] Push and deploy the import tool and the assistant (2026-10-12, version `d7e38548…`).
 - [x] Deploy the assistant redesign and Demo mode (2026-10-12, version `e2da146e…`, no migration).
-- [ ] Owner tries the redesigned assistant on the live site as a renter (manual test part 9, including Demo mode).
+- [x] Owner tries the redesigned assistant on the live site as a renter (2026-11-11: AI and guided chat, Clear chat, Demo mode).
 - [x] Apply migration 0007 to the live database and deploy the 2026-10-13 work (restore point first; version `d4ea27c7…`).
 - [ ] Run part 10 of the manual test with two real renter accounts (Details, Connect, Accept, Messages, room request).
 - [x] Quick check-in live: restore point, migration 0008 on the live database, deploy (version `e2e17667…`).
 - [ ] Run part 11 of the manual test (Quick check-in) on the live site. It adds real responses; that's expected.
 - [x] Deploy and push the demo data refresh (2026-10-14, version `c35940b7…`, no database change).
-- [ ] Try Demo mode on the live site as a renter: a room search, a roommate search, Details on each.
+- [x] Try Demo mode on the live site as a renter: a room search, a roommate search, Details on each (2026-11-11).
 - [x] Deploy the connected demo data (2026-10-18, version `df357d7e…`, no database change).
 - [x] Demo mode on the live site as a renter (owner's renter account in Chrome, 2026-11-11 ~15:30 UTC; Demo mode was
       off, turned on for the check and back off after): My matches showed the banner and 83 of 100 demo rooms, all
@@ -527,8 +527,8 @@ Earlier runs:
       answers like a typical renter's, compatible demo roommates went from 0 to 13 (Nov 2026), 12 to 26 (Dec 2026) and
       18 to 31 (Jan 2027). They're December 2026 profiles, so they'll need refreshing in the spring (a later
       `npm run demo:build` with new months).
-- [ ] In OpenRouter (owner): set a credit limit on the `openrouter-api-key` key (lowest allowed) and decide on the
-      free-models privacy setting (providers may use prompts for training).
+- [x] In OpenRouter (owner): a credit limit on the `openrouter-api-key` key (OpenRouter reports $5, $0 spent).
+- [ ] In OpenRouter (owner): decide on the free-models privacy setting (providers may use prompts for training).
 - [x] Deploy the OpenRouter build with AI off (2026-11-10, version `ff28f64e…`, no database change).
 - [x] Redeploy the model-check fix (2026-11-10, version `ec3aef29…`); second check: Nemotron 3.5 Super works, Gemma 4 31B's
       provider was busy, 2 models not checked yet.
@@ -582,11 +582,12 @@ Earlier runs:
 - [ ] Decide whether to use a dedicated Gmail account for coHabit's emails (the only $0 option found). If yes: create
       it with 2-Step Verification and an app password, enter it with `wrangler secret put`, and I'll add the SMTP sender.
 - [x] Migration 0009 on the live database (restore point first) and deploy, passwords off (2026-10-17, version `05be52b1…`).
-- [ ] Sign in with Google on the live site once (yours or a teammate's account) to confirm the real flow end to end.
+- [x] Sign in with Google on the live site to confirm the real flow end to end (the owner, both accounts, many times on
+      2026-11-11: sign-in, Google callback, session, sign-out all seen in the live logs).
 - [ ] Only after a sender exists and live email and speed checks pass: `PASSWORD_ACCOUNTS=on`.
 - [x] Push the Quick check-in commits to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-checkin`).
 - [x] Push commits `d3d9734` and the deploy record to GitHub (2026-10-13, with tag `checkpoint-2026-10-13-requests`).
-- [ ] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (part 9 of the manual test).
+- [x] Owner tries the live assistant as a renter: a few answers, results, Save, Clear chat (2026-11-11).
 
 **Blocked: real listings (0 imported).** Apartments.com refuses automated access, and there is no republication
 agreement with it or its owner CoStar. RentCast's API terms weren't confirmed to allow public display. To import,
