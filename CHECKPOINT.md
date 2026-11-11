@@ -521,7 +521,13 @@ Earlier runs:
       public config now says helpers are on; chat still on; not paused. No helper used yet.
 - [x] First helper tries (owner, 2026-11-11 04:57 UTC, polish as landlord): 3 × "AI help didn't work this time" —
       each answer used exactly its 400-token limit thinking. Fixed and deployed as `ba0046b4…` (see above).
-- [ ] Try a helper again after that deploy, then check the log line (`AI helper reply: task=…`) and the counters.
+- [x] Helper tried again after that deploy (owner, 2026-11-11 14:35 UTC, polish): 2 × "didn't work". The new log lines
+      show neither listed model answered (Nemotron 3.5 Lightning and Gemma 4 26B both failed), so the free router
+      picked unchecked models: `nvidia/nemotron-3-ultra-550b-a55b:free` (an empty answer) and `liquid/lfm-3-1.7b:free`
+      (1,500 tokens of thinking, cut off). The failed tries didn't use up the owner's helper uses; 5 of the helpers' 10
+      free requests used today.
+- [ ] Decide: helpers on checked models only (Nemotron 3.5 Lightning → Nemotron 3.5 Super → Gemma 4 26B, no free
+      router), like the chat; and/or a model check now to see whether the Nemotron models answer at this hour.
 - [ ] To turn the chat off at any time: Admin page → AI → "Assistant chat: On" (renters then get the guided chat).
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
