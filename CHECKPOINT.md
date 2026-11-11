@@ -27,7 +27,14 @@ No real listings were imported because no authorized data source exists yet (see
 ## Deployment status
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `917e67f3-0705-4ff9-a42e-1c6f64fbf3ea`, deployed 2026-11-11 with the owner's approval: demo data
+- **Live version:** `13d42e2b-3bb1-4e93-a229-561d3d18f868`, deployed 2026-11-11 with the owner's approval: My matches
+  shows a room only if it's free from the renter's move-in month or the month before (the assistant's window; 15 points
+  for the month before), as well as affordable, big enough and scoring 70+; rooms free months earlier or later stay on
+  Listings only (commit `34cac3b`, 537/537, no database change). Checked live: signed out as before; the owner's
+  renter account (Nov 2026 move-in) in Demo mode now gets 2 of 100 demo rooms (both free from Nov 15, 2026, 100%),
+  was 83, and 13 demo roommates; Demo mode turned back off.
+
+  Before it: `917e67f3-0705-4ff9-a42e-1c6f64fbf3ea`, deployed 2026-11-11 with the owner's approval: demo data
   with two December 2026 groups (15 roommate profiles and 6 rooms free from mid-November or December), taken from the
   largest 2027 groups so the totals stay 100 listings and 200 profiles (197 shown); every coverage target still met
   (commit `3929a5b`, 534/534, no database change). Checked live: signed out as before; the demo endpoints give 100
@@ -577,8 +584,11 @@ Earlier runs:
 - [ ] Later (owner's call, helpers off until then): give helpers more time (e.g. 45 s), ask models to think less
       (OpenRouter's reasoning setting) and tell a timeout apart from an empty reply in the logs; then try again.
 - [ ] To turn the chat off at any time: Admin page → AI → "Assistant chat: On" (renters then get the guided chat).
-- [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
-      budget shows at 80% even months off; it affects real matches too).
+- [x] My matches requires the room to be free in the move-in month or the month before (approved and deployed
+      2026-11-11, version `13d42e2b…`; for sample answers, demo matches for Nov 2026 went from 83 to 2, Jun 2027 from
+      83 to 29; sample data: 25 of 30 renters get a match, was 27). Was: "Decide whether My matches should require the
+      move-in month within a month (today a room in your area and
+      budget shows at 80% even months off; it affects real matches too)."
 - [ ] Decide whether to use a dedicated Gmail account for coHabit's emails (the only $0 option found). If yes: create
       it with 2-Step Verification and an app password, enter it with `wrangler secret put`, and I'll add the SMTP sender.
 - [x] Migration 0009 on the live database (restore point first) and deploy, passwords off (2026-10-17, version `05be52b1…`).
@@ -614,7 +624,7 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `75a84c62-9f0c-4f81-889e-51357229e84f` (demo data without December 2026), `34522db7-43c6-4d77-a944-e51ee6383c78` (helpers without the retry), `ba0046b4-6088-470f-87c7-c758ce410183` (helpers with the free router), `6d87bbf3-a743-4f94-9db1-388b30de6850` (helpers with 300-500 tokens), `428bb983-71c4-4a0d-a3aa-30d49952876a` (chat with the free router, 900-token steps), `ce127f77-8c0e-4613-82cf-6791b424e69f` (Gemma first; busy-provider fix), `ec3aef29-2490-481e-a5f8-99c5482359dd` (model-check fix), `ff28f64e-a2b8-4b97-99a3-d4a4cd209778` (first OpenRouter deploy), `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `917e67f3-0705-4ff9-a42e-1c6f64fbf3ea` (My matches ignoring the move-in month), `75a84c62-9f0c-4f81-889e-51357229e84f` (demo data without December 2026), `34522db7-43c6-4d77-a944-e51ee6383c78` (helpers without the retry), `ba0046b4-6088-470f-87c7-c758ce410183` (helpers with the free router), `6d87bbf3-a743-4f94-9db1-388b30de6850` (helpers with 300-500 tokens), `428bb983-71c4-4a0d-a3aa-30d49952876a` (chat with the free router, 900-token steps), `ce127f77-8c0e-4613-82cf-6791b424e69f` (Gemma first; busy-provider fix), `ec3aef29-2490-481e-a5f8-99c5482359dd` (model-check fix), `ff28f64e-a2b8-4b97-99a3-d4a4cd209778` (first OpenRouter deploy), `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
 | Database before migration 0009 | Time Travel bookmark `000000a0-00000000-00005107-945d11084f9aa143232ee332dac64224` (only added two empty columns, so rolling back the code alone is usually enough) |
 | Database before migration 0008 | Time Travel bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0007 | Time Travel bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c` (only added a column and tables, so rolling back the code alone is usually enough) |
