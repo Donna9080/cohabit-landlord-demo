@@ -27,7 +27,12 @@ No real listings were imported because no authorized data source exists yet (see
 ## Deployment status
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `428bb983-71c4-4a0d-a3aa-30d49952876a`, deployed 2026-11-11 with the owner's approval: Nemotron
+- **Live version:** `6d87bbf3-a743-4f94-9db1-388b30de6850`, deployed 2026-11-11 with the owner's approval, chat left
+  on: the chat lists checked models only (Nemotron 3.5 Super → Nemotron 3.5 Lightning → Gemma 4 31B, no free router),
+  each step may use up to 1,500 tokens (was 900), and each AI chat reply logs its model, finish reason, requests and
+  tokens, never the text (commit `efadcd1`, 529/529, no database change). Signed-out checks repeated (all as before).
+
+  Before it: `428bb983-71c4-4a0d-a3aa-30d49952876a`, deployed 2026-11-11 with the owner's approval: Nemotron
   leads the chat and helper model lists (commit `215c064`), AI still switched off, no database change. Signed-out
   checks repeated (pages 200, helpers off, AI endpoints 401, cross-site 403, no key anywhere); signed in as admin, the
   AI panel lists chat Nemotron 3.5 Super → Gemma 4 31B → free router and helpers Nemotron 3.5 Lightning → Gemma 4 26B
@@ -498,8 +503,8 @@ Earlier runs:
       model's answer hit the 900-token limit ("too_long"). 12 of the chat's 34 daily requests used (about 2 per reply).
       The last reply came from `dots-studio/dots-3-note-preview:free` through the free router, so both chosen models
       failed on that request; which model answered the others isn't recorded.
-- [ ] Decide: vetted models only in the chat (drop the free router), a log line with the model and finish reason
-      for each AI reply (no text), and a look at the length limit (needs a deploy).
+- [x] Chat: checked models only, a log line per AI reply, 1,500-token steps (approved and deployed 2026-11-11,
+      version `6d87bbf3…`).
 - [ ] Later (owner's decision): switch the helpers on.
 - [ ] To turn the chat off at any time: Admin page → AI → "Assistant chat: On" (renters then get the guided chat).
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
@@ -538,7 +543,7 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `ce127f77-8c0e-4613-82cf-6791b424e69f` (Gemma first; busy-provider fix), `ec3aef29-2490-481e-a5f8-99c5482359dd` (model-check fix), `ff28f64e-a2b8-4b97-99a3-d4a4cd209778` (first OpenRouter deploy), `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `428bb983-71c4-4a0d-a3aa-30d49952876a` (chat with the free router, 900-token steps), `ce127f77-8c0e-4613-82cf-6791b424e69f` (Gemma first; busy-provider fix), `ec3aef29-2490-481e-a5f8-99c5482359dd` (model-check fix), `ff28f64e-a2b8-4b97-99a3-d4a4cd209778` (first OpenRouter deploy), `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
 | Database before migration 0009 | Time Travel bookmark `000000a0-00000000-00005107-945d11084f9aa143232ee332dac64224` (only added two empty columns, so rolling back the code alone is usually enough) |
 | Database before migration 0008 | Time Travel bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0007 | Time Travel bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c` (only added a column and tables, so rolling back the code alone is usually enough) |
