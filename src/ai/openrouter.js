@@ -87,6 +87,25 @@ const headers = (env) => ({
   "X-Title": "coHabit",
 });
 
+// What a reply looked like, for the logs when it can't be used: status, size, which parts it had, why it stopped and
+// who answered. Never any text from it.
+function replyShape(res, raw, data) {
+  const c = Array.isArray(data?.choices) ? data.choices[0] : null;
+  return [
+    `HTTP ${res.status}`,
+    `${raw.length} bytes`,
+    data && typeof data === "object" ? `keys=${Object.keys(data).slice(0, 12).join("|")}` : raw.trim() ? "not JSON" : "empty body",
+    data && typeof data === "object" ? `choices=${Array.isArray(data.choices) ? data.choices.length : "none"}` : null,
+    c && typeof c === "object" ? `choice=${Object.keys(c).slice(0, 12).join("|")}` : null,
+    c?.finish_reason ? `finish=${String(c.finish_reason).slice(0, 30)}` : null,
+    c?.native_finish_reason ? `native=${String(c.native_finish_reason).slice(0, 30)}` : null,
+    typeof data?.provider === "string" ? `provider=${data.provider.slice(0, 40)}` : null,
+    typeof data?.model === "string" ? `model=${data.model.slice(0, 80)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 // One chat completion. messages/tools in OpenAI's format (OpenRouter's normalized API).
 // Returns { message, finish, model, usage: { input, output, reasoning } } (reasoning: the part of output a model
 // spent thinking, when OpenRouter reports it).
@@ -111,7 +130,11 @@ export async function chatCompletion(env, { use, models, messages, tools, toolCh
   } catch (e) {
     throw new OpenRouterError(e?.name === "TimeoutError" ? "timeout" : "unreachable", { detail: e?.message });
   }
-  const data = await res.json().catch(() => null);
+  const raw = await res.text().catch(() => "");
+  let data = null;
+  try {
+    data = raw.trim() ? JSON.parse(raw) : null;
+  } catch {}
   if (!res.ok || data?.error) {
     const status = res.ok ? Number(data?.error?.code) || 502 : res.status;
     const retry = Number(res.headers.get("retry-after"));
@@ -125,7 +148,12 @@ export async function chatCompletion(env, { use, models, messages, tools, toolCh
     throw new OpenRouterError(reason, { status, detail, retryAfter: Number.isFinite(retry) && retry > 0 ? retry : null, daily });
   }
   const choice = data?.choices?.[0];
-  if (!choice?.message) throw new OpenRouterError("bad_output", { detail: "No message in the reply." });
+  // A provider can fail after OpenRouter has answered "OK": the error is then inside the reply.
+  if (choice?.error) {
+    const code = Number(choice.error.code) || 502;
+    throw new OpenRouterError(code === 429 ? "provider_busy" : "service_error", { status: code, detail: `${choice.error.message || "Provider error"} (inside the reply; ${replyShape(res, raw, data)})` });
+  }
+  if (!choice?.message) throw new OpenRouterError("bad_output", { status: res.status, detail: `No message in the reply (${replyShape(res, raw, data)})` });
   const u = data.usage || {};
   return {
     message: choice.message,

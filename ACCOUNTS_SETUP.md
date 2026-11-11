@@ -538,7 +538,10 @@ the OpenRouter turn in `src/assistant/ai.js`.
     router the same day, after it passed a live reply to an unchecked preview model.
   - Each AI chat reply writes one line to the Worker's logs (model, finish reason, requests, tokens; never the text):
     `Assistant AI reply: …` or `Assistant AI unavailable: …`; each helper use writes `AI helper reply: task=…`, plus
-    `AI helper unusable: task=… reason=…` when coHabit couldn't use the answer. See them with `npx wrangler tail` or in the
+    `AI helper unusable: task=… reason=…` when coHabit couldn't use the answer. A helper request with no answer (no
+    message, an error inside the reply, a busy provider, empty, cut off) is tried once more with the next listed
+    model (`AI helper retry: …`); "AI helper unavailable: …" lines then describe the reply (status, size, parts,
+    finish reason, provider, model; never any text). See them with `npx wrangler tail` or in the
     Cloudflare dashboard (Workers → cohabit-landlord-demo → Logs).
   - Change them without a code change with the variables `AI_MODELS_CHAT`, `AI_MODELS_HELPER`, `AI_MODELS_SUMMARY`
     (comma-separated).

@@ -10,7 +10,8 @@
 //     careless model might add (unknown choices, invented prices, a phone number, an address), so the tests can
 //     check that coHabit drops them.
 //   state.mode "429": the account's daily free limit; "provider_busy": a model's provider is busy (also a 429).
-//   state.helperMode "length": helper answers come back empty and cut off (finish_reason "length").
+//   state.helperMode "length": helper answers come back empty and cut off (finish_reason "length");
+//   "no_message_once": the next helper request gets an empty "OK" reply (no message), then answers are normal again.
 import { createServer } from "node:http";
 
 export const FAKE_OPENROUTER_KEY = "test-openrouter-key-for-local-tests-only";
@@ -69,6 +70,12 @@ export function startFakeOpenRouter(port) {
     }
     // Helpers
     if (state.helperMode === "length") return reply({ content: "" }, "length");
+    if (state.helperMode === "no_message_once") {
+      // An "OK" with nothing in it (the live failure of 2026-11-11), once; the retry then gets a normal answer.
+      state.helperMode = null;
+      res.writeHead(200, { "content-type": "application/json" });
+      return res.end("");
+    }
     if (/housing questionnaire/.test(system)) return text('```json\n{"budget_max": 1200, "move_in_month": "2027-06", "area": "Moody Street", "pets": "no_pets", "sleep_schedule": "sideways", "rooms_needed": "two"}\n```');
     if (/search filters/.test(system)) return text('{"hood": "the highlands", "kind": "studio", "max_rent": 1500, "furnished": true, "lease": "forever", "rooms": 7}');
     if (/first message from one university student/.test(system)) return text("Hi {name}! I saw we both like a quiet home and keep things tidy. Call me at 617-555-0100. Want to talk about rooming together?");

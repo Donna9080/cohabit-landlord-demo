@@ -103,24 +103,48 @@ function unusable(task, why) {
   return unavailable("failed");
 }
 
-// One helper request, counted against today's free requests. The person's helper uses are counted only when they get
-// a usable result (see handleAiHelp): a failed try doesn't use one up.
-async function helperCall(env, db, user, task, args) {
-  const writes = [];
+// No answer worth showing (no message, an error inside the reply, a busy provider, empty, cut off): worth one more
+// try with the next listed model. A busy account (its own limits) or a refused request isn't.
+const RETRY_REASONS = ["bad_output", "provider_busy", "service_error"];
+
+// One request to the given models. Returns { out } with a usable answer, or { retry, model } when there was no answer.
+async function helperAttempt(env, db, task, args, models, writes) {
   try {
-    const out = await chatCompletion(env, { use: "helper", maxTokens: HELPER_MAX_TOKENS, temperature: 0.4, timeoutMs: 20_000, ...args });
+    const out = await chatCompletion(env, { use: "helper", maxTokens: HELPER_MAX_TOKENS, temperature: 0.4, timeoutMs: 20_000, ...args, models });
     writes.push(countRequests(db, "helper", 1, out.usage));
     helperLog(task, out);
-    if (out.finish === "length") throw unusable(task, "cut_off");
-    return out;
+    if (out.finish === "length") return { retry: "cut_off", model: out.model };
+    if (!replyText(out.message)) return { retry: "empty", model: out.model };
+    return { out };
   } catch (e) {
     if (e instanceof OpenRouterError) {
       if (!refusedBeforeModel(e)) writes.push(countRequests(db, "helper", 1));
       console.error("AI helper unavailable:", `task=${task}`, e.reason, e.status || "", e.detail);
       if (e.daily) writes.push(pauseStatement(db, e.retryAfter));
+      if (RETRY_REASONS.includes(e.reason)) return { retry: e.reason, model: null };
       throw unavailable("failed");
     }
     throw e;
+  }
+}
+
+// One helper use, counted against today's free requests (a retry counts too). When the first try brings no answer,
+// coHabit tries once more with the next listed models, if today's helper share allows. The person's helper uses are
+// counted only when they get a usable result (see handleAiHelp): a failed try doesn't use one up.
+async function helperCall(env, db, user, task, args) {
+  const writes = [];
+  try {
+    const models = modelsFor(env, "helper");
+    let r = await helperAttempt(env, db, task, args, models, writes);
+    if (r.retry) {
+      const rest = r.model && models.includes(r.model) ? models.filter((m) => m !== r.model) : models.slice(1);
+      await db.batch(writes.splice(0));
+      if (!rest.length || (await aiBlock(env, db, "helper", 1))) throw unusable(task, r.retry);
+      console.log(`AI helper retry: task=${task} after=${r.retry} models=${rest.join(",")}`);
+      r = await helperAttempt(env, db, task, args, rest, writes);
+      if (r.retry) throw unusable(task, r.retry);
+    }
+    return r.out;
   } finally {
     if (writes.length) await db.batch(writes);
   }

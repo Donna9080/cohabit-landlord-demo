@@ -1546,12 +1546,19 @@ try {
       // A cut-off answer (a model that spent its tokens thinking) is a failed try: a clear message, and it doesn't use
       // up one of the person's 3 helper uses (only the free request is counted).
       fakeOr.state.helperMode = "length";
+      const beforeCut = fakeOr.state.requests.length;
       const cutOff = await call("/api/ai/help", { method: "POST", as: t2.landlord, body: { task: "unit_description", name: "Sunny room", description: "Big window, shared kitchen." } });
       fakeOr.state.helperMode = null;
+      const cutTries = fakeOr.state.requests.slice(beforeCut).map((x) => x.body.models);
+      check("AI help: with no answer, coHabit tries once more with the next listed model, then stops", JSON.stringify(cutTries) === JSON.stringify([["google/gemma-4-26b-a4b-it:free", "openrouter/free"], ["openrouter/free"]]), JSON.stringify(cutTries));
       const landlordUses = JSON.parse(wrangler(["d1", "execute", "DB", "--local", "--persist-to", STATE2, "--json", "--command", "SELECT COUNT(*) AS n FROM assistant_usage WHERE user_id = 'h:t2_landlord'"]))[0].results[0].n;
       check("AI help: an answer cut off at the token limit gives a clear message and doesn't use up one of the person's helper uses", cutOff.status === 409 && /didn't work this time/.test(cutOff.data?.message || "") && landlordUses === 0, JSON.stringify({ cutOff: cutOff.data, landlordUses }));
       r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "unit_description", description: "Nice room" } });
+      // The first try gets an "OK" with no message (as on the live site); the retry answers.
+      fakeOr.state.helperMode = "no_message_once";
+      const beforeR3 = fakeOr.state.requests.length;
       const r3 = await call("/api/ai/help", { method: "POST", as: t2.landlord, body: { task: "unit_description", name: "Sunny room", area: "Waltham, MA", monthly_rent: 1150, rooms_available: 1, move_in_date: "2027-06-01", description: "Big window, shared kitchen, quiet house." } });
+      check("AI help: an empty \"OK\" from OpenRouter is retried once with the next model, and the retry's answer is used", fakeOr.state.requests.length - beforeR3 === 2 && r3.status === 200, JSON.stringify({ tries: fakeOr.state.requests.length - beforeR3, status: r3.status }));
       check("AI help (listing description): landlords only; invented prices, addresses and emails removed", r2.status === 403 && r3.status === 200 && r3.data.text.includes("Bright, quiet room") && !/999|Elm|owner@|Email me/.test(r3.data.text), JSON.stringify(r3.data));
       r2 = await call("/api/ai/help", { method: "POST", as: t2.landlord, body: { task: "unit_description", description: "Call 617-555-0100 for a tour" } });
       check("AI help: what people type is checked too (no phone numbers or addresses sent)", r2.status === 400);
