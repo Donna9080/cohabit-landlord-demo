@@ -28,8 +28,13 @@ No real listings were imported because no authorized data source exists yet (see
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
 - **Live version:** `ce127f77-8c0e-4613-82cf-6791b424e69f`, deployed 2026-11-10 22:43 UTC with the owner's approval: the
-  busy-provider fix (commit `3e5d33f`), AI still switched off; signed-out checks repeated (all as before). Model check
-  scheduled for just after 00:00 UTC, when the wrongly set pause and the admin share reset.
+  busy-provider fix (commit `3e5d33f`), AI still switched off; signed-out checks repeated (all as before).
+  **Third model check (2026-11-11 00:01 UTC, owner signed in as admin), all 4 models:** Nemotron 3.5 Super worked
+  (correct tool call, 0.7 s); Nemotron 3.5 Lightning worked (correct tool call, 1.3 s); Gemma 4 31B (3.3 s) and Gemma 4
+  26B (0.2 s) both got "Provider returned error" (Google AI Studio's free capacity busy, the same as at 22:34 UTC).
+  The fix held: no pause was set, the switches stayed off, coHabit counted 4 admin requests, OpenRouter's free counter
+  showed 0 of 50 right after. Both Gemma models lead a list (chat, helpers), so while Google stays busy each AI reply
+  waits for the fallback to Nemotron; making Nemotron first is an owner decision (needs a deploy or a Worker variable).
 
   Before it: `ec3aef29-2490-481e-a5f8-99c5482359dd`, deployed 2026-11-10 22:33 UTC with the owner's approval: the
   model-check fix (commit `7972d8a`), AI still switched off. Signed-out checks repeated (pages 200, helpers off, AI
@@ -179,8 +184,9 @@ No real listings were imported because no authorized data source exists yet (see
   model check, check-in themes); privacy page wording for AI (to approve before switching on).
 - **Free budget:** 50 requests a day for the account: chat 34, helpers 10, admin 6; per renter 6 AI replies and 3
   helper uses a day; a pause until 00:00 UTC after OpenRouter's 429. No database change.
-- **Next (owner's approval each):** deploy with AI off and run the admin model check (4 free requests); then
-  switch chat on, then helpers.
+- **Deployed with AI off; model check done** (2026-11-11 00:01 UTC: both Nemotron models work with tools, both Gemma
+  models' provider busy). **Next (owner's approval each):** whether Nemotron leads the chat and helper lists; approve
+  the privacy wording; switch chat on, then helpers.
 
 ### Connected demo data (2026-10-18, live as `df357d7e…`)
 
@@ -470,7 +476,10 @@ Earlier runs:
 - [x] Redeploy the model-check fix (2026-11-10, version `ec3aef29…`); second check: Nemotron 3.5 Super works, Gemma 4 31B's
       provider was busy, 2 models not checked yet.
 - [x] Redeploy the busy-provider fix (2026-11-10 22:43 UTC, version `ce127f77…`).
-- [ ] Run Check models again after 00:00 UTC (the pause and the admin share reset then).
+- [x] Run Check models for all 4 models (2026-11-11 00:01 UTC): Nemotron 3.5 Super and Lightning work (correct tool
+      calls, 0.7 s and 1.3 s); Gemma 4 31B and 26B: provider busy (Google AI Studio), no pause set.
+- [ ] Decide: lead the chat and helper lists with Nemotron (Super for chat, Lightning for helpers) instead of Gemma,
+      through the Worker variables `AI_MODELS_CHAT` / `AI_MODELS_HELPER` or a code default (either way a new version).
 - [ ] Approve: the privacy wording, then switch on the assistant chat; later the helpers.
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
