@@ -493,8 +493,13 @@ Earlier runs:
 - [x] Deploy the new model order (2026-11-11, version `428bb983…`, AI still off, no database change).
 - [x] Privacy page wording for AI approved by the owner (2026-11-11), as it already is on the live privacy page.
 - [x] Switch on the assistant chat (2026-11-11, owner's request; Admin page → AI).
-- [ ] Try the AI chat from a renter account on the live site (a few messages), then check Admin → AI: "AI chat
-      replies today" and coHabit's chat requests should go up, and the reply should not say it's the guided chat.
+- [x] Try the AI chat from a renter account (owner, 2026-11-11 04:30–04:32 UTC; checked with live logs and the
+      database, no message text read): 6 messages, 5 AI replies (2 with room cards), 1 guided chat because the
+      model's answer hit the 900-token limit ("too_long"). 12 of the chat's 34 daily requests used (about 2 per reply).
+      The last reply came from `dots-studio/dots-3-note-preview:free` through the free router, so both chosen models
+      failed on that request; which model answered the others isn't recorded.
+- [ ] Decide: vetted models only in the chat (drop the free router), a log line with the model and finish reason
+      for each AI reply (no text), and a look at the length limit (needs a deploy).
 - [ ] Later (owner's decision): switch the helpers on.
 - [ ] To turn the chat off at any time: Admin page → AI → "Assistant chat: On" (renters then get the guided chat).
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
