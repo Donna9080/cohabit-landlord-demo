@@ -190,7 +190,10 @@ try {
     check("Match: too few rooms is never shown", shown({ rooms_available: 1 }).length === 0);
     check("Match: affordable but wrong area and wrong month is not shown", shown({ area: "Belmont, MA", move_in_date: "2027-01-01" }).length === 0);
     check("Match: affordable, wrong area, exact month is shown", shown({ area: "Belmont, MA" })[0]?.score === 75);
-    check("Match: affordable, right area, wrong month is shown", shown({ move_in_date: "2027-01-01" })[0]?.score === 80);
+    check("Match: affordable, right area, but free months before the move-in month is not shown", shown({ move_in_date: "2027-01-01" }).length === 0);
+    check("Match: affordable, right area, but free a month after the move-in month is not shown", shown({ move_in_date: "2027-07-01" }).length === 0);
+    check("Match: free from the month before is shown (within budget, even outside the area: 70)", shown({ area: "Belmont, MA", move_in_date: "2027-05-15" })[0]?.score === 70 && shown({ area: "Belmont, MA", move_in_date: "2027-05-15" })[0]?.reasons.includes("Free from the month before"));
+    check("Match: slightly over budget and free in time is shown only in the renter's area", shown({ monthly_rent: 1100, area: "Belmont, MA" }).length === 0 && shown({ monthly_rent: 1100 })[0]?.score === 75);
     check("Match: affordable, wrong area, month one off is not shown", shown({ area: "Belmont, MA", move_in_date: "2027-07-01" }).length === 0);
     const ranked = rankUnits(want, [unit({ id: "far", area: "Belmont, MA" }), unit({ id: "best" }), unit({ id: "cheaper", monthly_rent: 950 })]);
     check("Match: sorted by score, then lower rent", ranked.map((m) => m.unit.id).join() === "cheaper,best,far");

@@ -118,6 +118,9 @@ admin user list to this site. Setup and commands: [ACCOUNTS_SETUP.md](ACCOUNTS_S
 - **Matching**: rule-based (budget 40, area 25, move-in 20, rooms 15). Tightened 2026-10-01 after the sample run:
   a unit is shown only if rent is at most 10% over budget, it has enough rooms, and it scores 70 or more
   (so it is also in the renter's area or free in their exact month). Was: shown if ≥40, no limits.
+  Tightened again 2026-11-11 (owner's approval): a unit must also be free from the renter's move-in month or the
+  month before (the assistant's window; 15 points for the month before); before, an affordable unit in the area
+  showed at 80% however far off its move-in date was.
   No AI API, so no key and no cost. Lifestyle answers are stored for future roommate
   matching but not used yet, and nobody else sees them.
 - **Roommate matching** (owner's choices, 2026-10-01): a renter is shown to others only after opting in, and must opt

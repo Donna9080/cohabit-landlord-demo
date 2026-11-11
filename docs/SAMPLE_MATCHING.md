@@ -13,15 +13,17 @@ Each active unit gets a score out of 100 for a renter:
 | Rent is over budget, but by 10% or less | 15 |
 | Unit's area shares a word with the renter's area (for example "Belmont") | 25 |
 | Move-in is the same month the renter wants | 20 |
-| Move-in is one month earlier or later | 10 |
+| Unit is free from the month before the renter's move-in month | 15 |
 | Unit has at least as many rooms as the renter needs | 15 |
 
-A unit is shown only if all three of these hold:
+A unit is shown only if all four of these hold:
 
 1. **Affordable:** rent is no more than 10% over the renter's "budget up to".
 2. **Big enough:** it has at least as many rooms as the renter needs.
-3. **Relevant:** it scores 70 or more. An affordable, big-enough unit starts at 55 (or 30 if slightly over budget),
-   so it also has to be in the renter's area or available in the exact month they want.
+3. **In time:** it's free from the renter's move-in month or the month before, the same window as the assistant's
+   room search. A unit free months earlier or later isn't shown (since 2026-11-11), even in the renter's area.
+4. **Relevant:** it scores 70 or more. An affordable, big-enough unit that's in time starts at 70 or 75 within
+   budget, but 45 or 50 if slightly over budget, so then it also has to be in the renter's area.
 
 Results are sorted by score, then by lower rent, and the top 20 are shown. The "budget from" figure
 and the lifestyle answers (sleep, cleanliness, noise, guests, pets, smoking) are saved but not used
@@ -30,7 +32,7 @@ yet; they are for future roommate matching.
 ## Summary
 
 - 20 sample units: 8 in Waltham, 6 in Belmont, 6 in Cambridge. Rent $875 to $1,900 per room.
-- 30 sample renters. 27 get at least one match; 23 have a 100% top match; 3 get none.
+- 30 sample renters. 25 get at least one match; 23 have a 100% top match; 5 get none.
 
 ## What tightening the rules changed
 
@@ -38,21 +40,23 @@ The first version of the rules showed any unit scoring 40 or more, with no limit
 
 | | Before (score 40+) | Now |
 | --- | --- | --- |
-| Units shown per renter, on average (out of 20) | 14.1 | 4.2 |
-| Matches outside the area the renter asked for | 209 of 424 (49%) | 27 of 125 (22%) |
-| Matches over the renter's budget | 84 | 1 |
+| Units shown per renter, on average (out of 20) | 14.1 | 2.3 |
+| Matches outside the area the renter asked for | 209 of 424 (49%) | 32 of 70 (46%) |
+| Matches over the renter's budget | 84 | 2 |
 | Matches more than 10% over budget | 52 | 0 |
 | Matches with too few rooms | not checked | 0 |
 | Renters whose top match is over budget | 1 | 0 |
 | Renters with a 100% top match | 23 | 23 |
-| Renters with no match | 0 | 3 |
+| Renters with no match | 0 | 5 |
 
-- Over-budget matches still shown (1) are within 10% of the budget and are labeled "Slightly over budget".
-- Out-of-area matches still shown (27) are affordable, big enough, and free in the exact month the renter wants.
+- Over-budget matches still shown (2) are within 10% of the budget and are labeled "Slightly over budget".
+- Out-of-area matches still shown (32) are within budget, big enough, and free in the renter's month or the month before.
 - Renters who now get no match, and why:
   - **Diego Morales** (Waltham, up to $650, Nov 2026, 1 room): no unit is within 10% of the budget with enough rooms.
-  - **Emily Nguyen** (Belmont, up to $950, Mar 2027, 1 room): units they can afford are neither in their area nor free in their month.
-  - **Nadia Petrova** (Watertown, up to $1,200, May 2027, 1 room): units they can afford are neither in their area nor free in their month.
+  - **Emily Nguyen** (Belmont, up to $950, Mar 2027, 1 room): units they can afford aren't free in their month or the month before, or are over budget outside their area.
+  - **Ryan Murphy** (Cambridge, up to $2,500, Apr 2027, 1 room): units they can afford aren't free in their month or the month before, or are over budget outside their area.
+  - **Nadia Petrova** (Watertown, up to $1,200, May 2027, 1 room): units they can afford aren't free in their month or the month before, or are over budget outside their area.
+  - **Yuki Tanaka** (Belmont or Waltham, up to $1,400, Aug 2027, 4 rooms): units they can afford aren't free in their month or the month before, or are over budget outside their area.
   The site tells them to widen their budget or area, or browse all listings.
 
 ## The units
@@ -84,64 +88,59 @@ The first version of the rules showed any unit scoring 40 or more, with no limit
 
 | Renter | Wants | Matches | Best match | Score | Why |
 | --- | --- | --- | --- | --- | --- |
-| Maya Chen | Waltham, up to $1,000, Nov 2026, 1 room | 4 | Sunny 3-bedroom near Brandeis (Waltham, MA, $950) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
-| Jordan Alvarez | Waltham, up to $1,100, Jan 2027, 1 room | 6 | Top-floor room with parking (Waltham, MA (Banks Square), $900) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
-| Priya Nair | Waltham, up to $1,300, Jun 2027, 2 rooms | 6 | Student house, all utilities included (Waltham, MA (Bentley area), $1,100) | 100% | Within your budget; In your area; Move-in month matches; 4 rooms available |
+| Maya Chen | Waltham, up to $1,000, Nov 2026, 1 room | 1 | Sunny 3-bedroom near Brandeis (Waltham, MA, $950) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
+| Jordan Alvarez | Waltham, up to $1,100, Jan 2027, 1 room | 3 | Top-floor room with parking (Waltham, MA (Banks Square), $900) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
+| Priya Nair | Waltham, up to $1,300, Jun 2027, 2 rooms | 3 | Student house, all utilities included (Waltham, MA (Bentley area), $1,100) | 100% | Within your budget; In your area; Move-in month matches; 4 rooms available |
 | Sam O'Connor | Waltham, up to $900, Dec 2026, 1 room | 2 | Quiet room in shared house (South Waltham, MA, $875) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
-| Ethan Brooks | Waltham, up to $1,200, Jun 2027, 3 rooms | 2 | Student house, all utilities included (Waltham, MA (Bentley area), $1,100) | 100% | Within your budget; In your area; Move-in month matches; 4 rooms available |
-| Lina Haddad | Waltham, up to $1,300, Sep 2027, 1 room | 9 | Large room in Victorian house (Waltham, MA (Highlands), $1,000) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
-| Noah Kim | Waltham or Belmont, up to $1,050, Jan 2027, 1 room | 5 | Top-floor room with parking (Waltham, MA (Banks Square), $900) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
-| Ava Thompson | Waltham, up to $1,000, Sep 2027, 2 rooms | 2 | Large room in Victorian house (Waltham, MA (Highlands), $1,000) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
+| Ethan Brooks | Waltham, up to $1,200, Jun 2027, 3 rooms | 1 | Student house, all utilities included (Waltham, MA (Bentley area), $1,100) | 100% | Within your budget; In your area; Move-in month matches; 4 rooms available |
+| Lina Haddad | Waltham, up to $1,300, Sep 2027, 1 room | 3 | Large room in Victorian house (Waltham, MA (Highlands), $1,000) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
+| Noah Kim | Waltham or Belmont, up to $1,050, Jan 2027, 1 room | 3 | Top-floor room with parking (Waltham, MA (Banks Square), $900) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
+| Ava Thompson | Waltham, up to $1,000, Sep 2027, 2 rooms | 1 | Large room in Victorian house (Waltham, MA (Highlands), $1,000) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
 | Diego Morales | Waltham, up to $650, Nov 2026, 1 room | 0 | none |  | No unit passes all three checks |
-| Grace Liu | Waltham, up to $1,400, Jun 2027, 2 rooms | 6 | Student house, all utilities included (Waltham, MA (Bentley area), $1,100) | 100% | Within your budget; In your area; Move-in month matches; 4 rooms available |
-| Omar Farouk | Belmont, up to $1,200, Nov 2026, 1 room | 4 | Bright room near Belmont Center (Belmont, MA (Belmont Center), $1,150) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
-| Hannah Schmidt | Belmont, up to $1,300, Jan 2027, 2 rooms | 3 | Family home with 3 rooms to share (Belmont, MA, $1,250) | 100% | Within your budget; In your area; Move-in month matches; 3 rooms available |
+| Grace Liu | Waltham, up to $1,400, Jun 2027, 2 rooms | 3 | Student house, all utilities included (Waltham, MA (Bentley area), $1,100) | 100% | Within your budget; In your area; Move-in month matches; 4 rooms available |
+| Omar Farouk | Belmont, up to $1,200, Nov 2026, 1 room | 2 | Bright room near Belmont Center (Belmont, MA (Belmont Center), $1,150) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
+| Hannah Schmidt | Belmont, up to $1,300, Jan 2027, 2 rooms | 2 | Family home with 3 rooms to share (Belmont, MA, $1,250) | 100% | Within your budget; In your area; Move-in month matches; 3 rooms available |
 | Kenji Watanabe | Belmont, up to $1,500, Feb 2027, 2 rooms | 3 | Quiet 2-bedroom near Waverley Square (Belmont, MA (Waverley), $1,350) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
-| Sofia Rossi | Belmont, up to $1,600, Jun 2027, 1 room | 9 | Shared duplex close to the bus line (Belmont, MA, $1,100) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
+| Sofia Rossi | Belmont, up to $1,600, Jun 2027, 1 room | 5 | Shared duplex close to the bus line (Belmont, MA, $1,100) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
 | Tunde Adeyemi | Belmont, up to $1,100, Jun 2027, 2 rooms | 2 | Shared duplex close to the bus line (Belmont, MA, $1,100) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
-| Chloe Martin | Belmont, up to $1,250, Sep 2027, 1 room | 6 | Newly painted room with backyard access (Belmont, MA (Payson Park), $1,200) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
+| Chloe Martin | Belmont, up to $1,250, Sep 2027, 1 room | 3 | Newly painted room with backyard access (Belmont, MA (Payson Park), $1,200) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
 | Arjun Mehta | Belmont or Cambridge, up to $1,300, Jan 2027, 3 rooms | 2 | Family home with 3 rooms to share (Belmont, MA, $1,250) | 100% | Within your budget; In your area; Move-in month matches; 3 rooms available |
 | Emily Nguyen | Belmont, up to $950, Mar 2027, 1 room | 0 | none |  | No unit passes all three checks |
-| Lucas Pereira | Cambridge, up to $1,700, Nov 2026, 1 room | 6 | Room near Porter Square station (Cambridge, MA (Porter Square), $1,600) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
-| Zoe Williams | Cambridge, up to $1,800, Jan 2027, 2 rooms | 5 | 3-bedroom walk-up by Central Square (Cambridge, MA (Central Square), $1,750) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
-| Mateo Garcia | Cambridge, up to $2,000, Feb 2027, 1 room | 7 | Compact room near Harvard Square (Cambridge, MA (Harvard Square), $1,900) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
-| Aisha Khan | Cambridge, up to $1,600, Jun 2027, 2 rooms | 5 | Shared apartment in Cambridgeport (Cambridge, MA (Cambridgeport), $1,550) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
+| Lucas Pereira | Cambridge, up to $1,700, Nov 2026, 1 room | 3 | Room near Porter Square station (Cambridge, MA (Porter Square), $1,600) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
+| Zoe Williams | Cambridge, up to $1,800, Jan 2027, 2 rooms | 3 | 3-bedroom walk-up by Central Square (Cambridge, MA (Central Square), $1,750) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
+| Mateo Garcia | Cambridge, up to $2,000, Feb 2027, 1 room | 6 | Compact room near Harvard Square (Cambridge, MA (Harvard Square), $1,900) | 100% | Within your budget; In your area; Move-in month matches; 1 room available |
+| Aisha Khan | Cambridge, up to $1,600, Jun 2027, 2 rooms | 4 | Shared apartment in Cambridgeport (Cambridge, MA (Cambridgeport), $1,550) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
 | Ben Cohen | Cambridge, up to $1,450, Sep 2027, 3 rooms | 1 | Top-floor 4-bedroom in North Cambridge (North Cambridge, MA, $1,400) | 100% | Within your budget; In your area; Move-in month matches; 3 rooms available |
-| Mei Lin | Cambridge, up to $1,700, Sep 2027, 1 room | 7 | Top-floor 4-bedroom in North Cambridge (North Cambridge, MA, $1,400) | 100% | Within your budget; In your area; Move-in month matches; 3 rooms available |
-| Daniel Okafor | Cambridge, up to $1,200, Jan 2027, 1 room | 2 | Top-floor room with parking (Waltham, MA (Banks Square), $900) | 75% | Within your budget; Move-in month matches; 1 room available |
-| Isabella Silva | Cambridge or Belmont, up to $1,500, Jun 2027, 1 room | 10 | Shared duplex close to the bus line (Belmont, MA, $1,100) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
-| Ryan Murphy | Cambridge, up to $2,500, Apr 2027, 1 room | 6 | Top-floor 4-bedroom in North Cambridge (North Cambridge, MA, $1,400) | 80% | Within your budget; In your area; 3 rooms available |
+| Mei Lin | Cambridge, up to $1,700, Sep 2027, 1 room | 5 | Top-floor 4-bedroom in North Cambridge (North Cambridge, MA, $1,400) | 100% | Within your budget; In your area; Move-in month matches; 3 rooms available |
+| Daniel Okafor | Cambridge, up to $1,200, Jan 2027, 1 room | 3 | Top-floor room with parking (Waltham, MA (Banks Square), $900) | 75% | Within your budget; Move-in month matches; 1 room available |
+| Isabella Silva | Cambridge or Belmont, up to $1,500, Jun 2027, 1 room | 5 | Shared duplex close to the bus line (Belmont, MA, $1,100) | 100% | Within your budget; In your area; Move-in month matches; 2 rooms available |
+| Ryan Murphy | Cambridge, up to $2,500, Apr 2027, 1 room | 0 | none |  | No unit passes all three checks |
 | Nadia Petrova | Watertown, up to $1,200, May 2027, 1 room | 0 | none |  | No unit passes all three checks |
-| Caleb Johnson | Waltham or Cambridge, up to $1,150, Dec 2026, 2 rooms | 4 | Sunny 3-bedroom near Brandeis (Waltham, MA, $950) | 90% | Within your budget; In your area; Move-in within a month; 2 rooms available |
-| Yuki Tanaka | Belmont or Waltham, up to $1,400, Aug 2027, 4 rooms | 1 | Student house, all utilities included (Waltham, MA (Bentley area), $1,100) | 80% | Within your budget; In your area; 4 rooms available |
+| Caleb Johnson | Waltham or Cambridge, up to $1,150, Dec 2026, 2 rooms | 1 | Sunny 3-bedroom near Brandeis (Waltham, MA, $950) | 95% | Within your budget; In your area; Free from the month before; 2 rooms available |
+| Yuki Tanaka | Belmont or Waltham, up to $1,400, Aug 2027, 4 rooms | 0 | none |  | No unit passes all three checks |
 
 ## Second and third choices
 
-- **Maya Chen:** Quiet room in shared house (90%), Top-floor room with parking (80%)
-- **Jordan Alvarez:** Renovated 4-bedroom by Moody Street shops (100%), Quiet room in shared house (90%)
-- **Priya Nair:** Whole 2-bedroom near commuter rail (100%), Sunny 3-bedroom near Brandeis (80%)
-- **Sam O'Connor:** Top-floor room with parking (90%)
-- **Ethan Brooks:** Renovated 4-bedroom by Moody Street shops (80%)
-- **Lina Haddad:** Garden-level room with own entrance (100%), Quiet room in shared house (80%)
-- **Noah Kim:** Renovated 4-bedroom by Moody Street shops (100%), Quiet room in shared house (90%)
-- **Ava Thompson:** Sunny 3-bedroom near Brandeis (80%)
-- **Grace Liu:** Whole 2-bedroom near commuter rail (100%), Sunny 3-bedroom near Brandeis (80%)
-- **Omar Farouk:** Shared duplex close to the bus line (80%), Newly painted room with backyard access (80%)
-- **Hannah Schmidt:** Shared duplex close to the bus line (80%), Renovated 4-bedroom by Moody Street shops (75%)
-- **Kenji Watanabe:** Family home with 3 rooms to share (90%), Shared duplex close to the bus line (80%)
-- **Sofia Rossi:** Room with private bath (100%), Bright room near Belmont Center (80%)
+- **Jordan Alvarez:** Renovated 4-bedroom by Moody Street shops (100%), Quiet room in shared house (95%)
+- **Priya Nair:** Whole 2-bedroom near commuter rail (100%), Shared duplex close to the bus line (75%)
+- **Sam O'Connor:** Sunny 3-bedroom near Brandeis (70%)
+- **Lina Haddad:** Garden-level room with own entrance (100%), Newly painted room with backyard access (75%)
+- **Noah Kim:** Renovated 4-bedroom by Moody Street shops (100%), Quiet room in shared house (95%)
+- **Grace Liu:** Whole 2-bedroom near commuter rail (100%), Shared duplex close to the bus line (75%)
+- **Omar Farouk:** Sunny 3-bedroom near Brandeis (75%)
+- **Hannah Schmidt:** Renovated 4-bedroom by Moody Street shops (75%)
+- **Kenji Watanabe:** Family home with 3 rooms to share (95%), Renovated 4-bedroom by Moody Street shops (70%)
+- **Sofia Rossi:** Room with private bath (100%), Student house, all utilities included (75%)
 - **Tunde Adeyemi:** Student house, all utilities included (75%)
-- **Chloe Martin:** Shared duplex close to the bus line (80%), Bright room near Belmont Center (80%)
+- **Chloe Martin:** Large room in Victorian house (75%), Garden-level room with own entrance (75%)
 - **Arjun Mehta:** Renovated 4-bedroom by Moody Street shops (75%)
-- **Lucas Pereira:** Top-floor 4-bedroom in North Cambridge (80%), Shared apartment in Cambridgeport (80%)
-- **Zoe Williams:** Top-floor 4-bedroom in North Cambridge (80%), Shared apartment in Cambridgeport (80%)
-- **Mateo Garcia:** 3-bedroom walk-up by Central Square (90%), Top-floor 4-bedroom in North Cambridge (80%)
-- **Aisha Khan:** Top-floor 4-bedroom in North Cambridge (80%), Student house, all utilities included (75%)
-- **Mei Lin:** Sunny room near Inman Square (100%), Shared apartment in Cambridgeport (80%)
-- **Daniel Okafor:** Renovated 4-bedroom by Moody Street shops (75%)
-- **Isabella Silva:** Room with private bath (100%), Bright room near Belmont Center (80%)
-- **Ryan Murphy:** Shared apartment in Cambridgeport (80%), Room near Porter Square station (80%)
-- **Caleb Johnson:** Renovated 4-bedroom by Moody Street shops (90%), Large room in Victorian house (80%)
+- **Lucas Pereira:** Sunny 3-bedroom near Brandeis (75%), Bright room near Belmont Center (75%)
+- **Zoe Williams:** Renovated 4-bedroom by Moody Street shops (75%), Family home with 3 rooms to share (75%)
+- **Mateo Garcia:** 3-bedroom walk-up by Central Square (95%), Quiet 2-bedroom near Waverley Square (75%)
+- **Aisha Khan:** Student house, all utilities included (75%), Shared duplex close to the bus line (75%)
+- **Mei Lin:** Sunny room near Inman Square (100%), Large room in Victorian house (75%)
+- **Daniel Okafor:** Renovated 4-bedroom by Moody Street shops (75%), Quiet room in shared house (70%)
+- **Isabella Silva:** Room with private bath (100%), Student house, all utilities included (75%)
 
 # Roommate matching
 

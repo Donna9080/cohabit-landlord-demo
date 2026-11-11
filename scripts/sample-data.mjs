@@ -183,15 +183,17 @@ Each active unit gets a score out of 100 for a renter:
 | Rent is over budget, but by 10% or less | 15 |
 | Unit's area shares a word with the renter's area (for example "Belmont") | 25 |
 | Move-in is the same month the renter wants | 20 |
-| Move-in is one month earlier or later | 10 |
+| Unit is free from the month before the renter's move-in month | 15 |
 | Unit has at least as many rooms as the renter needs | 15 |
 
-A unit is shown only if all three of these hold:
+A unit is shown only if all four of these hold:
 
 1. **Affordable:** rent is no more than 10% over the renter's "budget up to".
 2. **Big enough:** it has at least as many rooms as the renter needs.
-3. **Relevant:** it scores ${MIN_SCORE} or more. An affordable, big-enough unit starts at 55 (or 30 if slightly over budget),
-   so it also has to be in the renter's area or available in the exact month they want.
+3. **In time:** it's free from the renter's move-in month or the month before, the same window as the assistant's
+   room search. A unit free months earlier or later isn't shown (since 2026-11-11), even in the renter's area.
+4. **Relevant:** it scores ${MIN_SCORE} or more. An affordable, big-enough unit that's in time starts at 70 or 75 within
+   budget, but 45 or 50 if slightly over budget, so then it also has to be in the renter's area.
 
 Results are sorted by score, then by lower rent, and the top 20 are shown. The "budget from" figure
 and the lifestyle answers (sleep, cleanliness, noise, guests, pets, smoking) are saved but not used
@@ -217,7 +219,7 @@ ${(() => {
     const p = r.prefs;
     const affordable = units.filter((u) => u.monthly_rent <= p.budget_max * 1.1 && u.rooms_available >= p.rooms_needed);
     if (!affordable.length) return "no unit is within 10% of the budget with enough rooms";
-    return "units they can afford are neither in their area nor free in their month";
+    return "units they can afford aren't free in their month or the month before, or are over budget outside their area";
   };
   const pct = (n) => `${Math.round((n / all.length) * 100)}%`;
   return `The first version of the rules showed any unit scoring 40 or more, with no limits. Same data, before and after:
@@ -234,7 +236,7 @@ ${(() => {
 | Renters with no match | 0 | ${none.length} |
 
 - Over-budget matches still shown (${over.length}) are within 10% of the budget and are labeled "Slightly over budget".
-- Out-of-area matches still shown (${offArea.length}) are affordable, big enough, and free in the exact month the renter wants.
+- Out-of-area matches still shown (${offArea.length}) are within budget, big enough, and free in the renter's month or the month before.
 ${none.length ? `- Renters who now get no match, and why:\n${none.map((x) => `  - **${x.r.name.replace(" (sample)", "")}** (${x.r.prefs.area}, up to ${money(x.r.prefs.budget_max)}, ${month(x.r.prefs.move_in_month)}, ${x.r.prefs.rooms_needed} room${x.r.prefs.rooms_needed === 1 ? "" : "s"}): ${why(x)}.`).join("\n")}\n  The site tells them to widen their budget or area, or browse all listings.` : ""}`;
 })()}
 

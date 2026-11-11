@@ -2,11 +2,14 @@
 // No external AI service: it runs in the Worker, reads only the renter's own
 // preferences and the public listing fields of active units.
 //
-// A unit is shown only if all three hold:
+// A unit is shown only if all four hold:
 //   1. rent is at most 10% over the renter's "budget up to"
 //   2. it has at least as many rooms as the renter needs
-//   3. it scores MIN_SCORE or more, which in practice means it is also in the
-//      renter's area or available in the exact month they want
+//   3. it's free in time: available from the renter's move-in month or the month before, the same window as the
+//      assistant's room search (since 2026-11-11; before, a room in the area and budget showed at 80% even when it
+//      was free many months off)
+//   4. it scores MIN_SCORE or more, which in practice means a room slightly over budget must also be in the
+//      renter's area
 // docs/SAMPLE_MATCHING.md shows the effect on the sample data.
 
 export const OVER_BUDGET_LIMIT = 1.1;
@@ -47,13 +50,16 @@ export function scoreUnit(prefs, unit) {
     reasons.push("In your area");
   }
 
-  const gap = Math.abs(monthsBetween(unit.move_in_date, prefs.move_in_month));
+  // Months from the renter's move-in month to the unit's "available from" date: 0 is the same month, -1 the month
+  // before. Anything else isn't free in time.
+  const gap = prefs.move_in_month && unit.move_in_date ? monthsBetween(unit.move_in_date, prefs.move_in_month) : null;
+  const inTime = gap === null || gap === 0 || gap === -1;
   if (gap === 0) {
     score += 20;
     reasons.push("Move-in month matches");
-  } else if (gap === 1) {
-    score += 10;
-    reasons.push("Move-in within a month");
+  } else if (gap === -1) {
+    score += 15;
+    reasons.push("Free from the month before");
   }
 
   const enoughRooms = unit.rooms_available >= prefs.rooms_needed;
@@ -62,7 +68,7 @@ export function scoreUnit(prefs, unit) {
     reasons.push(`${unit.rooms_available} room${unit.rooms_available === 1 ? "" : "s"} available`);
   }
 
-  return { score, reasons, eligible: affordable && enoughRooms && score >= MIN_SCORE };
+  return { score, reasons, eligible: affordable && enoughRooms && inTime && score >= MIN_SCORE };
 }
 
 export function rankUnits(prefs, units, limit = 20) {
