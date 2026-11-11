@@ -268,6 +268,8 @@ export async function runAiTurn({ env, history, text, note, tools }) {
 // Same instructions and tools, in OpenAI's format. Free models are smaller, so a few rules are spelled out, and a
 // turn has fewer steps (each step is one of the day's free requests).
 const OPENROUTER_STEPS = 3;
+// Room for a reply (and any thinking a model does first) in each step; free, but it counts toward OpenRouter's limits.
+export const OPENROUTER_MAX_TOKENS = 1500;
 const OPENROUTER_EXTRA = `Format rules for this chat
 - Write plain sentences. No markdown headings, tables or bold text.
 - Use the tools only through function calls. Never write a tool name, JSON or code in your reply to the student.
@@ -295,15 +297,17 @@ async function runOpenRouterTurn({ env, history, text, note, tools }) {
   const usage = { input: 0, output: 0 };
   const toolLog = [];
   let requests = 0;
+  let reasoning = 0;
+  let finish = null;
   let model = modelsFor(env, "chat")[0];
-  const fail = (reason, cause) => Object.assign(new AiUnavailable(reason, cause), { usage, requests, model, retryAfter: cause?.retryAfter ?? null, daily: !!cause?.daily });
+  const fail = (reason, cause) => Object.assign(new AiUnavailable(reason, cause), { usage, requests, model, finish, reasoning, retryAfter: cause?.retryAfter ?? null, daily: !!cause?.daily });
 
   for (let step = 0; step < OPENROUTER_STEPS; step++) {
     const last = step === OPENROUTER_STEPS - 1;
     let out;
     try {
       requests++;
-      out = await chatCompletion(env, { use: "chat", messages, tools: OPENROUTER_TOOLS, toolChoice: last ? "none" : "auto", maxTokens: 900, temperature: 0.3 });
+      out = await chatCompletion(env, { use: "chat", messages, tools: OPENROUTER_TOOLS, toolChoice: last ? "none" : "auto", maxTokens: OPENROUTER_MAX_TOKENS, temperature: 0.3 });
     } catch (e) {
       // A request refused before reaching any model isn't one of the day's free requests.
       if (refusedBeforeModel(e)) requests--;
@@ -312,7 +316,9 @@ async function runOpenRouterTurn({ env, history, text, note, tools }) {
     }
     usage.input += out.usage.input;
     usage.output += out.usage.output;
+    reasoning += out.usage.reasoning || 0;
     model = out.model;
+    finish = out.finish;
     if (out.finish === "length") throw fail("too_long");
     if (out.finish === "content_filter") throw fail("refusal");
 
@@ -321,7 +327,7 @@ async function runOpenRouterTurn({ env, history, text, note, tools }) {
       const reply = replyText(out.message);
       if (!reply) throw fail("empty");
       if (TOOL_AS_TEXT.test(reply)) throw fail("bad_output");
-      return { reply, usage, toolLog, model, requests };
+      return { reply, usage, toolLog, model, requests, finish, reasoning };
     }
     const asked = calls.slice(0, 3).map((c, i) => ({ id: String(c.id || `call_${step}_${i}`), name: c.function.name, args: c.function.arguments }));
     messages.push({ role: "assistant", content: replyText(out.message) || "", tool_calls: asked.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: typeof c.args === "string" ? c.args : JSON.stringify(c.args || {}) } })) });

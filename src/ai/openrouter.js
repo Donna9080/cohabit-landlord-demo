@@ -22,11 +22,13 @@ export const isFreeModel = (id) => typeof id === "string" && (id === "openrouter
 
 // Free models chosen on 2026-11-10 from OpenRouter's model list (docs/OPENROUTER_PLAN.md). Nemotron leads since
 // 2026-11-11: in the live model checks both Nemotron models made correct tool calls, while the Gemma models' free
-// provider (Google AI Studio) was busy each time; Gemma stays second. Each use can be changed
+// provider (Google AI Studio) was busy each time; Gemma stays second. The chat lists checked models only (since
+// 2026-11-11, after the free router passed a live reply to an unchecked preview model): if all three fail, the
+// guided chat answers. Each use can be changed
 // without a code change with a Worker variable holding a comma-separated list (AI_MODELS_CHAT, AI_MODELS_HELPER,
 // AI_MODELS_SUMMARY); ids that aren't free are ignored, and at most three are used.
 export const DEFAULT_MODELS = {
-  chat: ["nvidia/nemotron-3.5-super-vl:free", "google/gemma-4-31b-it:free", "openrouter/free"],
+  chat: ["nvidia/nemotron-3.5-super-vl:free", "nvidia/nemotron-3.5-lightning:free", "google/gemma-4-31b-it:free"],
   helper: ["nvidia/nemotron-3.5-lightning:free", "google/gemma-4-26b-a4b-it:free", "openrouter/free"],
   summary: ["nvidia/nemotron-3.5-super-vl:free", "google/gemma-4-31b-it:free", "openrouter/free"],
 };
@@ -84,7 +86,8 @@ const headers = (env) => ({
 });
 
 // One chat completion. messages/tools in OpenAI's format (OpenRouter's normalized API).
-// Returns { message, finish, model, usage: { input, output } }.
+// Returns { message, finish, model, usage: { input, output, reasoning } } (reasoning: the part of output a model
+// spent thinking, when OpenRouter reports it).
 export async function chatCompletion(env, { use, models, messages, tools, toolChoice, maxTokens = 800, temperature = 0.3, json = false, timeoutMs = 25_000 }) {
   if (!openRouterConfigured(env)) throw new OpenRouterError("not_configured");
   const list = (models || modelsFor(env, use)).filter(isFreeModel).slice(0, MAX_MODELS);
@@ -126,7 +129,7 @@ export async function chatCompletion(env, { use, models, messages, tools, toolCh
     message: choice.message,
     finish: choice.finish_reason || choice.native_finish_reason || null,
     model: typeof data.model === "string" ? data.model : list[0],
-    usage: { input: Number(u.prompt_tokens) || 0, output: Number(u.completion_tokens) || 0 },
+    usage: { input: Number(u.prompt_tokens) || 0, output: Number(u.completion_tokens) || 0, reasoning: Number(u.completion_tokens_details?.reasoning_tokens) || 0 },
   };
 }
 

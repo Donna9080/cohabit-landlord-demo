@@ -528,11 +528,16 @@ the OpenRouter turn in `src/assistant/ai.js`.
   (`AI_PROVIDER=anthropic` would choose Claude instead, if that key existed).
 - **Free models only:** every model id must end in `:free` or be `openrouter/free`; anything else is dropped before a
   request is made. Defaults (each request lists up to three; OpenRouter tries the next if one fails):
-  - Chat: `nvidia/nemotron-3.5-super-vl:free`, `google/gemma-4-31b-it:free`, `openrouter/free`.
+  - Chat: `nvidia/nemotron-3.5-super-vl:free`, `nvidia/nemotron-3.5-lightning:free`, `google/gemma-4-31b-it:free`
+    (checked models only, no free router; if all three fail, the guided chat answers).
   - Helpers: `nvidia/nemotron-3.5-lightning:free`, `google/gemma-4-26b-a4b-it:free`, `openrouter/free`.
   - Summaries: `nvidia/nemotron-3.5-super-vl:free`, `google/gemma-4-31b-it:free`, `openrouter/free`.
   - Nemotron leads since 2026-11-11 (owner's approval): in the live model checks both Nemotron models made correct
-    tool calls, while the Gemma models' free provider (Google AI Studio) was busy each time.
+    tool calls, while the Gemma models' free provider (Google AI Studio) was busy each time. The chat dropped the free
+    router the same day, after it passed a live reply to an unchecked preview model.
+  - Each AI chat reply writes one line to the Worker's logs (model, finish reason, requests, tokens; never the text):
+    `Assistant AI reply: …` or `Assistant AI unavailable: …`. See them with `npx wrangler tail` or in the
+    Cloudflare dashboard (Workers → cohabit-landlord-demo → Logs).
   - Change them without a code change with the variables `AI_MODELS_CHAT`, `AI_MODELS_HELPER`, `AI_MODELS_SUMMARY`
     (comma-separated).
 - **Switches (Admin page → AI):** "Assistant chat" and "Helpers", both off until switched on; each change is recorded

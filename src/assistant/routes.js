@@ -672,6 +672,8 @@ async function handleMessage({ request, env, db, user }) {
       const allowed = allowedNumbers([text, note, JSON.stringify(turn.memory.v), ...history.filter((m) => m.role === "user").map((m) => m.content), ...out.toolLog.map((t) => JSON.stringify(t.result))]);
       const grounded = groundReply(out.reply, allowed);
       if (grounded.removed) console.warn("Assistant reply had unsupported numbers; sentences removed:", grounded.removed);
+      // Which model answered and how (never the text), to see in the Worker's logs.
+      console.log(`Assistant AI reply: model=${out.model} finish=${out.finish ?? "?"} requests=${out.requests} tokens_in=${out.usage.input} tokens_out=${out.usage.output}${out.reasoning ? ` reasoning=${out.reasoning}` : ""}`);
       reply = grounded.ok ? grounded.text : factualSummary(ctx);
       mode = "ai";
       turn.state.asked = null;
@@ -680,7 +682,13 @@ async function handleMessage({ request, env, db, user }) {
       if (openRouter) writes.push(countRequests(db, "chat", out.requests, out.usage), setSetting(db, "ai_last_model", out.model));
     } catch (e) {
       if (!(e instanceof AiUnavailable)) throw e;
-      console.error("Assistant AI unavailable:", e.reason, e.cause?.status || "", e.cause?.detail || e.cause?.message || "");
+      console.error(
+        "Assistant AI unavailable:",
+        e.reason,
+        `model=${e.model || "?"} finish=${e.finish ?? "?"} requests=${e.requests || 0} tokens_out=${e.usage?.output || 0}${e.reasoning ? ` reasoning=${e.reasoning}` : ""}`,
+        e.cause?.status || "",
+        e.cause?.detail || e.cause?.message || ""
+      );
       if (e.usage?.input || e.usage?.output) writes.push(...addUsage(db, user.id, 0, e.usage));
       if (openRouter) {
         writes.push(countRequests(db, "chat", e.requests || 0, e.usage));

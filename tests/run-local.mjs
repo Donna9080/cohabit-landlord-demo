@@ -285,6 +285,7 @@ try {
     // OpenRouter (src/ai/openrouter.js): only free models can ever be called
     check("OpenRouter: only free model ids are accepted (\":free\" or the free router)", isFreeModel("google/gemma-4-31b-it:free") && isFreeModel("openrouter/free") && !isFreeModel("anthropic/claude-opus-5-5") && !isFreeModel("openrouter/auto") && !isFreeModel("google/gemma-4-31b-it") && !isFreeModel("x:free extra"));
     check("OpenRouter: the default model lists are free, at most 3 each", Object.values(DEFAULT_MODELS).every((l) => l.length <= 3 && l.every(isFreeModel)));
+    check("OpenRouter: the chat lists checked models only (no free router passing replies to any model)", DEFAULT_MODELS.chat.length === 3 && !DEFAULT_MODELS.chat.includes("openrouter/free") && DEFAULT_MODELS.chat[0] === "nvidia/nemotron-3.5-super-vl:free");
     check("OpenRouter: a model list from a variable drops anything that isn't free", JSON.stringify(modelsFor({ AI_MODELS_CHAT: "anthropic/claude-opus-5-5, google/gemma-4-26b-a4b-it:free,openai/gpt-5" }, "chat")) === '["google/gemma-4-26b-a4b-it:free"]' && JSON.stringify(modelsFor({ AI_MODELS_CHAT: "openai/gpt-5" }, "chat")) === JSON.stringify(DEFAULT_MODELS.chat));
     check("OpenRouter: the assistant's tools in OpenAI's format, with no anyOf schemas", OPENROUTER_TOOLS.length === 4 && OPENROUTER_TOOLS.every((t) => t.type === "function" && t.function.parameters.type === "object") && !JSON.stringify(OPENROUTER_TOOLS).includes("anyOf"));
     const key = "x".repeat(30);
@@ -1522,6 +1523,7 @@ try {
       check("OpenRouter chat: a free model answers through the assistant's tools (2 requests), and the answer is recorded", r2.status === 200 && lastReply(r2)?.mode === "ai" && r2.data.memory.some((m) => m.field === "budget_max" && m.raw === 1200) && sent.length === 2, JSON.stringify(lastReply(r2)?.text));
       check("OpenRouter chat: invented numbers are removed, as with Claude", lastReply(r2)?.text.includes("$1,200") && !lastReply(r2)?.text.includes("7,777"), lastReply(r2)?.text);
       check("OpenRouter chat: every request lists free models only, sends the key only in the Authorization header, and the format rules", sent.every((x) => x.body.models.every(isFreeModel) && !("model" in x.body) && x.headers.authorization === `Bearer ${FAKE_OPENROUTER_KEY}` && !x.raw.includes(FAKE_OPENROUTER_KEY) && x.body.messages[0].role === "system" && x.body.messages[0].content.includes("Format rules") && x.body.provider?.require_parameters === true && !("parallel_tool_calls" in x.body)));
+      check("OpenRouter chat: each step asks for up to 1,500 tokens and lists the chat's checked models", sent.every((x) => x.body.max_tokens === 1500 && JSON.stringify(x.body.models) === JSON.stringify(DEFAULT_MODELS.chat)));
       check("OpenRouter chat: names and emails never reach the model", sent.every((x) => !/Rae|rae@example|t2_renter/.test(x.raw)));
       r2 = await say2("[[tool_text]]");
       check("OpenRouter chat: a tool call written out as text isn't shown; the guided chat answers instead", r2.status === 200 && lastReply(r2)?.mode === "basic" && !/update_memory/.test(lastReply(r2)?.text || ""), lastReply(r2)?.text);
@@ -1548,8 +1550,8 @@ try {
       // Admin: model check and check-in themes.
       r2 = await call("/api/admin/ai/check", { method: "POST", as: t2.admin, body: {}, timeout: 30000 });
       const res2 = r2.data?.check?.results || [];
-      check("Admin model check: one test per chosen model (not the free router), each sent to that model only", r2.status === 200 && res2.map((x) => x.model).join() === "nvidia/nemotron-3.5-super-vl:free,google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free" && fakeOr.state.requests.filter((x) => x.body.tools?.[0]?.function?.name === "record_budget").every((x) => x.body.models.length === 1), JSON.stringify(res2));
-      check("Admin model check: says which models used the tool correctly", res2[0]?.toolCall === true && res2[1]?.toolCall === false && res2[1]?.problem === "answered without using the tool");
+      check("Admin model check: one test per chosen model (not the free router), each sent to that model only", r2.status === 200 && res2.map((x) => x.model).join() === "nvidia/nemotron-3.5-super-vl:free,nvidia/nemotron-3.5-lightning:free,google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free" && fakeOr.state.requests.filter((x) => x.body.tools?.[0]?.function?.name === "record_budget").every((x) => x.body.models.length === 1), JSON.stringify(res2));
+      check("Admin model check: says which models used the tool correctly", res2[0]?.toolCall === true && res2[1]?.toolCall === true && res2[2]?.toolCall === false && res2[2]?.problem === "answered without using the tool");
       r2 = await call("/api/admin/ai/themes", { method: "POST", as: t2.admin, body: {}, timeout: 30000 });
       check("Admin check-in themes: themes with counts kept within the number of comments, contact details removed", r2.status === 200 && r2.data.comments === 3 && r2.data.themes.length === 2 && r2.data.themes[1].count === 3 && !/y\.test|@/.test(JSON.stringify(r2.data.themes)), JSON.stringify(r2.data));
 
