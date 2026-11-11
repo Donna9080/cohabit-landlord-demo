@@ -505,7 +505,18 @@ Earlier runs:
 - [x] Deploy and push the demo data refresh (2026-10-14, version `c35940b7…`, no database change).
 - [ ] Try Demo mode on the live site as a renter: a room search, a roommate search, Details on each.
 - [x] Deploy the connected demo data (2026-10-18, version `df357d7e…`, no database change).
-- [ ] Try Demo mode on the live site as a renter: My matches, Save on a demo card, the assistant, `/demo/people`.
+- [x] Demo mode on the live site as a renter (owner's renter account in Chrome, 2026-11-11 ~15:30 UTC; Demo mode was
+      off, turned on for the check and back off after): My matches showed the banner and 83 of 100 demo rooms, all
+      labelled Demo; Save on a demo card worked ("Saved ✓", kept apart from real saved items) and was removed again;
+      Listings showed 100 demo cards and 100 map pins; Details showed the photo credit, "made-up spot" and Demo label;
+      the request form said "Demo listing: this is a preview. Nothing will be sent." (cancelled, nothing sent);
+      `/demo/people` showed 197 profiles; the assistant showed demo results (19 demo roommates for its answers) and the
+      guided chat answered one tap ("Sometimes", the same as the saved preferences). Found: (1) 0 of 197 demo roommates
+      fit the saved preferences in My matches, because every demo profile moves in Jan–Sep 2027 and the saved move-in
+      is Nov 2026, so a real renter moving in this year sees no demo roommates; (2) demo rooms starting Aug–Sep 2027
+      show at 80% for a Nov 2026 move-in (the open My matches decision below).
+- [ ] Decide: add demo roommates moving in Nov 2026–Jan 2027 (a demo data rebuild and deploy), so this year's renters
+      see demo roommates too.
 - [ ] In OpenRouter (owner): set a credit limit on the `openrouter-api-key` key (lowest allowed) and decide on the
       free-models privacy setting (providers may use prompts for training).
 - [x] Deploy the OpenRouter build with AI off (2026-11-10, version `ff28f64e…`, no database change).
