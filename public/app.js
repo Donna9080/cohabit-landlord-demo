@@ -2623,7 +2623,7 @@
     const label = button ? button.textContent : "";
     if (button) {
       button.disabled = true;
-      button.textContent = "Working…";
+      button.textContent = "Working… (up to a minute)";
     }
     try {
       return await api("/api/ai/help", { method: "POST", body });

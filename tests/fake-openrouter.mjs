@@ -11,7 +11,8 @@
 //     check that coHabit drops them.
 //   state.mode "429": the account's daily free limit; "provider_busy": a model's provider is busy (also a 429).
 //   state.helperMode "length": helper answers come back empty and cut off (finish_reason "length");
-//   "no_message_once": the next helper request gets an empty "OK" reply (no message), then answers are normal again.
+//   "no_message_once": the next helper request gets an empty "OK" reply (no message), then answers are normal again;
+//   "stall_once": the next helper request gets "OK" and then nothing for 6 s (longer than the tests' helper wait).
 import { createServer } from "node:http";
 
 export const FAKE_OPENROUTER_KEY = "test-openrouter-key-for-local-tests-only";
@@ -37,7 +38,7 @@ export function startFakeOpenRouter(port) {
     if (state.mode === "429") return send(429, { error: { code: 429, message: "Rate limit exceeded: free-models-per-day", metadata: { error_type: "rate_limit_exceeded" } } });
     if (state.mode === "provider_busy")
       return send(429, { error: { code: 429, message: "Provider returned error", metadata: { provider_name: "Google AI Studio", raw: "free tier capacity reached" } } });
-    const SUPPORTED = ["models", "messages", "max_tokens", "temperature", "tools", "tool_choice", "response_format", "provider"];
+    const SUPPORTED = ["models", "messages", "max_tokens", "temperature", "tools", "tool_choice", "response_format", "provider", "reasoning"];
     if (body.provider?.require_parameters && Object.keys(body).some((k) => !SUPPORTED.includes(k)))
       return send(404, { error: { code: 404, message: "No endpoints found that can handle the requested parameters." } });
     state.freeUsed++;
@@ -70,6 +71,13 @@ export function startFakeOpenRouter(port) {
     }
     // Helpers
     if (state.helperMode === "length") return reply({ content: "" }, "length");
+    if (state.helperMode === "stall_once") {
+      // "OK" straight away, then nothing for longer than the helper's wait (as OpenRouter does while a model thinks).
+      state.helperMode = null;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.write(" ");
+      return setTimeout(() => res.end(""), 6000);
+    }
     if (state.helperMode === "no_message_once") {
       // An "OK" with nothing in it (the live failure of 2026-11-11), once; the retry then gets a normal answer.
       state.helperMode = null;

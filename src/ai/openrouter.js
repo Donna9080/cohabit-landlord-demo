@@ -109,7 +109,19 @@ function replyShape(res, raw, data) {
 // One chat completion. messages/tools in OpenAI's format (OpenRouter's normalized API).
 // Returns { message, finish, model, usage: { input, output, reasoning } } (reasoning: the part of output a model
 // spent thinking, when OpenRouter reports it).
-export async function chatCompletion(env, { use, models, messages, tools, toolChoice, maxTokens = 800, temperature = 0.3, json = false, timeoutMs = 25_000 }) {
+// How long helpers wait for one reply. A different value is only honored for local tests, as for the address.
+export function helperTimeoutMs(env) {
+  let local = false;
+  try {
+    local = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(new URL(env.BETTER_AUTH_URL).origin);
+  } catch {}
+  const t = Number(env?.AI_HELPER_TIMEOUT_MS);
+  return local && Number.isFinite(t) && t >= 500 ? t : 45_000;
+}
+
+// reasoning: "low" asks models that think before answering to think less (OpenRouter's reasoning setting; models
+// that don't think ignore it). Only sent without require_parameters, so it never narrows the providers.
+export async function chatCompletion(env, { use, models, messages, tools, toolChoice, maxTokens = 800, temperature = 0.3, json = false, reasoning = null, timeoutMs = 25_000 }) {
   if (!openRouterConfigured(env)) throw new OpenRouterError("not_configured");
   const list = (models || modelsFor(env, use)).filter(isFreeModel).slice(0, MAX_MODELS);
   if (!list.length) throw new OpenRouterError("bad_request", { detail: "No free model to use." });
@@ -123,14 +135,25 @@ export async function chatCompletion(env, { use, models, messages, tools, toolCh
     // Worker runs at most three tool calls a step, one after another).
     ...(tools?.length ? { tools, tool_choice: toolChoice || "auto", provider: { require_parameters: true } } : {}),
     ...(json ? { response_format: { type: "json_object" } } : {}),
+    ...(reasoning && !tools?.length ? { reasoning: { effort: reasoning } } : {}),
   };
+  const started = Date.now();
+  const secs = () => `${((Date.now() - started) / 1000).toFixed(1)} s`;
+  const timedOut = (e) => e?.name === "TimeoutError" || e?.name === "AbortError";
   let res;
   try {
     res = await fetch(`${apiBase(env)}/chat/completions`, { method: "POST", headers: headers(env), body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) });
   } catch (e) {
-    throw new OpenRouterError(e?.name === "TimeoutError" ? "timeout" : "unreachable", { detail: e?.message });
+    throw new OpenRouterError(timedOut(e) ? "timeout" : "unreachable", { detail: `${timedOut(e) ? "No answer" : e?.message || "Unreachable"} after ${secs()}` });
   }
-  const raw = await res.text().catch(() => "");
+  // OpenRouter answers "OK" straight away and sends the reply when the model is done, so the wait can run out here,
+  // while reading the reply (seen live on 2026-11-11 as an empty "OK").
+  let raw = "";
+  try {
+    raw = await res.text();
+  } catch (e) {
+    throw new OpenRouterError(timedOut(e) ? "timeout" : "unreachable", { status: res.status, detail: `${timedOut(e) ? "Gave up waiting for the reply" : "The reply broke off"} after ${secs()} (HTTP ${res.status} received)` });
+  }
   let data = null;
   try {
     data = raw.trim() ? JSON.parse(raw) : null;

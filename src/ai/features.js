@@ -19,7 +19,7 @@ import { applyUpdates, emptyMemory } from "../assistant/memory.js";
 import { HttpError, rateLimit, readJson } from "../http.js";
 import { EMAIL, InvalidInput, PHONE, hasAddress } from "../validate.js";
 import { aiBlock, aiBudget, aiSettings, countHelperUse, countRequests, helperUsesToday, pauseStatement, setSetting } from "./budget.js";
-import { OpenRouterError, chatCompletion, isFreeModel, keyStatus, modelsFor, openRouterConfigured, refusedBeforeModel, replyText } from "./openrouter.js";
+import { OpenRouterError, chatCompletion, helperTimeoutMs, isFreeModel, keyStatus, modelsFor, openRouterConfigured, refusedBeforeModel, replyText } from "./openrouter.js";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const HOOD_NAMES = Object.values(HOODS).map((h) => h.name);
@@ -92,9 +92,9 @@ function cleanWriting(text, sources, max) {
 export const HELPER_MAX_TOKENS = 1500;
 
 // One line in the Worker's logs per helper request: which helper, model, why it stopped, tokens. Never the text.
-const helperLog = (task, out) =>
+const helperLog = (task, out, ms) =>
   console.log(
-    `AI helper reply: task=${task} model=${out.model} finish=${out.finish ?? "?"} tokens_in=${out.usage.input} tokens_out=${out.usage.output}${out.usage.reasoning ? ` reasoning=${out.usage.reasoning}` : ""}`
+    `AI helper reply: task=${task} model=${out.model} finish=${out.finish ?? "?"} tokens_in=${out.usage.input} tokens_out=${out.usage.output}${out.usage.reasoning ? ` reasoning=${out.usage.reasoning}` : ""} seconds=${(ms / 1000).toFixed(1)}`
   );
 // An answer coHabit can't use (cut off, empty, nothing found, or nothing left after the checks): a second line says why.
 const logUnusable = (task, why) => console.log(`AI helper unusable: task=${task} reason=${why}`);
@@ -105,14 +105,15 @@ function unusable(task, why) {
 
 // No answer worth showing (no message, an error inside the reply, a busy provider, empty, cut off): worth one more
 // try with the next listed model. A busy account (its own limits) or a refused request isn't.
-const RETRY_REASONS = ["bad_output", "provider_busy", "service_error"];
+const RETRY_REASONS = ["bad_output", "provider_busy", "service_error", "timeout"];
 
 // One request to the given models. Returns { out } with a usable answer, or { retry, model } when there was no answer.
-async function helperAttempt(env, db, task, args, models, writes) {
+async function helperAttempt(env, db, task, args, models, writes, timeoutMs) {
+  const started = Date.now();
   try {
-    const out = await chatCompletion(env, { use: "helper", maxTokens: HELPER_MAX_TOKENS, temperature: 0.4, timeoutMs: 20_000, ...args, models });
+    const out = await chatCompletion(env, { use: "helper", maxTokens: HELPER_MAX_TOKENS, temperature: 0.4, reasoning: "low", timeoutMs, ...args, models });
     writes.push(countRequests(db, "helper", 1, out.usage));
-    helperLog(task, out);
+    helperLog(task, out, Date.now() - started);
     if (out.finish === "length") return { retry: "cut_off", model: out.model };
     if (!replyText(out.message)) return { retry: "empty", model: out.model };
     return { out };
@@ -128,20 +129,26 @@ async function helperAttempt(env, db, task, args, models, writes) {
   }
 }
 
-// One helper use, counted against today's free requests (a retry counts too). When the first try brings no answer,
-// coHabit tries once more with the next listed models, if today's helper share allows. The person's helper uses are
-// counted only when they get a usable result (see handleAiHelp): a failed try doesn't use one up.
+// One helper use, counted against today's free requests (a retry counts too). Each try may wait up to the helper
+// timeout (45 s); the whole use stops after that plus 15 s. When the first try brings no answer, coHabit tries once
+// more with the next listed models, if there are at least 10 s left and today's helper share allows. The person's
+// helper uses are counted only when they get a usable result (see handleAiHelp): a failed try doesn't use one up.
 async function helperCall(env, db, user, task, args) {
   const writes = [];
+  const limit = helperTimeoutMs(env);
+  // 45 s a try live: the whole use stops after 60 s, and a retry needs at least 10 s of that left.
+  const deadline = Date.now() + (limit * 4) / 3;
+  const minLeft = (limit * 2) / 9;
   try {
     const models = modelsFor(env, "helper");
-    let r = await helperAttempt(env, db, task, args, models, writes);
+    let r = await helperAttempt(env, db, task, args, models, writes, limit);
     if (r.retry) {
       const rest = r.model && models.includes(r.model) ? models.filter((m) => m !== r.model) : models.slice(1);
       await db.batch(writes.splice(0));
-      if (!rest.length || (await aiBlock(env, db, "helper", 1))) throw unusable(task, r.retry);
-      console.log(`AI helper retry: task=${task} after=${r.retry} models=${rest.join(",")}`);
-      r = await helperAttempt(env, db, task, args, rest, writes);
+      const left = deadline - Date.now();
+      if (!rest.length || left < minLeft || (await aiBlock(env, db, "helper", 1))) throw unusable(task, r.retry);
+      console.log(`AI helper retry: task=${task} after=${r.retry} models=${rest.join(",")} wait=${(Math.min(limit, left) / 1000).toFixed(0)}s`);
+      r = await helperAttempt(env, db, task, args, rest, writes, Math.min(limit, left));
       if (r.retry) throw unusable(task, r.retry);
     }
     return r.out;

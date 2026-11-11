@@ -1488,7 +1488,7 @@ try {
         "--var", "GOOGLE_CLIENT_ID:local-test-client.apps.googleusercontent.com", "--var", "GOOGLE_CLIENT_SECRET:local-test-only", "--var", "MAPTILER_KEY:test-browser-key",
         "--var", "DEV_EMAIL_OUTBOX:0", "--var", "PASSWORD_ACCOUNTS:on", "--var", "DEMO_DATA:off",
         "--var", `openrouter-api-key:${FAKE_OPENROUTER_KEY}`, "--var", `OPENROUTER_BASE_URL:http://127.0.0.1:${FAKE_OR_PORT}/api/v1`,
-        "--var", "AI_MODELS_HELPER:google/gemma-4-26b-a4b-it:free,anthropic/claude-opus-5-5,openrouter/free"],
+        "--var", "AI_MODELS_HELPER:google/gemma-4-26b-a4b-it:free,anthropic/claude-opus-5-5,openrouter/free", "--var", "AI_HELPER_TIMEOUT_MS:3000"],
       { stdio: "ignore" }
     );
     try {
@@ -1539,7 +1539,7 @@ try {
       r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "preferences", text: "Up to $1,200 from June near Moody Street, no pets please" } });
       check("AI help (questionnaire): values checked like the form; unknown answers and wrong types dropped", r2.status === 200 && r2.data.fields.budget_max === 1200 && r2.data.fields.move_in_month === "2027-06" && r2.data.fields.area === "Moody Street" && r2.data.fields.pets === "no_pets" && !("sleep_schedule" in r2.data.fields) && !("rooms_needed" in r2.data.fields), JSON.stringify(r2.data));
       check("AI help: requests use the helper models, with anything that isn't free removed", fakeOr.state.requests.slice(before).every((x) => JSON.stringify(x.body.models) === '["google/gemma-4-26b-a4b-it:free","openrouter/free"]'));
-      check("AI help: each helper request leaves room for thinking (1,500 tokens)", fakeOr.state.requests.slice(before).every((x) => x.body.max_tokens === 1500));
+      check("AI help: each helper request leaves room for thinking (1,500 tokens) and asks models to think less", fakeOr.state.requests.slice(before).every((x) => x.body.max_tokens === 1500 && x.body.reasoning?.effort === "low"));
       r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "listing_filters", text: "a furnished studio in the Highlands under $1,500" } });
       check("AI help (listing filters): only listed values are kept", r2.status === 200 && JSON.stringify(r2.data.filters) === JSON.stringify({ hood: "The Highlands", kind: "Studio", maxRent: 1500, furnished: "true" }), JSON.stringify(r2.data));
       r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "intro", firstName: "Mia", shared: ["Both like a quiet home", "Both very tidy"] } });
@@ -1557,6 +1557,13 @@ try {
       const landlordUses = JSON.parse(wrangler(["d1", "execute", "DB", "--local", "--persist-to", STATE2, "--json", "--command", "SELECT COUNT(*) AS n FROM assistant_usage WHERE user_id = 'h:t2_landlord'"]))[0].results[0].n;
       check("AI help: an answer cut off at the token limit gives a clear message and doesn't use up one of the person's helper uses", cutOff.status === 409 && /didn't work this time/.test(cutOff.data?.message || "") && landlordUses === 0, JSON.stringify({ cutOff: cutOff.data, landlordUses }));
       r2 = await call("/api/ai/help", { method: "POST", as: t2.renter, body: { task: "unit_description", description: "Nice room" } });
+      // A reply that never finishes arriving (OpenRouter's "OK", then nothing): coHabit stops waiting, and the retry
+      // answers. (The tests' helper wait is 3 s; live it's 45 s.)
+      fakeOr.state.helperMode = "stall_once";
+      const beforeStall = fakeOr.state.requests.length;
+      const stalled = await call("/api/ai/help", { method: "POST", as: t2.admin, body: { task: "listing_filters", text: "a furnished studio in the Highlands under $1,500" }, timeout: 30000 });
+      check("AI help: a reply that stops arriving is given up on after the helper's wait, then retried with the next model", stalled.status === 200 && fakeOr.state.requests.length - beforeStall === 2, JSON.stringify({ status: stalled.status, tries: fakeOr.state.requests.length - beforeStall }));
+
       // The first try gets an "OK" with no message (as on the live site); the retry answers.
       fakeOr.state.helperMode = "no_message_once";
       const beforeR3 = fakeOr.state.requests.length;
