@@ -536,7 +536,11 @@ Earlier runs:
 - [x] Model check at 14:45 UTC (owner): Nemotron 3.5 Super worked (correct tool call, 1.6 s) and Nemotron 3.5
       Lightning worked (correct tool call, 1.9 s); the 2 Gemma models skipped (today's admin share used up). So the
       14:35 helper failures were a short-lived busy spell, not a broken model.
-- [ ] Try the polish helper again on the checked-models-only version.
+- [x] Polish tried again (owner, 14:47:58 UTC): "didn't work"; log: `AI helper unavailable: task=unit_description
+      bad_output No message in the reply.` OpenRouter answered with HTTP 200 but no message and no token counts (the
+      body may have been empty or cut short). The same models answer the admin check (with tools) fine.
+- [ ] Decide: log the reply's shape when there's no message (status, size, keys, finish reason, OpenRouter's error
+      message; never the text) and retry once with the next listed models; meanwhile maybe switch the helpers off.
 - [ ] To turn the chat off at any time: Admin page → AI → "Assistant chat: On" (renters then get the guided chat).
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
