@@ -46,9 +46,9 @@ export function startFakeOpenRouter(port) {
     const text = (t) => reply({ content: t });
     const system = (body.messages || []).find((m) => m.role === "system")?.content || "";
 
-    // Admin model check: the Gemma models call the tool, the others answer in words.
+    // Admin model check: the Nemotron models call the tool, the others answer in words.
     if ((body.tools || []).some((t) => t.function?.name === "record_budget")) {
-      if (/gemma/.test(model)) return reply({ content: null, tool_calls: [{ id: "call_check", type: "function", function: { name: "record_budget", arguments: '{"budget":1200}' } }] }, "tool_calls");
+      if (/nemotron/.test(model)) return reply({ content: null, tool_calls: [{ id: "call_check", type: "function", function: { name: "record_budget", arguments: '{"budget":1200}' } }] }, "tool_calls");
       return text("Your budget is $1,200 a month.");
     }
     // Assistant chat: directives in the student's last message.

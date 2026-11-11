@@ -185,8 +185,9 @@ No real listings were imported because no authorized data source exists yet (see
 - **Free budget:** 50 requests a day for the account: chat 34, helpers 10, admin 6; per renter 6 AI replies and 3
   helper uses a day; a pause until 00:00 UTC after OpenRouter's 429. No database change.
 - **Deployed with AI off; model check done** (2026-11-11 00:01 UTC: both Nemotron models work with tools, both Gemma
-  models' provider busy). **Next (owner's approval each):** whether Nemotron leads the chat and helper lists; approve
-  the privacy wording; switch chat on, then helpers.
+  models' provider busy). **Approved 2026-11-11:** Nemotron leads the chat and helper lists (code default changed
+  locally, 527/527; needs a deploy) and the privacy page wording (already live, unchanged). **Next (owner's approval
+  each):** deploy the new model order with AI off; switch chat on, then helpers.
 
 ### Connected demo data (2026-10-18, live as `df357d7e…`)
 
@@ -478,9 +479,11 @@ Earlier runs:
 - [x] Redeploy the busy-provider fix (2026-11-10 22:43 UTC, version `ce127f77…`).
 - [x] Run Check models for all 4 models (2026-11-11 00:01 UTC): Nemotron 3.5 Super and Lightning work (correct tool
       calls, 0.7 s and 1.3 s); Gemma 4 31B and 26B: provider busy (Google AI Studio), no pause set.
-- [ ] Decide: lead the chat and helper lists with Nemotron (Super for chat, Lightning for helpers) instead of Gemma,
-      through the Worker variables `AI_MODELS_CHAT` / `AI_MODELS_HELPER` or a code default (either way a new version).
-- [ ] Approve: the privacy wording, then switch on the assistant chat; later the helpers.
+- [x] Nemotron leads the chat and helper lists (owner's approval 2026-11-11): chat Nemotron 3.5 Super → Gemma 4 31B →
+      free router; helpers Nemotron 3.5 Lightning → Gemma 4 26B → free router. Code default changed locally (527/527).
+- [ ] Approve: deploy the new model order (AI still off, no database change).
+- [x] Privacy page wording for AI approved by the owner (2026-11-11), as it already is on the live privacy page.
+- [ ] Switch on the assistant chat (owner's decision; Admin page → AI); later the helpers.
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
 - [ ] Decide whether to use a dedicated Gmail account for coHabit's emails (the only $0 option found). If yes: create

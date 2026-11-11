@@ -1,10 +1,11 @@
 # Plan: free AI models through OpenRouter (for approval)
 
-**Status, 2026-11-10: approved by the owner and built locally (steps 1-4, plus the helpers and admin tools of steps 7
-and 8, all switched off).** Not deployed; no request has been sent to OpenRouter with your key. Next: step 5 (deploy
-with AI off, then the admin model check), which needs the owner's approval. One change from the plan: each request
-lists at most three models (chat: Gemma 4 31B, Nemotron 3.5 Super, then the free router), to stay within what
-OpenRouter's fallback list is documented to handle; Gemma 4 26B leads the helpers.
+**Status, 2026-11-11: approved by the owner, built, and deployed with AI switched off (step 5 done).** Model
+checks on the live site: both Nemotron models made correct tool calls; both Gemma models' free provider (Google AI
+Studio) was busy each time. So, with the owner's approval on 2026-11-11, Nemotron leads: chat is Nemotron 3.5 Super,
+Gemma 4 31B, then the free router; helpers are Nemotron 3.5 Lightning, Gemma 4 26B, then the free router (at most
+three models per request, to stay within what OpenRouter's fallback list is documented to handle). The privacy page
+wording was approved the same day. Next: switching the chat on (owner's decision).
 
 ## 1. What the audit found
 
@@ -34,10 +35,10 @@ OpenRouter can plug into this design without changing those rules.
 
 | Free model | Context | Tool calls | Picked for |
 | --- | --- | --- | --- |
-| `google/gemma-4-31b-it:free` | 262k | Yes | **Chat (first choice)**: capable, follows instructions, tool calls and JSON |
-| `nvidia/nemotron-3.5-super-vl:free` | 1M | Yes | **Chat (2nd)**, **admin summaries (1st)**: long input |
-| `google/gemma-4-26b-a4b-it:free` | 262k | Yes | **Chat (3rd)**, **writing helpers (1st)**: faster |
-| `nvidia/nemotron-3.5-lightning:free` | 1M | Yes | **Writing helpers (2nd)**: fast, short texts |
+| `google/gemma-4-31b-it:free` | 262k | Yes | **Chat (2nd)**, **admin summaries (2nd)**: capable, follows instructions, tool calls and JSON (was 1st for chat until 2026-11-11: provider busy in every check) |
+| `nvidia/nemotron-3.5-super-vl:free` | 1M | Yes | **Chat (1st)**, **admin summaries (1st)**: long input; correct tool calls in the live checks |
+| `google/gemma-4-26b-a4b-it:free` | 262k | Yes | **Writing helpers (2nd)**: faster (was 1st until 2026-11-11: provider busy) |
+| `nvidia/nemotron-3.5-lightning:free` | 1M | Yes | **Writing helpers (1st)**: fast, short texts; correct tool call in the live check |
 | `openrouter/free` | 200k | Yes | **Last resort everywhere**: any free model that fits |
 | `nvidia/nemotron-3-ultra-550b-a55b:free` | 1M | Yes | Spare: very large, likely slow; tested in step 5 |
 | `thinkingmachines/inkling-2-small:free` | 1M | Yes | Spare: listed yesterday; tested in step 5 |

@@ -1526,7 +1526,7 @@ try {
       r2 = await say2("[[tool_text]]");
       check("OpenRouter chat: a tool call written out as text isn't shown; the guided chat answers instead", r2.status === 200 && lastReply(r2)?.mode === "basic" && !/update_memory/.test(lastReply(r2)?.text || ""), lastReply(r2)?.text);
       r2 = await call("/api/admin/ai", { as: t2.admin });
-      check("OpenRouter: coHabit counts its own requests per use and the model that answered", r2.data && (await call("/api/admin/assistant", { as: t2.admin })).data.requestsToday.chat === 3 && r2.data.lastModel === "google/gemma-4-31b-it:free");
+      check("OpenRouter: coHabit counts its own requests per use and the model that answered", r2.data && (await call("/api/admin/assistant", { as: t2.admin })).data.requestsToday.chat === 3 && r2.data.lastModel === "nvidia/nemotron-3.5-super-vl:free");
 
       // Helpers: everything the model returns is checked before it reaches the page.
       const before = fakeOr.state.requests.length;
@@ -1548,7 +1548,7 @@ try {
       // Admin: model check and check-in themes.
       r2 = await call("/api/admin/ai/check", { method: "POST", as: t2.admin, body: {}, timeout: 30000 });
       const res2 = r2.data?.check?.results || [];
-      check("Admin model check: one test per chosen model (not the free router), each sent to that model only", r2.status === 200 && res2.map((x) => x.model).join() === "google/gemma-4-31b-it:free,nvidia/nemotron-3.5-super-vl:free,google/gemma-4-26b-a4b-it:free" && fakeOr.state.requests.filter((x) => x.body.tools?.[0]?.function?.name === "record_budget").every((x) => x.body.models.length === 1), JSON.stringify(res2));
+      check("Admin model check: one test per chosen model (not the free router), each sent to that model only", r2.status === 200 && res2.map((x) => x.model).join() === "nvidia/nemotron-3.5-super-vl:free,google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free" && fakeOr.state.requests.filter((x) => x.body.tools?.[0]?.function?.name === "record_budget").every((x) => x.body.models.length === 1), JSON.stringify(res2));
       check("Admin model check: says which models used the tool correctly", res2[0]?.toolCall === true && res2[1]?.toolCall === false && res2[1]?.problem === "answered without using the tool");
       r2 = await call("/api/admin/ai/themes", { method: "POST", as: t2.admin, body: {}, timeout: 30000 });
       check("Admin check-in themes: themes with counts kept within the number of comments, contact details removed", r2.status === 200 && r2.data.comments === 3 && r2.data.themes.length === 2 && r2.data.themes[1].count === 3 && !/y\.test|@/.test(JSON.stringify(r2.data.themes)), JSON.stringify(r2.data));
