@@ -172,7 +172,7 @@ No real listings were imported because no authorized data source exists yet (see
 | Import tool | Admin CSV import of external listings from authorized sources: preview, permission record, import (max 50), rollback, audit log, sample hiding | Yes (2026-10-12) |
 | **Assistant** | Chat-first housing and roommate assistant for renters at `/assistant` (details below) | Yes, basic mode (2026-10-12) |
 | **Assistant redesign + Demo mode** | Results 65% / guided chat 35%, List/Map, editable chips, new wording, Demo mode (details below) | Yes (2026-10-12) |
-| **AI on OpenRouter (free models)** | Assistant replies, form filling, intro and description drafts, check-in themes, admin switches, budget and model check; all off until switched on (details below) | Deployed, switched off (2026-11-10) |
+| **AI on OpenRouter (free models)** | Assistant replies, form filling, intro and description drafts, check-in themes, admin switches, budget and model check; all off until switched on (details below) | Deployed; assistant chat switched on 2026-11-11, helpers off |
 | **Connected demo data** | 100 demo rooms and 200 demo profiles in Waltham, one Demo mode switch across Listings, My matches, the assistant and a demo profile page; coverage checked with the matching code (details below) | Yes (2026-10-18) |
 | **Details and requests** | Shorter cards, exact vs partial groups, room Details with confirmed "I'm interested", roommate Details, Connect, accept/decline/withdraw, messages (details below) | Yes (2026-10-13) |
 
@@ -193,7 +193,10 @@ No real listings were imported because no authorized data source exists yet (see
 - **Deployed with AI off; model check done** (2026-11-11 00:01 UTC: both Nemotron models work with tools, both Gemma
   models' provider busy). **Approved 2026-11-11:** Nemotron leads the chat and helper lists (code default changed
   locally, 527/527) and the privacy page wording (already live, unchanged); the new order deployed 2026-11-11 as
-  `428bb983…` with AI off. **Next (owner's decision):** switch chat on, then helpers.
+  `428bb983…` with AI off. **Assistant chat switched on 2026-11-11 04:2x UTC** (owner's request; Admin → AI; the
+  switch is recorded in the audit log): provider OpenRouter, first model Nemotron 3.5 Super, not paused, OpenRouter's
+  free counter 2 of 50. Helpers still off. Not yet tried end to end: the assistant is for renter accounts only, and the
+  owner's admin account is a landlord. **Next:** a renter tries the chat; later, the helpers (owner's decision).
 
 ### Connected demo data (2026-10-18, live as `df357d7e…`)
 
@@ -489,7 +492,11 @@ Earlier runs:
       free router; helpers Nemotron 3.5 Lightning → Gemma 4 26B → free router. Code default changed locally (527/527).
 - [x] Deploy the new model order (2026-11-11, version `428bb983…`, AI still off, no database change).
 - [x] Privacy page wording for AI approved by the owner (2026-11-11), as it already is on the live privacy page.
-- [ ] Switch on the assistant chat (owner's decision; Admin page → AI); later the helpers.
+- [x] Switch on the assistant chat (2026-11-11, owner's request; Admin page → AI).
+- [ ] Try the AI chat from a renter account on the live site (a few messages), then check Admin → AI: "AI chat
+      replies today" and coHabit's chat requests should go up, and the reply should not say it's the guided chat.
+- [ ] Later (owner's decision): switch the helpers on.
+- [ ] To turn the chat off at any time: Admin page → AI → "Assistant chat: On" (renters then get the guided chat).
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
 - [ ] Decide whether to use a dedicated Gmail account for coHabit's emails (the only $0 option found). If yes: create
