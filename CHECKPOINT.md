@@ -27,7 +27,15 @@ No real listings were imported because no authorized data source exists yet (see
 ## Deployment status
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `6d87bbf3-a743-4f94-9db1-388b30de6850`, deployed 2026-11-11 with the owner's approval, chat left
+- **Live version:** `ba0046b4-6088-470f-87c7-c758ce410183`, deployed 2026-11-11 ~05:05 UTC with the owner's approval,
+  chat and helpers left on: helpers ask for up to 1,500 tokens (was 300-500; Nemotron 3.5 Lightning spent all 400 of
+  the polish helper's tokens thinking, so the owner's 3 live tries came back empty), a cut-off answer is a failed try,
+  a person's helper use counts only for a usable result, and each helper request logs task, model, finish and tokens
+  (never the text) (commit `fa6f908`, 531/531, no database change). Signed-out checks repeated (all as before; the
+  public config says helpers on). With the owner's approval, today's helper count for the owner's admin account was
+  reset (one `assistant_usage` row removed); the site's helper share still counts the 3 real requests.
+
+  Before it: `6d87bbf3-a743-4f94-9db1-388b30de6850`, deployed 2026-11-11 with the owner's approval, chat left
   on: the chat lists checked models only (Nemotron 3.5 Super → Nemotron 3.5 Lightning → Gemma 4 31B, no free router),
   each step may use up to 1,500 tokens (was 900), and each AI chat reply logs its model, finish reason, requests and
   tokens, never the text (commit `efadcd1`, 529/529, no database change). Signed-out checks repeated (all as before).
@@ -511,8 +519,9 @@ Earlier runs:
       designed. Today: 13 of the chat's 34 requests used.
 - [x] Helpers switched on by the owner (2026-11-11 04:52 UTC, Admin → AI; recorded in the audit log). Checked: the
       public config now says helpers are on; chat still on; not paused. No helper used yet.
-- [ ] Try a helper on the live site (a renter: "Describe it" on My matches or Listings, or the Connect intro draft; a
-      landlord: polish a unit description), then check the helper counter (10 a day for everyone, 3 per person).
+- [x] First helper tries (owner, 2026-11-11 04:57 UTC, polish as landlord): 3 × "AI help didn't work this time" —
+      each answer used exactly its 400-token limit thinking. Fixed and deployed as `ba0046b4…` (see above).
+- [ ] Try a helper again after that deploy, then check the log line (`AI helper reply: task=…`) and the counters.
 - [ ] To turn the chat off at any time: Admin page → AI → "Assistant chat: On" (renters then get the guided chat).
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
@@ -550,7 +559,7 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `428bb983-71c4-4a0d-a3aa-30d49952876a` (chat with the free router, 900-token steps), `ce127f77-8c0e-4613-82cf-6791b424e69f` (Gemma first; busy-provider fix), `ec3aef29-2490-481e-a5f8-99c5482359dd` (model-check fix), `ff28f64e-a2b8-4b97-99a3-d4a4cd209778` (first OpenRouter deploy), `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `6d87bbf3-a743-4f94-9db1-388b30de6850` (helpers with 300-500 tokens), `428bb983-71c4-4a0d-a3aa-30d49952876a` (chat with the free router, 900-token steps), `ce127f77-8c0e-4613-82cf-6791b424e69f` (Gemma first; busy-provider fix), `ec3aef29-2490-481e-a5f8-99c5482359dd` (model-check fix), `ff28f64e-a2b8-4b97-99a3-d4a4cd209778` (first OpenRouter deploy), `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
 | Database before migration 0009 | Time Travel bookmark `000000a0-00000000-00005107-945d11084f9aa143232ee332dac64224` (only added two empty columns, so rolling back the code alone is usually enough) |
 | Database before migration 0008 | Time Travel bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0007 | Time Travel bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c` (only added a column and tables, so rolling back the code alone is usually enough) |
