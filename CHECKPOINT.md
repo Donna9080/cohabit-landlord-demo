@@ -548,8 +548,13 @@ Earlier runs:
       body may have been empty or cut short). The same models answer the admin check (with tools) fine.
 - [x] Log the reply's shape and retry once with the next listed models (approved and deployed 2026-11-11, version
       `75a84c62…`). Helpers switched off by the owner at 14:50 UTC meanwhile.
-- [ ] Owner: switch the helpers on again and try the polish once; check the log lines (`AI helper reply/retry/
-      unavailable`). If it still fails, read the reply shape in the log before changing anything else.
+- [x] Polish tried with the retry (owner, 2026-11-11 15:00 UTC): failed again. Log: first try "HTTP 200, 0 bytes, empty
+      body"; retry (Nemotron 3.5 Super, Gemma 4 26B) "504 The operation was aborted". Likely cause: the free providers
+      took longer than the helpers' 20-second limit (OpenRouter answers "OK" straight away and sends the reply when the
+      model is done; coHabit gave up mid-reply and read an empty body). The owner switched the helpers off again at
+      15:01 UTC and chose to leave them off for now. The chat stays on.
+- [ ] Later (owner's call, helpers off until then): give helpers more time (e.g. 45 s), ask models to think less
+      (OpenRouter's reasoning setting) and tell a timeout apart from an empty reply in the logs; then try again.
 - [ ] To turn the chat off at any time: Admin page → AI → "Assistant chat: On" (renters then get the guided chat).
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
