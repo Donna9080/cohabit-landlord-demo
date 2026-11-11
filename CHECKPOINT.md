@@ -533,8 +533,10 @@ Earlier runs:
       (1,500 tokens of thinking, cut off). The failed tries didn't use up the owner's helper uses; 5 of the helpers' 10
       free requests used today.
 - [x] Helpers on checked models only (approved and deployed 2026-11-11, version `34522db7…`).
-- [ ] Model check at this hour (approved; the owner clicks Admin → AI → Check models: the last 2 admin requests of
-      2026-11-11 cover Nemotron 3.5 Super and Lightning).
+- [x] Model check at 14:45 UTC (owner): Nemotron 3.5 Super worked (correct tool call, 1.6 s) and Nemotron 3.5
+      Lightning worked (correct tool call, 1.9 s); the 2 Gemma models skipped (today's admin share used up). So the
+      14:35 helper failures were a short-lived busy spell, not a broken model.
+- [ ] Try the polish helper again on the checked-models-only version.
 - [ ] To turn the chat off at any time: Admin page → AI → "Assistant chat: On" (renters then get the guided chat).
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
       budget shows at 80% even months off; it affects real matches too).
