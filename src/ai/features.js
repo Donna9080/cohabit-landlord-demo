@@ -92,13 +92,14 @@ function cleanWriting(text, sources, max) {
 export const HELPER_MAX_TOKENS = 1500;
 
 // One line in the Worker's logs per helper request: which helper, model, why it stopped, tokens. Never the text.
-const helperLog = (task, out, extra = "") =>
+const helperLog = (task, out) =>
   console.log(
-    `AI helper reply: task=${task} model=${out.model} finish=${out.finish ?? "?"} tokens_in=${out.usage.input} tokens_out=${out.usage.output}${out.usage.reasoning ? ` reasoning=${out.usage.reasoning}` : ""}${extra}`
+    `AI helper reply: task=${task} model=${out.model} finish=${out.finish ?? "?"} tokens_in=${out.usage.input} tokens_out=${out.usage.output}${out.usage.reasoning ? ` reasoning=${out.usage.reasoning}` : ""}`
   );
-// An answer coHabit can't use (cut off, empty, or nothing left after the checks).
-function unusable(task, out, why) {
-  helperLog(task, out, ` unusable=${why}`);
+// An answer coHabit can't use (cut off, empty, nothing found, or nothing left after the checks): a second line says why.
+const logUnusable = (task, why) => console.log(`AI helper unusable: task=${task} reason=${why}`);
+function unusable(task, why) {
+  logUnusable(task, why);
   return unavailable("failed");
 }
 
@@ -109,8 +110,8 @@ async function helperCall(env, db, user, task, args) {
   try {
     const out = await chatCompletion(env, { use: "helper", maxTokens: HELPER_MAX_TOKENS, temperature: 0.4, timeoutMs: 20_000, ...args });
     writes.push(countRequests(db, "helper", 1, out.usage));
-    if (out.finish === "length") throw unusable(task, out, "cut_off");
     helperLog(task, out);
+    if (out.finish === "length") throw unusable(task, "cut_off");
     return out;
   } catch (e) {
     if (e instanceof OpenRouterError) {
@@ -148,7 +149,7 @@ const TASKS = {
     const fields = { ...Object.fromEntries(["budget_max", "budget_min", "move_in_month", "rooms_needed", ...Object.keys(LIFESTYLE)].filter((k) => v[k] != null).map((k) => [k, v[k]])) };
     if (v.areas?.length) fields.area = v.areas.join(", ").slice(0, 80);
     if (!Object.keys(fields).length) {
-      helperLog("preferences", out, " unusable=nothing_found");
+      logUnusable("preferences", "nothing_found");
       throw new HttpError(422, "nothing_found", "Couldn't find a budget, month, area or lifestyle answer in that. Try saying it another way.");
     }
     return { fields, model: out.model };
@@ -181,7 +182,7 @@ const TASKS = {
     if (typeof j.furnished === "boolean") f.furnished = String(j.furnished);
     if ([2, 3].includes(Number(j.rooms))) f.rooms = String(Number(j.rooms));
     if (!Object.keys(f).length) {
-      helperLog("listing_filters", out, " unusable=nothing_found");
+      logUnusable("listing_filters", "nothing_found");
       throw new HttpError(422, "nothing_found", "Couldn't turn that into filters. Try naming a neighborhood, a rent or a month.");
     }
     return { filters: f, model: out.model };
@@ -203,7 +204,7 @@ const TASKS = {
       ],
     });
     let text = cleanWriting(replyText(out.message), [...shared, note], 500);
-    if (!text) throw unusable("intro", out, replyText(out.message) ? "removed_by_checks" : "empty");
+    if (!text) throw unusable("intro", replyText(out.message) ? "removed_by_checks" : "empty");
     text = text.replace(/\{name\}/gi, first);
     if (!text.includes(first)) text = `Hi ${first}! ${text}`.slice(0, 500);
     return { text, model: out.model };
@@ -230,7 +231,7 @@ const TASKS = {
       ],
     });
     const text = cleanWriting(replyText(out.message), [JSON.stringify(facts)], 1000);
-    if (!text) throw unusable("unit_description", out, replyText(out.message) ? "removed_by_checks" : "empty");
+    if (!text) throw unusable("unit_description", replyText(out.message) ? "removed_by_checks" : "empty");
     return { text, model: out.model };
   },
 };

@@ -530,14 +530,15 @@ the OpenRouter turn in `src/assistant/ai.js`.
   request is made. Defaults (each request lists up to three; OpenRouter tries the next if one fails):
   - Chat: `nvidia/nemotron-3.5-super-vl:free`, `nvidia/nemotron-3.5-lightning:free`, `google/gemma-4-31b-it:free`
     (checked models only, no free router; if all three fail, the guided chat answers).
-  - Helpers: `nvidia/nemotron-3.5-lightning:free`, `google/gemma-4-26b-a4b-it:free`, `openrouter/free`.
+  - Helpers: `nvidia/nemotron-3.5-lightning:free`, `nvidia/nemotron-3.5-super-vl:free`, `google/gemma-4-26b-a4b-it:free`
+    (checked models only, no free router; if all three fail, the person is told it didn't work this time).
   - Summaries: `nvidia/nemotron-3.5-super-vl:free`, `google/gemma-4-31b-it:free`, `openrouter/free`.
   - Nemotron leads since 2026-11-11 (owner's approval): in the live model checks both Nemotron models made correct
     tool calls, while the Gemma models' free provider (Google AI Studio) was busy each time. The chat dropped the free
     router the same day, after it passed a live reply to an unchecked preview model.
   - Each AI chat reply writes one line to the Worker's logs (model, finish reason, requests, tokens; never the text):
-    `Assistant AI reply: …` or `Assistant AI unavailable: …`; each helper use writes `AI helper reply: task=…` (with
-    `unusable=…` when coHabit couldn't use the answer). See them with `npx wrangler tail` or in the
+    `Assistant AI reply: …` or `Assistant AI unavailable: …`; each helper use writes `AI helper reply: task=…`, plus
+    `AI helper unusable: task=… reason=…` when coHabit couldn't use the answer. See them with `npx wrangler tail` or in the
     Cloudflare dashboard (Workers → cohabit-landlord-demo → Logs).
   - Change them without a code change with the variables `AI_MODELS_CHAT`, `AI_MODELS_HELPER`, `AI_MODELS_SUMMARY`
     (comma-separated).

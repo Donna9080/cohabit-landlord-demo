@@ -37,10 +37,10 @@ OpenRouter can plug into this design without changing those rules.
 | Free model | Context | Tool calls | Picked for |
 | --- | --- | --- | --- |
 | `google/gemma-4-31b-it:free` | 262k | Yes | **Chat (3rd)**, **admin summaries (2nd)**: capable, follows instructions, tool calls and JSON (was 1st for chat until 2026-11-11: provider busy in every check) |
-| `nvidia/nemotron-3.5-super-vl:free` | 1M | Yes | **Chat (1st)**, **admin summaries (1st)**: long input; correct tool calls in the live checks |
-| `google/gemma-4-26b-a4b-it:free` | 262k | Yes | **Writing helpers (2nd)**: faster (was 1st until 2026-11-11: provider busy) |
+| `nvidia/nemotron-3.5-super-vl:free` | 1M | Yes | **Chat (1st)**, **admin summaries (1st)**, **writing helpers (2nd)**: long input; correct tool calls in the live checks |
+| `google/gemma-4-26b-a4b-it:free` | 262k | Yes | **Writing helpers (3rd)**: faster (was 1st until 2026-11-11: provider busy) |
 | `nvidia/nemotron-3.5-lightning:free` | 1M | Yes | **Writing helpers (1st)**, **chat (2nd)**: fast, short texts; correct tool call in the live check |
-| `openrouter/free` | 200k | Yes | **Last resort for helpers and summaries**: any free model that fits (dropped from the chat on 2026-11-11: it passed a live reply to `dots-studio/dots-3-note-preview:free`, a model not picked) |
+| `openrouter/free` | 200k | Yes | **Last resort for admin summaries only**: any free model that fits (dropped from the chat and the helpers on 2026-11-11: it passed live requests to `dots-studio/dots-3-note-preview:free`, `nvidia/nemotron-3-ultra-550b-a55b:free` and `liquid/lfm-3-1.7b:free`, models not picked; the last two returned nothing usable) |
 | `nvidia/nemotron-3-ultra-550b-a55b:free` | 1M | Yes | Spare: very large, likely slow; tested in step 5 |
 | `thinkingmachines/inkling-2-small:free` | 1M | Yes | Spare: listed yesterday; tested in step 5 |
 | `recursive/flint-v1.0:free`, `xingchen-agi/xing4.0-29b-a4b:free`, `dots-studio/dots-3-note-preview:free` | 262k–512k | Yes | Not picked: little-known or preview |

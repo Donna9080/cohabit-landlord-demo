@@ -24,12 +24,14 @@ export const isFreeModel = (id) => typeof id === "string" && (id === "openrouter
 // 2026-11-11: in the live model checks both Nemotron models made correct tool calls, while the Gemma models' free
 // provider (Google AI Studio) was busy each time; Gemma stays second. The chat lists checked models only (since
 // 2026-11-11, after the free router passed a live reply to an unchecked preview model): if all three fail, the
-// guided chat answers. Each use can be changed
+// guided chat answers. The helpers too (since the same day, after the free router passed live helper requests to
+// unchecked models that returned nothing usable): if all three fail, the person is told it didn't work this time.
+// Each use can be changed
 // without a code change with a Worker variable holding a comma-separated list (AI_MODELS_CHAT, AI_MODELS_HELPER,
 // AI_MODELS_SUMMARY); ids that aren't free are ignored, and at most three are used.
 export const DEFAULT_MODELS = {
   chat: ["nvidia/nemotron-3.5-super-vl:free", "nvidia/nemotron-3.5-lightning:free", "google/gemma-4-31b-it:free"],
-  helper: ["nvidia/nemotron-3.5-lightning:free", "google/gemma-4-26b-a4b-it:free", "openrouter/free"],
+  helper: ["nvidia/nemotron-3.5-lightning:free", "nvidia/nemotron-3.5-super-vl:free", "google/gemma-4-26b-a4b-it:free"],
   summary: ["nvidia/nemotron-3.5-super-vl:free", "google/gemma-4-31b-it:free", "openrouter/free"],
 };
 const MAX_MODELS = 3;
