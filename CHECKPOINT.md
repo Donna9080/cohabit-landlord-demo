@@ -505,6 +505,10 @@ Earlier runs:
       failed on that request; which model answered the others isn't recorded.
 - [x] Chat: checked models only, a log line per AI reply, 1,500-token steps (approved and deployed 2026-11-11,
       version `6d87bbf3…`).
+- [x] Second renter try after that deploy (owner, 2026-11-11 04:49 UTC): the AI reply came from Nemotron 3.5 Super
+      (first choice), stopped normally, 1 request, 342 output tokens of which 298 were thinking (so 900 was tight;
+      1,500 leaves room). The next 5 messages got the guided chat with "You've used today's 6 AI replies", as
+      designed. Today: 13 of the chat's 34 requests used.
 - [ ] Later (owner's decision): switch the helpers on.
 - [ ] To turn the chat off at any time: Admin page → AI → "Assistant chat: On" (renters then get the guided chat).
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
