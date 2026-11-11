@@ -27,7 +27,13 @@ No real listings were imported because no authorized data source exists yet (see
 ## Deployment status
 
 - **Live site:** https://cohabit-landlord-demo.dolgorsureng.workers.dev
-- **Live version:** `ce127f77-8c0e-4613-82cf-6791b424e69f`, deployed 2026-11-10 22:43 UTC with the owner's approval: the
+- **Live version:** `428bb983-71c4-4a0d-a3aa-30d49952876a`, deployed 2026-11-11 with the owner's approval: Nemotron
+  leads the chat and helper model lists (commit `215c064`), AI still switched off, no database change. Signed-out
+  checks repeated (pages 200, helpers off, AI endpoints 401, cross-site 403, no key anywhere); signed in as admin, the
+  AI panel lists chat Nemotron 3.5 Super → Gemma 4 31B → free router and helpers Nemotron 3.5 Lightning → Gemma 4 26B
+  → free router; not paused.
+
+  Before it: `ce127f77-8c0e-4613-82cf-6791b424e69f`, deployed 2026-11-10 22:43 UTC with the owner's approval: the
   busy-provider fix (commit `3e5d33f`), AI still switched off; signed-out checks repeated (all as before).
   **Third model check (2026-11-11 00:01 UTC, owner signed in as admin), all 4 models:** Nemotron 3.5 Super worked
   (correct tool call, 0.7 s); Nemotron 3.5 Lightning worked (correct tool call, 1.3 s); Gemma 4 31B (3.3 s) and Gemma 4
@@ -186,8 +192,8 @@ No real listings were imported because no authorized data source exists yet (see
   helper uses a day; a pause until 00:00 UTC after OpenRouter's 429. No database change.
 - **Deployed with AI off; model check done** (2026-11-11 00:01 UTC: both Nemotron models work with tools, both Gemma
   models' provider busy). **Approved 2026-11-11:** Nemotron leads the chat and helper lists (code default changed
-  locally, 527/527; needs a deploy) and the privacy page wording (already live, unchanged). **Next (owner's approval
-  each):** deploy the new model order with AI off; switch chat on, then helpers.
+  locally, 527/527) and the privacy page wording (already live, unchanged); the new order deployed 2026-11-11 as
+  `428bb983…` with AI off. **Next (owner's decision):** switch chat on, then helpers.
 
 ### Connected demo data (2026-10-18, live as `df357d7e…`)
 
@@ -481,7 +487,7 @@ Earlier runs:
       calls, 0.7 s and 1.3 s); Gemma 4 31B and 26B: provider busy (Google AI Studio), no pause set.
 - [x] Nemotron leads the chat and helper lists (owner's approval 2026-11-11): chat Nemotron 3.5 Super → Gemma 4 31B →
       free router; helpers Nemotron 3.5 Lightning → Gemma 4 26B → free router. Code default changed locally (527/527).
-- [ ] Approve: deploy the new model order (AI still off, no database change).
+- [x] Deploy the new model order (2026-11-11, version `428bb983…`, AI still off, no database change).
 - [x] Privacy page wording for AI approved by the owner (2026-11-11), as it already is on the live privacy page.
 - [ ] Switch on the assistant chat (owner's decision; Admin page → AI); later the helpers.
 - [ ] Decide whether My matches should require the move-in month within a month (today a room in your area and
@@ -520,7 +526,7 @@ one of these is needed:
 
 | What | How |
 |---|---|
-| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `ec3aef29-2490-481e-a5f8-99c5482359dd` (model-check fix), `ff28f64e-a2b8-4b97-99a3-d4a4cd209778` (first OpenRouter deploy), `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
+| Code (current live) | `npx wrangler rollback <version>`. Previous versions: `ce127f77-8c0e-4613-82cf-6791b424e69f` (Gemma first; busy-provider fix), `ec3aef29-2490-481e-a5f8-99c5482359dd` (model-check fix), `ff28f64e-a2b8-4b97-99a3-d4a4cd209778` (first OpenRouter deploy), `df357d7e-73f7-4255-8104-1a7b6de9da29` (before AI on OpenRouter; no database change between them), `05be52b1-a9aa-4485-8d33-3b94b38e6e02` (before the connected demo data; no database change between them), `c35940b7-6b05-4156-9cf5-c274a3386f0e` (before the account pages and freeze fix; it doesn't read the two new columns, so it runs fine on the migrated database), `e2e17667-50ba-4f0d-94ef-b2ed994b1d96` (before the demo data refresh), `d4ea27c7-4e1f-419f-b52e-21dfb4298ce9` (before the Quick check-in; it doesn't use the new tables, so it runs fine on the migrated database), `e2da146e-2d3b-4c23-9591-63ae1e71a4b8` (before Details and requests; it doesn't use the new tables, so it runs fine on the migrated database), `bdc3fd32-43b6-4d4b-957a-5ae097605f44` (assistant before the redesign), `2e452e10-a5f3-4a87-b70a-b6970607f827` (before the assistant), `90064451…` (map with a toggle), `8adbaa8a…` (before maps) |
 | Database before migration 0009 | Time Travel bookmark `000000a0-00000000-00005107-945d11084f9aa143232ee332dac64224` (only added two empty columns, so rolling back the code alone is usually enough) |
 | Database before migration 0008 | Time Travel bookmark `0000007f-00000000-00005104-ae72185c6770bf744251aa407c3afd16` (only added tables, so rolling back the code alone is usually enough) |
 | Database before migration 0007 | Time Travel bookmark `00000075-00000000-00005103-5f5ae051cfc181e65e91b5a1637f9a7c` (only added a column and tables, so rolling back the code alone is usually enough) |
