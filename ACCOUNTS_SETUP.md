@@ -516,6 +516,8 @@ source and license are in [docs/DEMO_DATA.md](docs/DEMO_DATA.md) (written from t
   - Listing photos are free Unsplash stock photos (Unsplash License), labeled "Illustrative demo photo" and credited
     in Details; they never show the listing itself. They load from `images.unsplash.com` (named on the privacy
     page); if one can't load, a drawing shows instead.
+  - The home page photo (since the 2026-11-13 redesign) is also a free Unsplash photo (Unsplash License, credited
+    under it) loaded from `images.unsplash.com` for every visitor; the privacy page says so ("Photos from Unsplash").
 
 ### AI on OpenRouter's free models (built 2026-11-10; off until the admin switches it on)
 

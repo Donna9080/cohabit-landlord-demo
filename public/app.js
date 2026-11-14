@@ -893,7 +893,7 @@
       html: `
       <article class="prose">
         <h1 tabindex="-1">Privacy policy</h1>
-        <p class="muted">Last updated October 13, 2026. coHabit is a student project for shared student housing.</p>
+        <p class="muted">Last updated November 13, 2026. coHabit is a student project for shared student housing.</p>
 
         <h2>What we collect</h2>
         <ul>
@@ -909,7 +909,7 @@
           <li><strong>To limit abuse:</strong> short-lived request counters that include your IP address. They are deleted within about a day.</li>
         </ul>
         <p>Apart from a unit's optional address, we do not ask for street addresses, phone numbers, government IDs, dates of birth, payment details or health information. Please don't put them in names or descriptions.</p>
-        <p><strong>Demo mode photos:</strong> the illustrative photos on demo listings load from Unsplash's image servers, which see your IP address and browser like any website. Nothing about you is sent with them. Real listings and everything else load from coHabit. Demo mode itself is saved with a renter's assistant settings; for anyone else it's remembered only in their browser.</p>
+        <p><strong>Photos from Unsplash:</strong> the photo on the home page and the illustrative photos on demo listings load from Unsplash's image servers, which see your IP address and browser like any website. Nothing about you is sent with them. Real listings and everything else load from coHabit. Demo mode itself is saved with a renter's assistant settings; for anyone else it's remembered only in their browser.</p>
         <p><strong>“Use my location”:</strong> when a renter clicks it, the browser asks for permission. The position is used only in that browser to show nearby listings. It is never sent to coHabit or saved.</p>
 
         <h2>Who can see it</h2>
