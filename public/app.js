@@ -747,11 +747,11 @@
 
   // The home page's photo: free under the Unsplash License, loaded from Unsplash's image servers (like demo photos).
   const HOME_PHOTO = {
-    src: "https://images.unsplash.com/photo-1758526213774-8ae08c1d48c2",
-    page: "https://unsplash.com/photos/two-young-women-singing-into-hair-dryers-on-couch-ckss5NBt37s",
+    src: "https://images.unsplash.com/photo-1714978444599-83c666dbd7b7",
+    page: "https://unsplash.com/photos/a-group-of-people-sitting-around-a-table-eating-pizza-o_uWKLAoYsk",
     by: "Vitaly Gariev",
     profile: "https://unsplash.com/@silverkblack",
-    alt: "Two housemates laughing and singing into hair dryers on the sofa in their bright living room",
+    alt: "Housemates sharing pizza and chatting around the coffee table in their living room",
   };
   const homePhotoUrl = (w) => `${HOME_PHOTO.src}?auto=format&fit=crop&w=${w}&q=70`;
 
@@ -814,7 +814,7 @@
     const u = me.user;
     const role = u && u.accountType;
     const first = u ? esc((u.name || "").split(" ")[0] || "there") : "";
-    // Two sections on one scrolling page: .h-first (header, hero, photo, purple strip; one laptop screen) and
+    // Two sections on one scrolling page: .h-first (header, hero, photo, purple strip; about one laptop screen) and
     // .h-section (How it works, then the footer).
     // The main button goes where each person finds their match ("List your place" in the header covers listing).
     const cta =
@@ -844,7 +844,7 @@
           </div>
           <figure class="h-photo">
             <div class="h-photo-frame">
-              <img src="${homePhotoUrl(900)}" srcset="${homePhotoUrl(600)} 600w, ${homePhotoUrl(900)} 900w, ${homePhotoUrl(1300)} 1300w" sizes="(max-width: 900px) 92vw, 40vw" alt="${esc(HOME_PHOTO.alt)}" width="900" height="675" decoding="async" fetchpriority="high" data-home-photo="1" />
+              <img src="${homePhotoUrl(900)}" srcset="${homePhotoUrl(600)} 600w, ${homePhotoUrl(900)} 900w, ${homePhotoUrl(1300)} 1300w" sizes="(max-width: 900px) 92vw, 50vw" alt="${esc(HOME_PHOTO.alt)}" width="900" height="675" decoding="async" fetchpriority="high" data-home-photo="1" />
             </div>
             <span class="h-sticker-good" aria-hidden="true"><strong>Good</strong><small>vibes only</small></span>
             <span class="h-sticker-pill" aria-hidden="true">Roomies, but make it right →</span>
