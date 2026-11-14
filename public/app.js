@@ -814,6 +814,8 @@
     const u = me.user;
     const role = u && u.accountType;
     const first = u ? esc((u.name || "").split(" ")[0] || "there") : "";
+    // Two sections on one scrolling page: .h-first (header, hero, photo, purple strip; one laptop screen) and
+    // .h-section (How it works, then the footer).
     // The main button goes where each person finds their match ("List your place" in the header covers listing).
     const cta =
       role === "renter"
@@ -832,6 +834,7 @@
       page: "home",
       html: `
       <div class="h-page">
+        <div class="h-first">
         ${homeHeader()}
         <section class="h-hero" aria-labelledby="h-title">
           <div class="h-hero-text">
@@ -852,6 +855,7 @@
           </div>
         </section>
         <div class="h-band" aria-hidden="true"><div class="h-band-track">${band}${band}</div></div>
+        </div>
         <section class="h-section" aria-labelledby="h-how">
           <p class="h-eyebrow"><span class="h-num" aria-hidden="true">02</span>How it works</p>
           <h2 class="h-h2" id="h-how">Less scrolling. <em>Better fits.</em></h2>
