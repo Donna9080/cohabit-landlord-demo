@@ -1360,6 +1360,40 @@ try {
     const unknown = await signIn("nobody@example.test", "not the password");
     check("A wrong password and an unknown email get the same answer (401)", r.status === 401 && unknown.status === 401 && r.data.code === "INVALID_EMAIL_OR_PASSWORD" && unknown.data.code === r.data.code && r.data.message === unknown.data.message);
 
+    // Renter setup ("Your next chapter?", "What's your home energy?"): the answers go to the assistant's answers.
+    r = await api("/api/me", { as: mayaCookie });
+    check("Setup: a new renter with no answers yet is offered setup once (setupPending)", r.data.setupPending === true);
+    r = await api("/api/assistant/setup", { as: mayaCookie });
+    check("Setup: reading it shows the account's name and no answers yet", r.status === 200 && r.data.name === "Maya" && JSON.stringify(r.data.answers) === "{}" && r.data.status === null);
+    const setupField = async (body) => (await api("/api/assistant/setup", { method: "POST", as: mayaCookie, body })).data?.field;
+    const setupFields = [
+      await setupField({ name: "R2-D2" }),
+      await setupField({ answers: { pets: "no_pets" } }),
+      await setupField({ answers: { budget_max: "a lot" } }),
+      await setupField({ answers: { areas: ["14 Elm Street"] } }),
+      await setupField({ status: "maybe" }),
+    ];
+    check("Setup: checks the first name, allows only the setup answers, and checks each answer like the chat", setupFields.join() === "name,answers,budget_max,areas,status", setupFields.join());
+    r = await api("/api/assistant/setup", { method: "POST", as: mayaCookie, body: { name: "Maya-Rose", answers: { looking_for: "both", budget_max: 1200, move_in_month: "2027-06", areas: ["Waltham"] } } });
+    const nameNow = d1rows(`SELECT name FROM "user" WHERE email = '${maya}'`)[0]?.name;
+    check("Setup (basics): first name saved to the account; budget, month, area and what they're looking for saved", r.status === 200 && nameNow === "Maya-Rose" && JSON.stringify(r.data.answers) === JSON.stringify({ looking_for: "both", budget_max: 1200, move_in_month: "2027-06", areas: ["Waltham"] }));
+    r = await api("/api/assistant/setup", { method: "POST", as: mayaCookie, body: { answers: { noise: "quiet", cleanliness: "average", guests: null, budget_max: null }, status: "done" } });
+    const afterLife = await api("/api/assistant", { as: mayaCookie });
+    const facts = Object.fromEntries((afterLife.data.memory || []).map((m) => [m.field, m.raw]));
+    check("Setup (lifestyle): chips saved, a cleared answer stays unset, and the assistant's answers show them", r.status === 200 && r.data.status === "done" && facts.noise === "quiet" && facts.cleanliness === "average" && !("guests" in facts) && !("budget_max" in facts) && facts.looking_for === "both");
+    check("Setup: adds no chat messages (the conversation is unchanged)", (afterLife.data.messages || []).length === 0);
+    r = await api("/api/me", { as: mayaCookie });
+    check("Setup: once finished it isn't offered again; \"later\" doesn't undo \"done\"", r.data.setupPending === false && (await api("/api/assistant/setup", { method: "POST", as: mayaCookie, body: { status: "later" } })).data.status === "done");
+    const setupOut = await api("/api/assistant/setup", { method: "POST", body: { status: "later" } });
+    const setupCross = await api("/api/assistant/setup", { method: "POST", as: mayaCookie, body: { status: "later" }, origin: "https://evil.example" });
+    check("Setup: signed out it's refused (401), and from another site (403)", setupOut.status === 401 && setupCross.status === 403);
+
+    // A renter can sign up with just an email and a password; the first name comes in setup.
+    r = await api("/api/auth/sign-up/email", { method: "POST", body: { signupAs: "renter", email: "noname.renter@example.test", password: PASS } });
+    const nonameRow = d1rows(`SELECT name, account_type FROM "user" WHERE email = 'noname.renter@example.test'`)[0];
+    const nonameMail = await inbox("noname.renter@example.test");
+    check("Sign-up (renter): email and password are enough; no name is stored and the email says \"Hi there\"", r.status === 200 && nonameRow?.name === "" && nonameRow.account_type === "renter" && /^Hi there,/.test(nonameMail[0]?.body || ""));
+
     // Landlord: name, email, password, optional company
     resetAuthLimits();
     const dana = "dana.landlord@example.test";
@@ -1374,7 +1408,7 @@ try {
     resetAuthLimits();
     const fieldOf = async (body) => (await api("/api/auth/sign-up/email", { method: "POST", body })).data.field;
     const fields = [
-      await fieldOf({ signupAs: "renter", name: "", email: "ann@example.test", password: PASS }),
+      await fieldOf({ signupAs: "landlord", name: "", email: "ann@example.test", password: PASS }),
       await fieldOf({ signupAs: "renter", name: "R2-D2", email: "ann@example.test", password: PASS }),
       await fieldOf({ signupAs: "renter", name: "Ann", email: "not-an-email", password: PASS }),
       await fieldOf({ signupAs: "renter", name: "Ann", email: "ann@example.test", password: "short" }),

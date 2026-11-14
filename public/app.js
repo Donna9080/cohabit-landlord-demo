@@ -509,16 +509,16 @@
         ${step ? `<span class="ob-step">Step ${step} of 2</span>` : ""}
       </header>`;
   const obGoogle = (next, primary, action = "sign-in") =>
-    `<button class="${primary ? "ob-primary ob-google-main" : "ob-google"}" type="button" data-action="${action}" data-next="${esc(next || "")}">${icon("google", 18)}<span>Continue with Google</span></button>`;
+    `<button class="${primary ? "ob-primary ob-google-main" : "ob-google"}" type="button" data-action="${action}" data-next="${esc(next || "")}" aria-label="Continue with Google">${icon("google", 18)}<span>Continue with Google</span></button>`;
   const obEmail = () => field("email", "Email", input("email", 'type="email" autocomplete="email" inputmode="email" required maxlength="254" spellcheck="false" autocapitalize="off"', ""));
-  const obMain = (label, type = "submit", extra = "") => `<button class="ob-primary" type="${type}"${extra}><span>${label}</span><span class="ob-arrow">${obArrow}</span></button>`;
+  const obMain = (label, type = "submit", extra = "") => `<button class="ob-primary" type="${type}" aria-label="${esc(label)}"${extra}><span>${label}</span><span class="ob-arrow">${obArrow}</span></button>`;
   const obTerms = `<a href="/terms">terms</a> and <a href="/privacy">privacy policy</a>`;
 
   // Sign up (renters): "Make yourself at home." Only what an account needs: email and password where passwords are on,
   // or Google. The first name and the rest come in setup. Terms and privacy are agreed to here, as before.
   function renterSignUpPage() {
     const next = new URLSearchParams(location.search).get("next") || "";
-    saveReturn(next || lastPage || "/");
+    saveReturn(next || lastPage); // nothing to return to: renters land on the assistant, as before
     const explore = explorePath(next);
     const signinHref = `/signin${next ? `?next=${encodeURIComponent(next)}` : ""}`;
     return {
@@ -822,7 +822,7 @@
       return null;
     }
     const expired = me.sessionExpired;
-    saveReturn(next || lastPage || "/");
+    saveReturn(next || lastPage); // nothing to return to: renters land on the assistant, as before
     const explore = explorePath(next);
     const signupHref = `/signup?as=renter${next ? `&next=${encodeURIComponent(next)}` : ""}`;
     return {
@@ -878,7 +878,7 @@
     const next = form.dataset.next || "";
     // Renters: setup once if they're new, otherwise back to where they were.
     if (me.user && me.user.accountType === "renter") {
-      if (me.user.setupPending) return navigate("/setup/basics", true);
+      if (me.setupPending) return navigate("/setup/basics", true);
       const to = renterLanding(next);
       clearReturn();
       return navigate(to, true);
@@ -2122,7 +2122,7 @@
         return welcome();
       })();
     if (t === "renter") {
-      if (me.user.setupPending) navigate("/setup/basics", true);
+      if (me.setupPending) navigate("/setup/basics", true);
       else {
         const to = renterLanding(next);
         clearReturn();
