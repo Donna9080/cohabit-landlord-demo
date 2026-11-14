@@ -283,9 +283,10 @@ worked example on the sample data are in [docs/SAMPLE_MATCHING.md](docs/SAMPLE_M
   borrowed handle gets 404. Demo profiles have no handle, so they can never be sent a real request.
 - **Connect** opens an editable introduction. Nothing is sent until **Send request**. The recipient sees the first
   name, the introduction and what the two have in common, then **Accept** or **Decline**. The sender can **Withdraw**
-  while it's pending. After acceptance both can **Message** each other on coHabit (no phone numbers or addresses;
-  those are refused). Status shows on the card, in Details, and under "Roommate requests" in the assistant and on
-  My matches.
+  while it's pending (the button says **Cancel request**). After acceptance both can **Message** each other on
+  coHabit (no phone numbers or addresses; those are refused). Status shows on the card, in Details, and under
+  "Roommate requests" in the assistant and in Requests → People (`/requests/people`). On the Roommates page the
+  button is **Say hey**; it opens the same introduction.
 - **Server checks** (`src/connections.js`): renters only; the sender must have roommate matching on; the target must
   be a discoverable renter; no requests to yourself; one open request per pair (also a unique database index); no
   new request after a decline; at most 10 open outgoing requests; only the sender can withdraw, only the recipient
@@ -295,10 +296,11 @@ worked example on the sample data are in [docs/SAMPLE_MATCHING.md](docs/SAMPLE_M
   `{handle, intro}`; `POST /api/roommates/requests/<id>` `{action: withdraw | accept | decline}`;
   `GET`/`POST /api/roommates/requests/<id>/messages`.
 - **Deleting an account** deletes its requests and messages. There are no email notifications (that would need a
-  paid email service); people see new requests when they open the assistant or My matches.
+  paid email service); people see new requests when they open the assistant or Roommates (a number on the messages
+  icon and in the account menu).
 - **Rooms ("I'm interested")** use the existing request flow, now also opened from a room's Details in the
-  assistant, with a "Send this request?" confirmation first. "Request sent" and Withdraw stay in step on the card,
-  in Details, on Listings, in Saved and on My matches. A request doesn't reserve the room. Demo listings show a
+  assistant, with a "Send this request?" confirmation first. "Request sent" and **Cancel request** stay in step on
+  the card, in Details, on Listings, in Saved, on Rooms for you and in Requests → Rooms (`/requests/rooms`). A request doesn't reserve the room. Demo listings show a
   preview only; external listings say to contact the original site; sample listings have no landlord to contact.
 
 ## Quick check-in survey and coHabit Points (migration `0008`, live since 2026-10-13)
@@ -983,30 +985,32 @@ These steps describe the redesigned assistant, live since 2026-10-12.
 5. Open a card's **Details**, then **Save** it. It appears under **Saved**, below the results.
 6. Turn on **Demo mode**. A banner appears and every card and pin says Demo. Change the goal chip to **Both** and
    answer the roommate questions. **Rooms** and **Roommates** tabs appear and the roommates have no contact details.
-   Save a demo card: it shows under **Saved**. Open **Listings** and **My matches**: Demo mode is on there too (100 demo
-   listings with filters; demo rooms and roommates for your preferences, and **Browse all demo profiles**). Connect
-   with a demo profile: "Demo only, nothing sent". Turn Demo mode off: only real results again, and the demo card
-   is no longer under Saved.
+   Save a demo card: it shows under **Saved**. Open **Listings**, **Rooms** and **Roommates**: Demo mode is on there
+   too (100 demo listings with filters; demo rooms for your preferences; demo roommates under For you and all of them
+   under Explore, with a **Demo** label in the header). **Say hey** to a demo profile: "Demo only, nothing sent". Turn
+   Demo mode off (in the account menu): only real results again, and the demo card is no longer under Saved.
 7. On a phone, switch **Chat** / **Results**: the chat and the map keep their place.
 8. Reload: everything is still there. Then **Clear chat** and confirm: the chat and answers are gone, **Saved** stays.
 
 ### 10. Details and requests (8 minutes, renters B and C)
 
-1. As B and as C, on **My matches**, tick **Show me to compatible renters** and **Share my details with my matches**,
-   and save. Use similar answers (same area and month) so they match.
+1. As B and as C, open **Preferences** (account menu, or Preferences on Roommates), tick **Show me to compatible
+   renters** and **Share my details with my matches**, and save. Use similar answers (same area and month) so they
+   match. Roommates → **For you** now shows the other one.
 2. As B, open **Assistant**, choose **A roommate** (or **Both**), and open the **Roommates** tab. C's card shows
    two things in common and at most one important difference. Open **Details**: budget, move-in, area, lifestyle tags
    and differences. Untick sharing on one side and reload: those details are hidden again.
-3. Click **Connect**, edit the introduction and click **Send request**. The card says **Request sent**; Details offers
-   **Withdraw request**.
-4. As C, open **My matches**: **Roommate requests** shows B's introduction with **Accept** and **Decline**. Click
+3. Click **Connect** (or **Say hey** on Roommates), edit the introduction and click **Send request**. The card says
+   **Request sent**; Details offers **Cancel request**. Sending again is refused ("You already sent a request.").
+4. As C, the messages icon shows **1**. Open it (Requests → People): B's introduction with **Accept** and **Decline**. Click
    **Accept**, then **Message**, and send a short message. Try one with a phone number: it's refused.
 5. As B, the card now says **Connected**; **Message** shows C's message.
 6. As B, open a real room's **Details** in the assistant, click **I'm interested**, write a note and **Send**. A
    **Send this request?** box appears first. After sending, the card, Details, Listings and Saved all say
-   **Request sent**; **Withdraw** removes it everywhere.
-7. Turn on **Demo mode**: **Connect (preview)** and **I'm interested (preview)** only say "Demo only, nothing sent."
-8. Clean up: withdraw the room request and decline or withdraw the roommate request.
+   **Request sent**; **Cancel request** removes it everywhere (Requests → Rooms lists it with its date).
+7. Turn on **Demo mode**: **Connect (preview)**, **Say hey** and **I'm interested (preview)** only say "Demo only,
+   nothing sent."
+8. Clean up: cancel the room request and decline or cancel the roommate request.
 
 ### 11. Quick check-in (5 minutes, renter B, then signed out, then the owner)
 

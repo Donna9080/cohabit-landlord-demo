@@ -12,9 +12,14 @@
 //   /landlord/units/<id>     One unit: details and the renters interested in it
 //   /landlord/units/<id>/edit  Edit or delete a unit
 //   /assistant               A renter's chat assistant: rooms and roommates that fit, with reasons
-//   /renter                  A renter's match preferences and matching units
-//   /demo/people             Demo mode: all the made-up roommate profiles, with filters (public, clearly labeled)
-//                            (Demo mode also turns Listings, /renter and /assistant to the made-up data)
+//   /roommates               Roommates: For you (/roommates/for-you, a renter's matches) and Explore
+//                            (/roommates/explore, profiles anyone may browse: the made-up ones in Demo mode)
+//   /rooms                   Rooms for you: units that match a renter's saved preferences (Explore is /listings)
+//   /requests/rooms, /requests/people  A renter's requests: landlords contacted; roommate requests and messages
+//   /saved                   A renter's saved rooms and people
+//   /preferences             A renter's match preferences (the questionnaire)
+//   /renter, /demo/people    Old addresses: redirect to the pages above
+//                            (Demo mode also turns Listings, Roommates, Rooms and /assistant to the made-up data)
 //   /admin                   Read-only user list (admins only; enforced by the server)
 //   /admin/import            Import external listings from an authorized source (admins only)
 (function () {
@@ -106,14 +111,15 @@
     navigate("/");
   }
 
-  // Top bar: the same links on every page and every screen size.
+  // Top bar: the same links on every page and every screen size. Renters' Rooms covers Listings (its Explore tab).
   function navItems() {
     const u = me.user;
     const items = [];
     if (u && u.accountType === "landlord") items.push(["/landlord", "Dashboard"]);
-    else if (u && u.accountType === "renter") items.push(["/assistant", "Assistant"], ["/renter", "My matches"]);
+    else if (u && u.accountType === "renter") items.push(["/assistant", "Assistant"], ["/roommates", "Roommates"], ["/rooms", "Rooms"]);
     else if (u) items.push(["/welcome", "Get started"]);
-    items.push(["/listings", "Listings"]);
+    else items.push(["/roommates", "Roommates"]);
+    if (!(u && u.accountType === "renter")) items.push(["/listings", "Listings"]);
     if (u && u.isAdmin) items.push(["/admin", "Admin"]);
     return items;
   }
@@ -121,7 +127,7 @@
   function renderAccount() {
     const u = me.user;
     const path = location.pathname.replace(/\/+$/, "") || "/";
-    const current = (href) => (path === href || path.startsWith(href + "/") ? ' aria-current="page"' : "");
+    const current = (href) => (path === href || path.startsWith(href + "/") || (href === "/rooms" && path === "/listings") ? ' aria-current="page"' : "");
     navEl.innerHTML = navItems()
       .map(([href, label]) => `<a class="nav-item" href="${href}"${current(href)}>${label}</a>`)
       .join("");
@@ -306,11 +312,12 @@
   const sampleTag = `<span class="tag">Fictional sample data</span>`;
 
   // An in-page "are you sure?" box. Resolves true only when the confirm button is pressed.
-  function confirmDialog({ title, text, confirmLabel, danger = false }) {
+  function confirmDialog({ title, text, confirmLabel, cancelLabel = "Cancel", danger = false }) {
     const dialog = document.getElementById("confirm");
     if (!dialog || !dialog.showModal) return Promise.resolve(window.confirm(`${title}\n\n${text}`));
     document.getElementById("confirm-title").textContent = title;
     document.getElementById("confirm-text").textContent = text;
+    dialog.querySelector('button[value="cancel"]').textContent = cancelLabel;
     const ok = document.getElementById("confirm-ok");
     ok.textContent = confirmLabel;
     ok.className = danger ? "btn btn-danger-solid" : "btn";
@@ -395,7 +402,7 @@
       return null;
     }
     if (type && me.user.accountType !== type) {
-      const other = me.user.accountType === "landlord" ? "/landlord" : "/renter";
+      const other = me.user.accountType === "landlord" ? "/landlord" : "/roommates";
       return messageView(
         type === "landlord" ? "This area is for landlords" : "This area is for renters",
         `You signed up as a ${esc(me.user.accountType)}, so this page isn't available to you.`,
@@ -440,7 +447,7 @@
   // Google redirect and the email confirmation link opening in another tab.
   const RETURN_KEY = "cohabit.returnTo";
   const NOT_A_RETURN = /^\/(signin|signup|forgot-password|reset-password|welcome|setup|signin-error|dev\/)/;
-  const PRIVATE_PAGE = /^\/(assistant|renter|landlord|account|admin)(\/|$|\?|#)/;
+  const PRIVATE_PAGE = /^\/(assistant|renter|rooms|requests|saved|preferences|landlord|account|admin)(\/|$|\?|#)/;
   const safeReturn = (p) => (typeof p === "string" && /^\/(?!\/)\S*$/.test(p) && p.length <= 300 && !NOT_A_RETURN.test(p) ? p : null);
   let lastPage = null; // the last ordinary page shown in this tab (not sign-in, sign-up or setup)
   function saveReturn(p) {
@@ -1341,7 +1348,7 @@
 
   function interestState(unitId) {
     return myInterests.has(unitId)
-      ? `<span class="saved small">Request sent</span><button class="btn btn-small btn-quiet" type="button" data-action="interest-withdraw" data-unit="${esc(unitId)}">Withdraw</button>`
+      ? `<span class="saved small">Request sent</span><button class="btn btn-small btn-quiet" type="button" data-action="interest-withdraw" data-unit="${esc(unitId)}">Cancel request</button>`
       : `<button class="btn btn-small" type="button" data-action="interest-open" data-unit="${esc(unitId)}">I'm interested</button>`;
   }
 
@@ -1350,7 +1357,7 @@
     if (u.demo) return `<div class="interest" data-interest="${esc(u.id)}"><button class="btn btn-small" type="button" data-action="interest-open" data-unit="${esc(u.id)}">I'm interested (preview)</button><p class="small muted">Demo listing: you can try the request, but nothing is sent.</p></div>`;
     if (u.external) return `<p class="small muted interest">Listed on ${esc(u.source.name)}: contact them through the original listing.</p>`;
     if (u.sample) return `<p class="small muted interest">Sample listing: there is no landlord to contact.</p>`;
-    if (!me.user) return `<p class="small interest"><a href="/renter">Sign in as a renter</a> to tell the landlord you're interested.</p>`;
+    if (!me.user) return `<p class="small interest"><a href="/signin?next=${encodeURIComponent(location.pathname)}">Sign in as a renter</a> to tell the landlord you're interested.</p>`;
     if (!isRenter()) return "";
     return `<div class="interest" data-interest="${esc(u.id)}">${interestState(u.id)}</div>`;
   }
@@ -1382,7 +1389,7 @@
           <strong>${esc(i.unitName)}</strong> <span class="muted small">${esc(i.unitArea)} · sent ${esc(fmtJoined(i.createdAt))}</span>${i.listed ? "" : ` <span class="badge badge-sample">No longer listed</span>`}
           ${i.message ? `<p class="small desc">“${esc(i.message)}”</p>` : ""}
         </div>
-        <button class="btn btn-small btn-quiet" type="button" data-action="interest-withdraw" data-unit="${esc(i.unitId)}">Withdraw</button>
+        <button class="btn btn-small btn-quiet" type="button" data-action="interest-withdraw" data-unit="${esc(i.unitId)}">Cancel request</button>
       </li>`
       )
       .join("")}</ul>`;
@@ -1421,7 +1428,7 @@
   }
 
   async function withdrawInterest(unitId) {
-    if (!(await confirmDialog({ title: "Withdraw your request?", text: "The landlord will no longer see it. You can send a new one later.", confirmLabel: "Withdraw" }))) return;
+    if (!(await confirmDialog({ title: "Cancel this request?", text: "The landlord will no longer see it. You can send a new one later.", confirmLabel: "Cancel request", cancelLabel: "Keep it" }))) return;
     try {
       await api(`/api/renter/interests/${encodeURIComponent(unitId)}`, { method: "DELETE" });
     } catch (e) {
@@ -1429,6 +1436,7 @@
       if (e.status !== 404) return toast(e.message);
     }
     setInterest(unitId, false);
+    toast("Request cancelled.");
   }
 
   async function removeInterest(id, button) {
@@ -1852,7 +1860,7 @@
       <div class="heading-row">
         <div class="heading">
           <h1 tabindex="-1">Listings</h1>
-          <p class="muted">${plural(listings.length, "room listing", "room listings")} in Massachusetts.${isRenter() ? "" : ` Looking for a room? <a href="/renter">See which ones match you</a>.`}</p>
+          <p class="muted">${plural(listings.length, "room listing", "room listings")} in Massachusetts.${me.user ? "" : ` Looking for a room? <a href="/signin?next=/rooms">See which ones match you</a>.`}</p>
         </div>
         ${demoSwitchHtml()}
       </div>
@@ -2541,11 +2549,12 @@
 
   function matchesHtml(data) {
     lastMatches = data;
-    if (data.needsPreferences) return emptyState("Save your preferences first", "Fill in the questionnaire and save to see rooms that match.");
+    const editPrefs = `<a class="btn btn-quiet" href="/preferences?from=/rooms">Edit preferences</a>`;
+    if (data.needsPreferences) return emptyState("Save your preferences first", "Fill in the questionnaire and save to see rooms that match.", `<a class="btn" href="/preferences?from=/rooms">Set my preferences</a><a class="btn btn-quiet" href="/listings">Browse all listings</a>`);
     if (data.demo) {
       // Demo mode: the same ranking over the demo listings, shown as the same cards as Listings and the assistant.
       if (!data.matches.length)
-        return emptyState("No demo listings match your preferences", "Try a wider budget, a different area or another month.", `<button class="btn btn-quiet" type="button" data-action="edit-prefs">Edit preferences</button><a class="btn btn-quiet" href="/listings">Browse all demo listings</a>`);
+        return emptyState("No demo listings match your preferences", "Try a wider budget, a different area or another month.", `${editPrefs}<a class="btn btn-quiet" href="/listings">Browse all demo listings</a>`);
       const list = [...data.matches];
       if (matchSort === "rent") list.sort((a, b) => perPerson(a.unit) - perPerson(b.unit));
       else if (matchSort === "date") list.sort((a, b) => byDate(a.unit, b.unit));
@@ -2555,7 +2564,7 @@
         .join("")}</ul>`;
     }
     if (!data.matches.length)
-      return emptyState("No rooms match yet", "Try a wider budget, a different area or another month.", `<button class="btn btn-quiet" type="button" data-action="edit-prefs">Edit preferences</button><a class="btn btn-quiet" href="/listings">Browse all listings</a>`);
+      return emptyState("No rooms match yet", "Try a wider budget, a different area or another month.", `${editPrefs}<a class="btn btn-quiet" href="/listings">Browse all listings</a>`);
     const list = [...data.matches];
     if (matchSort === "rent") list.sort((a, b) => byRent(a.unit, b.unit));
     else if (matchSort === "date") list.sort((a, b) => byDate(a.unit, b.unit));
@@ -2569,25 +2578,9 @@
       .join("")}</ul>`;
   }
 
-  function roommatesHtml(data) {
-    if (data.needsPreferences) return emptyState("Save your preferences first", "Roommate matching uses your lifestyle answers.", data.demo ? `<a class="btn btn-quiet" href="/demo/people">Browse all demo profiles</a>` : "");
-    if (data.demo) {
-      if (!data.roommates.length)
-        return emptyState("No compatible demo profiles", "None of the made-up people shares your area, timing and lifestyle closely enough. Browse them all to see why.", `<a class="btn btn-quiet" href="/demo/people">Browse all demo profiles</a>`);
-      return `<ul class="res-grid" role="list">${data.roommates.map((m) => personCard(m, `mm:${m.id}`)).join("")}</ul>`;
-    }
-    if (!data.optedIn)
-      return emptyState(
-        "Roommate matching is off",
-        "Turn on “Show me to compatible renters” in your preferences to see renters you'd get along with. You only see people who turned it on too.",
-        `<button class="btn btn-quiet" type="button" data-action="edit-prefs">Edit preferences</button>`
-      );
-    if (!data.roommates.length)
-      return emptyState("No compatible renters yet", "Nobody else has your area and move-in month right now. Check back as more people join.");
-    return `<ul class="res-grid" role="list">${data.roommates.map((m, i) => personCard(m, `mm:${i}`, { save: false })).join("")}</ul>`;
-  }
-
-  // Saved answers at a glance, so the long form only opens when the renter wants to change something.
+  // ── Preferences: the questionnaire (basics, lifestyle, roommate matching and sharing) ──
+  // Its own page (/preferences), opened from Preferences on Roommates and Rooms, the account menu and the account page.
+  // Saving changes what For you shows. The filters on Roommates are temporary and never change these answers.
   function prefsSummary(p) {
     const life = Object.entries(CHOICES)
       .map(([k, [label, opts]]) => {
@@ -2599,7 +2592,7 @@
       <section class="summary" aria-labelledby="prefs-heading">
         <div class="heading-row">
           <div class="section-heading"><h2 id="prefs-heading">Your preferences</h2><span class="muted small">saved ${esc(fmtJoined(p.updated_at))}</span></div>
-          <button class="btn btn-quiet" type="button" data-action="edit-prefs" aria-expanded="false" aria-controls="prefs-form">Edit preferences</button>
+          <a class="btn btn-quiet" href="/preferences?from=/account">Edit preferences</a>
         </div>
         <dl class="tiles">
           ${tile("Budget", `${money(p.budget_min)} to ${money(p.budget_max)}`, "per month")}
@@ -2615,103 +2608,72 @@
       </section>`;
   }
 
-  async function renterPage() {
+  // The old "My matches" page (/renter) and the parts of it that links point to: where each one is now.
+  const RENTER_MOVED = { "#requests-heading": "/requests/people", "#contacted-heading": "/requests/rooms", "#matches-heading": "/rooms", "#prefs-heading": "/preferences", "#prefs-form": "/preferences", "#roommates-heading": "/roommates" };
+
+  // Where Save and Cancel go back to: the page Preferences was opened from (only these pages).
+  const PREFS_BACK = { "/roommates": "Roommates", "/roommates/for-you": "Roommates", "/roommates/explore": "Roommates", "/rooms": "Rooms", "/account": "your account", "/saved": "Saved" };
+  const prefsBack = () => {
+    const from = new URLSearchParams(location.search).get("from");
+    return PREFS_BACK[from] ? from : "/roommates";
+  };
+
+  async function preferencesPage() {
     const blocked = gate("renter");
     if (blocked !== undefined) return blocked;
-    const [{ preferences: p }, matches, mates, contacted] = await Promise.all([api("/api/renter/preferences"), api("/api/renter/matches"), api("/api/renter/roommates"), loadMyInterests(), loadSavedIndex()]);
-    lastRoommates = mates;
-    const demo = !!matches.demo;
+    const { preferences: p } = await api("/api/renter/preferences");
     const v = p || { budget_min: "", budget_max: "", move_in_month: "", area: "", rooms_needed: 1 };
+    const back = prefsBack();
     const lifestyle = Object.entries(CHOICES)
       .map(([k, [label, opts]]) => field(k, label, select(k, (p ? [] : [["", "Choose…"]]).concat(opts), v[k] || "")))
       .join("");
-    return {
-      title: "Your matches",
-      html: `
-      <div class="heading-row">
-        <div class="heading">
-          <h1 tabindex="-1">${p ? "Your matches" : "Find your room"}</h1>
-          <p class="muted">${p ? "Rooms and renters that fit the preferences you saved." : "Answer these once. We'll save them so you can come back and edit them."}</p>
-        </div>
-        ${demoSwitchHtml()}
-      </div>
-      ${demo ? demoBannerHtml("Matching rooms and possible roommates below are made-up demo listings and profiles, matched to your real preferences with the same rules. Your preferences, requests and contacts stay real and unchanged.") : ""}
-      ${p ? prefsSummary(p) : ""}
-      ${isRenter() ? aiDescribeBox("ai-prefs", "Up to $1,200 from June near Moody Street, early bird, no pets", "questionnaire") : ""}
-      <form class="form" id="prefs-form" novalidate${p ? " hidden" : ""}>
-        <fieldset>
-          <legend>The basics</legend>
-          <div class="field-row">
-            ${field("budget_min", "Budget from ($/month)", input("budget_min", 'type="number" min="0" max="50000" step="1" required inputmode="numeric"', v.budget_min))}
-            ${field("budget_max", "Budget up to ($/month)", input("budget_max", 'type="number" min="1" max="50000" step="1" required inputmode="numeric"', v.budget_max))}
+    return rmPage({
+      title: "Your preferences",
+      active: "",
+      body: `
+        <a class="rm-back" href="${back}">${icon("left", 16)} Back to ${PREFS_BACK[back]}</a>
+        <div class="rm-head">
+          <div>
+            <h1 class="rm-title rm-title-sm" tabindex="-1">Your <em>preferences.</em></h1>
+            <p class="rm-sub">${p ? `Saved ${esc(fmtJoined(p.updated_at))}. ` : "Answer these once and we'll save them. "}They decide which people and rooms show under For you. Filters on Roommates are only for browsing and don't change them.</p>
           </div>
-          <div class="field-row">
-            ${field("move_in_month", "Move-in month", input("move_in_month", 'type="month" required placeholder="2027-06"', v.move_in_month))}
-            ${field("rooms_needed", "Rooms you need", input("rooms_needed", 'type="number" min="1" max="10" step="1" required inputmode="numeric"', v.rooms_needed), "More than 1 if you're moving with friends.")}
+        </div>
+        ${aiDescribeBox("ai-prefs", "Up to $1,200 from June near Moody Street, early bird, no pets", "questionnaire")}
+        <form class="form rm-form" id="prefs-form" data-back="${back}" novalidate>
+          <fieldset>
+            <legend>The basics</legend>
+            <div class="field-row">
+              ${field("budget_min", "Budget from ($/month)", input("budget_min", 'type="number" min="0" max="50000" step="1" required inputmode="numeric"', v.budget_min))}
+              ${field("budget_max", "Budget up to ($/month)", input("budget_max", 'type="number" min="1" max="50000" step="1" required inputmode="numeric"', v.budget_max))}
+            </div>
+            <div class="field-row">
+              ${field("move_in_month", "Move-in month", input("move_in_month", 'type="month" required placeholder="2027-06"', v.move_in_month))}
+              ${field("rooms_needed", "Rooms you need", input("rooms_needed", 'type="number" min="1" max="10" step="1" required inputmode="numeric"', v.rooms_needed), "More than 1 if you're moving with friends.")}
+            </div>
+            ${field("area", "Area", input("area", 'type="text" maxlength="80" required autocomplete="off"', v.area), "Neighborhood or city, like “Waltham”.")}
+          </fieldset>
+          <fieldset>
+            <legend>How you like to live</legend>
+            <p class="hint">Used for roommate matching. Room matches use the basics above.</p>
+            <div class="field-grid">${lifestyle}${field("chores", "Chores (optional)", select("chores", CHORES, v.chores || ""))}</div>
+          </fieldset>
+          <fieldset id="roommate-matching">
+            <legend>Roommate matching (optional)</legend>
+            <label class="check"><input type="checkbox" id="f-roommate_visible" name="roommate_visible" ${p && p.roommate_visible ? "checked" : ""} />
+              <span><strong>Show me to compatible renters.</strong> They see your first name, a compatibility score and what you have in common. Not your last name, and not answers you don't share.</span></label>
+            <label class="check"><input type="checkbox" id="f-share_email" name="share_email" ${p && p.share_email ? "checked" : ""} ${p && p.roommate_visible ? "" : "disabled"} />
+              <span><strong>Let my roommate matches see my email</strong> (${esc(me.user.email)}) so they can contact me.</span></label>
+            <label class="check"><input type="checkbox" id="f-share_profile" name="share_profile" ${p && p.share_profile ? "checked" : ""} ${p && p.roommate_visible ? "" : "disabled"} />
+              <span><strong>Share my details with my matches:</strong> budget range, move-in month, area and lifestyle answers. You'll see the same from matches who share theirs.</span></label>
+            <p class="hint">Both are off unless you tick them. You can turn them off again at any time.</p>
+          </fieldset>
+          <p class="form-error" id="form-error" role="alert"></p>
+          <div class="actions">
+            <button class="btn" type="submit">${p ? "Save changes" : "Save and see matches"}</button>
+            <a class="btn btn-quiet" href="${back}">Cancel</a>
           </div>
-          ${field("area", "Area", input("area", 'type="text" maxlength="80" required autocomplete="off"', v.area), "Neighborhood or city, like “Waltham”.")}
-        </fieldset>
-        <fieldset>
-          <legend>How you like to live</legend>
-          <p class="hint">Used for roommate matching. Room matches use the basics above.</p>
-          <div class="field-grid">${lifestyle}${field("chores", "Chores (optional)", select("chores", CHORES, v.chores || ""))}</div>
-        </fieldset>
-        <fieldset>
-          <legend>Roommate matching (optional)</legend>
-          <label class="check"><input type="checkbox" id="f-roommate_visible" name="roommate_visible" ${p && p.roommate_visible ? "checked" : ""} />
-            <span><strong>Show me to compatible renters.</strong> They see your first name, a compatibility score and what you have in common. Not your last name, and not answers you don't share.</span></label>
-          <label class="check"><input type="checkbox" id="f-share_email" name="share_email" ${p && p.share_email ? "checked" : ""} ${p && p.roommate_visible ? "" : "disabled"} />
-            <span><strong>Let my roommate matches see my email</strong> (${esc(me.user.email)}) so they can contact me.</span></label>
-          <label class="check"><input type="checkbox" id="f-share_profile" name="share_profile" ${p && p.share_profile ? "checked" : ""} ${p && p.roommate_visible ? "" : "disabled"} />
-            <span><strong>Share my details with my matches:</strong> budget range, move-in month, area and lifestyle answers. You'll see the same from matches who share theirs.</span></label>
-          <p class="hint">Both are off unless you tick them. You can turn them off again at any time.</p>
-        </fieldset>
-        <p class="form-error" id="form-error" role="alert"></p>
-        <div class="actions">
-          <button class="btn" type="submit">${p ? "Save changes" : "Save and see matches"}</button>
-          ${p ? `<button class="btn btn-quiet" type="button" data-action="edit-prefs">Cancel</button>` : ""}
-        </div>
-      </form>
-      <section aria-labelledby="matches-heading">
-        <div class="heading-row">
-          <div class="section-heading"><h2 id="matches-heading">Matching rooms${demo ? ` ${demoTag}` : ""}</h2><span class="muted small" id="match-count">${demo && !matches.needsPreferences ? `${matches.matches.length} of ${matches.total} demo listings match` : matches.matches.length ? plural(matches.matches.length, "match", "matches") : ""}</span></div>
-          ${matches.matches.length > 1 ? sortSelect("match-sort", matchSort, [["best", "Best match"], ["rent", demo ? "Lowest rent per person" : "Lowest rent"], ["date", "Soonest move-in"]]) : ""}
-        </div>
-        <div id="matches">${matchesHtml(matches)}</div>
-      </section>
-      <section aria-labelledby="contacted-heading">
-        <div class="section-heading"><h2 id="contacted-heading">Landlords you've contacted</h2></div>
-        <div id="contacted">${contactedHtml(contacted)}</div>
-      </section>
-      <section aria-labelledby="roommates-heading">
-        <div class="heading-row">
-          <div class="section-heading"><h2 id="roommates-heading">Possible roommates${demo ? ` ${demoTag}` : ""}</h2><span class="muted small" id="roommate-count">${demo && !mates.needsPreferences ? `${mates.roommates.length} of ${mates.total} demo profiles are compatible` : mates.roommates.length ? plural(mates.roommates.length, "person", "people") : ""}</span></div>
-          ${demo ? `<a class="btn btn-quiet btn-small" href="/demo/people">Browse all demo profiles</a>` : ""}
-        </div>
-        <div id="roommates">${roommatesHtml(mates)}</div>
-      </section>
-      <section aria-labelledby="requests-heading">
-        <div class="section-heading"><h2 id="requests-heading">Roommate requests</h2><span class="count" id="req-count"></span></div>
-        <div id="requests-body"><p class="small muted">Loading…</p></div>
-      </section>`,
-      mount: loadRequests,
-    };
-  }
-
-  // Open or close the questionnaire on the renter page.
-  function togglePrefsForm() {
-    const form = document.getElementById("prefs-form");
-    if (!form) return;
-    form.hidden = !form.hidden;
-    const opener = document.querySelector('.summary [data-action="edit-prefs"]');
-    if (opener) {
-      opener.setAttribute("aria-expanded", String(!form.hidden));
-      opener.textContent = form.hidden ? "Edit preferences" : "Close";
-    }
-    if (!form.hidden) {
-      form.scrollIntoView({ block: "start", behavior: "smooth" });
-      form.querySelector("input").focus({ preventScroll: true });
-    }
+        </form>`,
+    });
   }
 
   async function submitPrefs(form) {
@@ -2726,13 +2688,494 @@
     try {
       await api("/api/renter/preferences", { method: "PUT", body });
       setFlash("Preferences saved. Your matches are up to date.");
-      render(true);
+      navigate(PREFS_BACK[form.dataset.back] ? form.dataset.back : "/roommates");
     } catch (e) {
       if (e.status === 401) return showView(errorView(e));
       showErrors(form, e);
       btn.disabled = false;
       btn.textContent = label;
     }
+  }
+
+  // ── Roommates, Rooms, Requests and Saved ("Gen Z mode", 2026-11-14) ─────────────────────────────────────────
+  // These pages share one compact header (logo, Roommates / Rooms, messages, the account menu), a simple footer and
+  // the home page's palette. Styles live under .rm-* in styles.css and apply while <body data-page="people"> is set.
+  // What used to be the long "My matches" page (/renter) is split up, and its old addresses redirect (see route()):
+  //   /roommates/for-you, /roommates/explore   possible roommates; For you = the renter's matches (the same results
+  //                                            as before), Explore = profiles anyone may browse (Demo mode only so far)
+  //   /rooms                                   rooms that match the saved preferences; Explore is the Listings page
+  //   /requests/rooms, /requests/people        landlords contacted; roommate requests and messages
+  //   /saved                                   saved rooms and people (the same list as the assistant's Saved)
+  //   /preferences                             the questionnaire (above)
+  const RM_ICONS = {
+    chat: '<path d="M21 11.5a8.4 8.4 0 0 1-12.2 7.5L3 20.5l1.6-5.2A8.4 8.4 0 1 1 21 11.5Z"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.6-3.9 3.7-6.5 7.5-6.5s6.9 2.6 7.5 6.5"/>',
+    bookmark: '<path d="M7 3.5h10a1 1 0 0 1 1 1v16l-6-4-6 4v-16a1 1 0 0 1 1-1Z"/>',
+    sparkle: '<path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9Z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8Z"/>',
+    filters: '<path d="M4 6.5h16M7 12h10M10 17.5h4"/>',
+    sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  };
+  const rmIcon = (name, size = 20, filled = false) =>
+    `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${RM_ICONS[name]}</svg>`;
+  const rmCurrent = (yes) => (yes ? ' aria-current="page"' : "");
+
+  // The account menu: the same destinations as the top bar and the home page's menu, plus Saved, Requests and Demo
+  // mode. Opened by the lime button; Escape or a click outside closes it (toggleHomeMenu).
+  function rmMenu() {
+    const u = me.user;
+    const role = u && u.accountType;
+    const link = (href, label, extra = "") => `<a class="rm-menu-item" href="${href}"${extra}>${label}</a>`;
+    let items = "";
+    if (role === "renter")
+      items =
+        link("/account", "Profile &amp; settings") +
+        link("/preferences", "Preferences") +
+        link("/saved", "Saved") +
+        `<p class="rm-menu-label" id="rm-menu-req">Requests</p>
+         <div class="rm-menu-sub" role="group" aria-labelledby="rm-menu-req">${link("/requests/rooms", "Rooms")}${link("/requests/people", `People<span class="rm-badge rm-badge-inline" data-rm-badge hidden></span>`)}</div>` +
+        link("/assistant", "Assistant");
+    else if (role === "landlord") items = link("/landlord", "Dashboard") + link("/account", "Profile &amp; settings");
+    else if (u) items = link("/welcome", "Get started") + link("/account", "Profile &amp; settings");
+    else items = link("/signin", "Sign in") + link("/signup?as=renter", "Create an account", ' data-path="renter"');
+    if (u && u.isAdmin) items += link("/admin", "Admin");
+    return `
+      <div class="rm-menu" id="rm-menu" hidden>
+        ${u ? `<p class="rm-menu-who"><strong>${esc(u.name || "Your account")}</strong><span>${esc(u.email)}</span></p>` : ""}
+        <nav aria-label="Account">${items}</nav>
+        <div class="rm-menu-foot">
+          ${cfg.demoData ? `<div class="rm-menu-demo">${demoSwitchHtml()}<span>${demoOn() ? "On: made-up people and rooms are shown." : "Try coHabit with made-up people and rooms."}</span></div>` : ""}
+          <button class="rm-menu-item" type="button" data-action="survey-open" aria-haspopup="dialog">Quick check-in</button>
+          <p class="rm-menu-legal"><a href="/terms">Terms</a> &amp; <a href="/privacy">Privacy</a></p>
+          ${u ? `<button class="rm-menu-item rm-menu-out" type="button" data-action="sign-out">Sign out</button>` : ""}
+        </div>
+      </div>`;
+  }
+
+  function rmHeader(active) {
+    const u = me.user;
+    const renter = isRenter();
+    const flag = demoOn() ? `<span class="rm-demo-flag" title="Demo mode is on: the people and rooms shown are made up">Demo</span>` : "";
+    const messages = renter
+      ? `<a class="rm-icon-btn" href="/requests/people" aria-label="Messages and roommate requests" title="Messages"${rmCurrent(active === "requests")}>${rmIcon("chat")}<span class="rm-badge" data-rm-badge aria-hidden="true" hidden></span></a>`
+      : "";
+    return `
+      <header class="rm-top">
+        <a class="rm-logo" href="/" aria-label="coHabit, home">co<span class="rm-logo-h" aria-hidden="true">H</span><span class="sr-only">H</span>abit</a>
+        <nav class="rm-switch" aria-label="Browse">
+          <a class="rm-switch-link" href="/roommates"${rmCurrent(active === "roommates")}>Roommates</a>
+          <a class="rm-switch-link" href="${renter ? "/rooms" : "/listings"}"${rmCurrent(active === "rooms")}>Rooms</a>
+        </nav>
+        <div class="rm-actions">
+          ${flag}${messages}
+          <button class="rm-acct" type="button" data-action="home-menu" aria-expanded="false" aria-controls="rm-menu" aria-label="${u ? `Account menu for ${esc(u.name || u.email)}` : "Account menu"}" title="Account">${rmIcon("user", 21)}</button>
+          ${rmMenu()}
+        </div>
+      </header>`;
+  }
+
+  const rmFooter = () => `
+      <footer class="rm-foot">
+        <span>coHabit · Rooms. Roommates. Your vibe.</span>
+        <nav aria-label="Footer"><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+      </footer>`;
+
+  // One frame for these pages. The shared top bar and footer are hidden while it shows.
+  const rmPage = ({ title, active, body, mount }) => ({
+    title,
+    page: "people",
+    html: `<div class="rm-page">${rmHeader(active)}<div class="rm-main">${body}</div>${rmFooter()}</div>`,
+    mount: () => {
+      if (isRenter() && mount !== loadRequests) api("/api/roommates/requests").then((d) => setRmBadge(d.incoming.length)).catch(() => {});
+      if (mount) mount();
+    },
+  });
+
+  // New roommate requests: a number on the messages icon, in the menu and on the People tab of Requests.
+  function setRmBadge(n) {
+    document.querySelectorAll("[data-rm-badge]").forEach((el) => {
+      el.hidden = !n;
+      el.textContent = n ? String(n) : "";
+    });
+    const msg = document.querySelector(".rm-icon-btn");
+    if (msg) msg.setAttribute("aria-label", n ? `Messages and roommate requests, ${plural(n, "new request", "new requests")}` : "Messages and roommate requests");
+  }
+
+  const rmDemoNote = (text) => `<p class="rm-demo-note" role="note"><span class="rm-demo-flag">Demo</span><span>${text} Turn Demo mode off in the account menu.</span></p>`;
+
+  // ── Roommates: For you (the renter's matches) and Explore (profiles anyone may browse) ──
+  const RM_FILTERS0 = { q: "", area: "", month: "", budget: "", level: "", sleep_schedule: "", cleanliness: "", noise: "", pets: "", smoking: "", only: "", sort: "best" };
+  const rmFilters = { ...RM_FILTERS0 }; // temporary: kept while browsing, never saved
+  let rmFiltersOpen = false;
+  let rmView = null; // { tab, data, demo }
+
+  // The lifestyle tag the server writes for each answer (src/roommates.js lifestyleTags), so a filter can match
+  // people who share their details without seeing their raw answers.
+  const LIFE_TAGS = {
+    sleep_schedule: { early: "Early bird", flexible: "Flexible sleeper", late: "Night owl" },
+    cleanliness: { relaxed: "Relaxed about tidiness", average: "Average tidiness", tidy: "Very tidy" },
+    noise: { quiet: "Likes it quiet", moderate: "Some noise is fine", lively: "Likes a lively home" },
+    pets: { no_pets: "No pets, please", ok_with_pets: "OK with pets", have_pets: "Has a pet" },
+    smoking: { no_smoking: "No smoking", outside_ok: "Smoking outside is OK", smoker: "Smokes" },
+  };
+  const MONTH_NUM = Object.fromEntries(MONTHS.map((m, i) => [m, String(i + 1).padStart(2, "0")]));
+  // What a card can say about a person: the made-up profiles' answers, or only what a real person chose to share.
+  function rmFacts(c) {
+    const a = c.answers;
+    const d = c.details;
+    const nums = d && d.budget ? (d.budget.match(/\$[\d,]+/g) || []).map((n) => Number(n.replace(/[$,]/g, ""))) : [];
+    const [mon, year] = d && d.moveIn ? d.moveIn.split(" ") : [];
+    return {
+      areas: a && a.looking_in ? a.looking_in : d && d.area ? d.area.split(/,\s*/) : [],
+      month: a ? a.move_in_month : MONTH_NUM[mon] && year ? `${year}-${MONTH_NUM[mon]}` : "",
+      budgetMin: a ? a.budget_min || 0 : nums.length ? (/^Up to/.test(d.budget) ? 0 : nums[0]) : null,
+      tags: d && d.lifestyle ? d.lifestyle : [],
+    };
+  }
+
+  const rmPeople = () => (!rmView || !rmView.data ? [] : rmView.tab === "explore" ? rmView.data.people || [] : rmView.data.roommates || []);
+  const rmFiltersActive = () => Object.keys(RM_FILTERS0).filter((k) => k !== "sort" && rmFilters[k] !== RM_FILTERS0[k]).length;
+
+  function rmFiltered() {
+    const f = rmFilters;
+    const q = f.q.trim().toLowerCase();
+    const list = rmPeople().filter((c) => {
+      const x = rmFacts(c);
+      const text = `${c.firstName} ${c.about || ""} ${c.intro || ""} ${(c.interests || []).join(" ")} ${x.areas.join(" ")} ${x.tags.join(" ")} ${(c.highlights || []).join(" ")}`.toLowerCase();
+      return (
+        (!q || text.includes(q)) &&
+        (!f.area || x.areas.includes(f.area)) &&
+        (!f.month || x.month === f.month) &&
+        (!f.budget || (x.budgetMin != null && x.budgetMin <= Number(f.budget))) &&
+        (!f.level || (c.program && levelOf(c.program) === f.level)) &&
+        Object.keys(LIFE_TAGS).every((k) => !f[k] || (c.answers ? c.answers[k] === f[k] : x.tags.includes(LIFE_TAGS[k][f[k]]))) &&
+        (!f.only || c.compatible === true || c.score != null)
+      );
+    });
+    const byName = (a, b) => a.firstName.localeCompare(b.firstName);
+    const order =
+      f.sort === "name"
+        ? byName
+        : f.sort === "month"
+          ? (a, b) => (rmFacts(a).month || "9999").localeCompare(rmFacts(b).month || "9999") || byName(a, b)
+          : (a, b) => (b.score ?? -1) - (a.score ?? -1) || byName(a, b);
+    return list.sort(order);
+  }
+
+  const rmTint = (name) => `rm-tint-${[...name].reduce((n, ch) => n + ch.charCodeAt(0), 0) % 4}`;
+  // Bookmark: saves through the same saved options as everywhere else. Made-up profiles only for now: real people
+  // can only be saved from the assistant's results (the save needs the assistant's reference for them).
+  function rmSaveIcon(kind, id, firstName) {
+    const name = esc(firstName);
+    if (!me.user) return `<a class="rm-save" href="/signin?next=${encodeURIComponent(location.pathname)}" aria-label="Sign in to save ${name}" title="Sign in to save">${rmIcon("bookmark", 20)}</a>`;
+    if (!isRenter()) return "";
+    const savedId = savedIndex.get(`${kind}:${id}`);
+    return `<button class="rm-save" type="button" data-action="demo-save" data-style="icon" data-kind="${kind}" data-target="${esc(id)}" data-name="${name}"${savedId ? ` data-saved="${esc(savedId)}"` : ""} aria-pressed="${!!savedId}" aria-label="Save ${name}" title="${savedId ? "Saved. Click to remove." : "Save. Nobody is told."}">${rmIcon("bookmark", 20, !!savedId)}</button>`;
+  }
+
+  // The main button: Say hey (the same introduction and request as before), Respond, Message, or the status.
+  function rmPrimary(c, key) {
+    const r = c.request;
+    if (!r)
+      return `<button class="rm-hey" type="button" data-action="connect-open" data-key="${esc(key)}" aria-label="Say hey to ${esc(c.firstName)}${c.demo ? " (preview)" : ""}"><span>Say hey</span><span class="rm-hey-arrow">${rmIcon("arrow", 18)}</span></button>`;
+    if (r.status === "pending" && r.direction === "in") return `<button class="rm-hey rm-hey-plain" type="button" data-action="person-details" data-key="${esc(key)}">Respond</button>`;
+    if (r.status === "accepted") return `<button class="rm-hey rm-hey-plain" type="button" data-action="messages-open" data-id="${esc(r.id)}" data-name="${esc(c.firstName)}">Message</button>`;
+    return `<span class="rm-status">${r.status === "pending" ? "Request sent" : "Declined"}</span>`;
+  }
+
+  // A photo-led card. Real renters have no profile photos on coHabit, so they get their initials; the made-up
+  // profiles have illustrated avatars. Only what's known is shown: area, budget and move-in when shared, a few
+  // lifestyle tags (or what you have in common), and the score where matching worked one out. The rest is in the
+  // profile (Details), opened from the picture or the name.
+  function rmCard(c, key) {
+    chatCards.set(key, c);
+    const name = esc(c.firstName);
+    const id = `rmn-${key.replace(/[^a-z0-9-]/gi, "")}`;
+    const d = c.details;
+    const pic = c.avatar
+      ? `<span class="rm-art">${avatarSvg(c.avatar).replace("<svg ", '<svg preserveAspectRatio="xMidYMid slice" ')}</span>`
+      : `<span class="rm-initials ${rmTint(c.firstName)}">${esc(initials(c.firstName))}</span>`;
+    const score = c.score != null ? `<span class="rm-score">${c.score}% match</span>` : c.compatible === false ? `<span class="rm-score is-off">Not a match</span>` : "";
+    const terms = d ? [d.budget && d.budget.replace(/ a month$/, "/mo"), d.moveIn && `Move-in ${d.moveIn}`].filter(Boolean) : [];
+    const tags = (d && d.lifestyle && d.lifestyle.length ? d.lifestyle : c.highlights || []).slice(0, 3);
+    return `
+      <li>
+        <article class="rm-card" aria-labelledby="${id}">
+          <div class="rm-pic">
+            <button class="rm-pic-btn" type="button" data-action="person-details" data-key="${esc(key)}" tabindex="-1" aria-hidden="true">${pic}</button>
+            ${score}
+            ${c.demo ? `<span class="rm-chip rm-chip-dark" title="${c.avatar ? "A made-up profile with an illustrated avatar" : "A made-up profile"}">Demo</span>` : c.sample ? `<span class="rm-chip" title="A fictional sample renter">Sample</span>` : ""}
+          </div>
+          <div class="rm-body">
+            <h3 class="rm-name" id="${id}"><button class="rm-name-btn" type="button" data-action="person-details" data-key="${esc(key)}" aria-label="${name}: view profile">${name}</button></h3>
+            ${d && d.area ? `<p class="rm-meta">${esc(d.area)}</p>` : ""}
+            ${terms.length ? `<p class="rm-meta">${terms.map((m) => `<span>${esc(m)}</span>`).join("")}</p>` : ""}
+            ${tags.length ? `<ul class="rm-tags" aria-label="${d && d.lifestyle && d.lifestyle.length ? "Lifestyle" : "What you have in common"}">${tags.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+            <div class="rm-row">${rmPrimary(c, key)}</div>
+          </div>
+          ${c.demo ? rmSaveIcon("person", c.id, c.firstName) : ""}
+        </article>
+      </li>`;
+  }
+
+  // Why a tab has no cards: each situation says what it is and what to do next.
+  function rmEmpty() {
+    const v = rmView;
+    const d = v.data;
+    const renter = isRenter();
+    if (v.tab === "for-you") {
+      if (!me.user)
+        return emptyState("People picked for you", "Create a free renter account and answer a few questions to see roommates who fit how you live.", `<a class="btn" href="/signup?as=renter" data-path="renter">Create an account</a><a class="btn btn-quiet" href="/signin?next=/roommates/for-you">Sign in</a>`);
+      if (!renter) return emptyState("For you is for renter accounts", "Roommate matching compares renters' answers. You can still browse Explore.", `<a class="btn btn-quiet" href="/roommates/explore">Go to Explore</a>`);
+      if (d.needsPreferences) return emptyState("Save your preferences first", "Roommate matching uses your budget, move-in month, area and lifestyle answers.", `<a class="btn" href="/preferences?from=/roommates/for-you">Set my preferences</a>`);
+      if (!d.optedIn)
+        return emptyState("Roommate matching is off", "Turn on “Show me to compatible renters” in Preferences to see renters you'd get along with. You only see people who turned it on too.", `<a class="btn" href="/preferences?from=/roommates/for-you#roommate-matching">Turn it on in Preferences</a>`);
+      if (!d.roommates.length)
+        return d.demo
+          ? emptyState("No compatible demo profiles", "None of the made-up people shares your area, timing and lifestyle closely enough. Explore shows them all, with why they don't match.", `<a class="btn btn-quiet" href="/roommates/explore">Explore all demo profiles</a>`)
+          : emptyState("No compatible renters yet", "Nobody else who turned on roommate matching has your area and move-in month right now. Check back as more people join.", `<a class="btn btn-quiet" href="/preferences?from=/roommates/for-you">Review my preferences</a>`);
+      return "";
+    }
+    if (!v.demo)
+      return emptyState(
+        "No public profiles yet",
+        "coHabit doesn't publish renters' profiles. Real renters are only shown, under For you, to compatible renters who also turned on roommate matching. To see how browsing works, try Demo mode with made-up profiles.",
+        `${cfg.demoData ? `<button class="btn" type="button" data-action="demo-switch">Try Demo mode</button>` : ""}${renter ? `<a class="btn btn-quiet" href="/roommates/for-you">See For you</a>` : !me.user ? `<a class="btn btn-quiet" href="/signup?as=renter" data-path="renter">Create an account</a>` : ""}`
+      );
+    if (!rmPeople().length) return emptyState("No demo profiles", "The made-up profiles aren't available right now.");
+    return "";
+  }
+
+  function rmCountText(shown) {
+    const v = rmView;
+    const d = v.data;
+    const all = rmPeople().length;
+    const filtered = rmFiltersActive() ? ` · ${shown} shown with your filters <button class="rm-link" type="button" data-action="rm-filters-clear">Clear filters</button>` : "";
+    if (v.tab === "explore") return `${d.shown || all} made-up profiles${d.compared ? ` · ${d.people.filter((p) => p.compatible).length} compatible with you` : ""} · ${d.hidden || 0} more chose not to be found${filtered}`;
+    return `${d.demo ? `${plural(all, "made-up profile", "made-up profiles")} of ${d.total}` : plural(all, "person", "people")} ${all === 1 ? "matches" : "match"} your preferences${filtered}`;
+  }
+
+  function rmGridHtml() {
+    for (const k of [...chatCards.keys()]) if (k.startsWith("rm:")) chatCards.delete(k);
+    const empty = rmEmpty();
+    if (empty) return empty;
+    const people = rmPeople();
+    const list = rmFiltered();
+    if (!list.length)
+      return emptyState("Nobody matches these filters", "Try another area or month, a higher budget, or fewer lifestyle filters.", `<button class="btn btn-quiet" type="button" data-action="rm-filters-clear">Clear filters</button>`);
+    return `<ul class="rm-grid" role="list">${list.map((c) => rmCard(c, `rm:${people.indexOf(c)}`)).join("")}</ul>`;
+  }
+
+  // Redraws the cards and counts after a filter, a request or a save changes (the filter form stays as it is).
+  function rmRefresh() {
+    const grid = document.getElementById("rm-grid");
+    if (!grid || !rmView) return;
+    grid.innerHTML = rmGridHtml();
+    const count = document.getElementById("rm-count");
+    if (count) count.innerHTML = rmEmpty() ? "" : rmCountText(rmFiltered().length);
+    const n = document.getElementById("rm-filter-count");
+    if (n) n.textContent = rmFiltersActive() || "";
+  }
+
+  function rmFiltersHtml() {
+    const f = rmFilters;
+    const list = rmPeople();
+    const facts = list.map(rmFacts);
+    const areas = [...new Set(facts.flatMap((x) => x.areas))].sort((a, b) => a.localeCompare(b));
+    const months = [...new Set(facts.map((x) => x.month).filter(Boolean))].sort();
+    const scored = list.some((c) => c.score != null);
+    const hidden = list.some((c) => !c.answers && !c.details);
+    const life = (k, label, opts) => filterSelect(k, label, opts, f[k]);
+    return `
+      <form class="filters rm-filters" id="rm-filters" role="search" aria-label="Filter people" novalidate${rmFiltersOpen ? "" : " hidden"}>
+        <label class="filter filter-wide"><span>Search</span><input type="search" name="q" value="${esc(f.q)}" placeholder="Name, area or interest" autocomplete="off" /></label>
+        ${areas.length ? filterSelect("area", "Looking in", areas.map((a) => [a, a]), f.area) : ""}
+        ${months.length ? filterSelect("month", "Move-in month", months.map((m) => [m, fmtDate(m)]), f.month) : ""}
+        ${filterSelect("budget", "Budget up to", [800, 1000, 1200, 1500, 2000].map((n) => [String(n), `${money(n)}/mo`]), f.budget)}
+        ${list.some((c) => c.program) ? filterSelect("level", "Program", LEVELS, f.level) : ""}
+        ${life("sleep_schedule", "Sleep", CHOICES.sleep_schedule[1])}
+        ${life("cleanliness", "Tidiness", CHOICES.cleanliness[1])}
+        ${life("noise", "Noise", CHOICES.noise[1])}
+        ${life("pets", "Pets", [["no_pets", "No pets, please"], ["ok_with_pets", "OK with pets"], ["have_pets", "Has a pet"]])}
+        ${life("smoking", "Smoking", [["no_smoking", "No smoking"], ["outside_ok", "OK outside"], ["smoker", "Smokes"]])}
+        ${rmView.tab === "explore" && rmView.data.compared ? `<label class="filter filter-check"><input type="checkbox" name="only" value="1"${f.only ? " checked" : ""} /><span>Only compatible with me</span></label>` : ""}
+        <label class="filter"><span>Sort by</span><select name="sort">${scored ? opt("best", "Best match", f.sort) : ""}${opt("name", "Name", f.sort)}${opt("month", "Move-in month", f.sort)}</select></label>
+        <p class="rm-filters-note">Filters are just for browsing: they don't change your saved preferences.${hidden ? " Area, month, budget and lifestyle filters only match people who share those details." : ""}</p>
+        <div class="rm-filters-actions">
+          <button class="rm-tool" type="button" data-action="rm-filters-clear">Clear filters</button>
+          <button class="rm-tool rm-tool-dark" type="button" data-action="rm-filters" data-close="1">Done</button>
+        </div>
+      </form>`;
+  }
+
+  function readRmFilters(form) {
+    for (const k of Object.keys(RM_FILTERS0)) {
+      const el = form.elements[k];
+      if (el) rmFilters[k] = el.type === "checkbox" ? (el.checked ? "1" : "") : el.value;
+    }
+    rmRefresh();
+  }
+
+  function toggleRmFilters(close) {
+    const form = document.getElementById("rm-filters");
+    const button = document.getElementById("rm-filters-btn");
+    if (!form || !button) return;
+    rmFiltersOpen = close ? false : !rmFiltersOpen;
+    form.hidden = !rmFiltersOpen;
+    button.setAttribute("aria-expanded", String(rmFiltersOpen));
+    if (rmFiltersOpen) form.elements.q.focus();
+    else button.focus();
+  }
+
+  function clearRmFilters() {
+    Object.assign(rmFilters, RM_FILTERS0);
+    const form = document.getElementById("rm-filters");
+    if (form) {
+      form.outerHTML = rmFiltersHtml();
+      if (rmFiltersOpen) document.getElementById("rm-filters").elements.q.focus();
+    }
+    rmRefresh();
+    if (!rmFiltersOpen) document.getElementById("rm-filters-btn")?.focus();
+  }
+
+  async function roommatesPage(tabParam) {
+    if (me.user && !me.user.accountType) {
+      navigate("/welcome?next=" + encodeURIComponent(location.pathname), true);
+      return null;
+    }
+    const renter = isRenter();
+    const tab = tabParam || (renter ? "for-you" : "explore");
+    const demo = demoOn();
+    let data = null;
+    if (tab === "for-you" && renter) {
+      [data] = await Promise.all([api("/api/renter/roommates"), loadSavedIndex()]);
+      lastRoommates = data;
+    } else if (tab === "explore" && demo) {
+      [data] = await Promise.all([api("/api/demo/people"), loadSavedIndex()]);
+    }
+    rmView = { tab, data, demo: tab === "for-you" ? !!(data && data.demo) : demo };
+    const showsList = !rmEmpty();
+    const self = tab === "explore" ? "/roommates/explore" : "/roommates/for-you";
+    const demoText =
+      tab === "explore"
+        ? "These are made-up people with illustrated avatars, not real students. Say hey is a preview: nothing is sent."
+        : "For you shows made-up profiles matched to your real preferences with the usual rules. Say hey is a preview: nothing is sent.";
+    return rmPage({
+      title: "Roommates",
+      active: "roommates",
+      body: `
+        <div class="rm-head">
+          <h1 class="rm-title" tabindex="-1">Meet your <em>kind of people.</em></h1>
+          ${me.user && !renter ? "" : `<a class="rm-vibe" href="/assistant?focus=roommates" title="Opens the assistant on your roommate results">${rmIcon("sparkle", 18)}<span>Ask Vibe</span></a>`}
+        </div>
+        <div class="rm-bar">
+          <nav class="rm-tabs" aria-label="Roommate views">
+            <a href="/roommates/for-you"${rmCurrent(tab === "for-you")}>For you</a>
+            <a href="/roommates/explore"${rmCurrent(tab === "explore")}>Explore</a>
+          </nav>
+          <div class="rm-tools">
+            ${showsList ? `<button class="rm-tool" type="button" id="rm-filters-btn" data-action="rm-filters" aria-expanded="${rmFiltersOpen}" aria-controls="rm-filters">${rmIcon("filters", 18)}<span>Filters</span><span class="rm-tool-count" id="rm-filter-count" aria-label="active filters">${rmFiltersActive() || ""}</span></button>` : ""}
+            ${renter ? `<a class="rm-tool" href="/preferences?from=${self}">${rmIcon("sliders", 18)}<span>Preferences</span></a>` : ""}
+          </div>
+        </div>
+        ${rmView.demo && showsList ? rmDemoNote(demoText) : ""}
+        ${showsList ? rmFiltersHtml() : ""}
+        <p class="rm-count" id="rm-count" role="status"></p>
+        <div id="rm-grid">${rmGridHtml()}</div>`,
+      mount: rmRefresh,
+    });
+  }
+
+  // ── Rooms: For you (rooms that match the saved preferences); Explore is the Listings page for now ──
+  async function roomsPage() {
+    if (!me.user || me.user.accountType === "landlord") {
+      navigate("/listings", true);
+      return null;
+    }
+    const blocked = gate("renter");
+    if (blocked !== undefined) return blocked;
+    const [matches] = await Promise.all([api("/api/renter/matches"), loadMyInterests(), loadSavedIndex()]);
+    const demo = !!matches.demo;
+    const n = matches.matches.length;
+    return rmPage({
+      title: "Rooms for you",
+      active: "rooms",
+      body: `
+        <div class="rm-head">
+          <h1 class="rm-title" tabindex="-1">Rooms that <em>fit you.</em></h1>
+        </div>
+        <div class="rm-bar">
+          <nav class="rm-tabs" aria-label="Room views">
+            <a href="/rooms" aria-current="page">For you</a>
+            <a href="/listings">Explore</a>
+          </nav>
+          <div class="rm-tools">
+            ${n > 1 ? sortSelect("match-sort", matchSort, [["best", "Best match"], ["rent", demo ? "Lowest rent per person" : "Lowest rent"], ["date", "Soonest move-in"]]) : ""}
+            <a class="rm-tool" href="/preferences?from=/rooms">${rmIcon("sliders", 18)}<span>Preferences</span></a>
+          </div>
+        </div>
+        ${demo ? rmDemoNote("These are made-up demo listings matched to your real preferences with the same rules. “I'm interested” is a preview: nothing is sent.") : ""}
+        <p class="rm-count" id="match-count" role="status">${matches.needsPreferences ? "" : demo ? `${n} of ${matches.total} demo listings match your preferences` : n ? `${plural(n, "room matches", "rooms match")} your preferences` : ""}</p>
+        <div class="rm-rooms" id="matches">${matchesHtml(matches)}</div>`,
+    });
+  }
+
+  // ── Requests: Rooms (landlords contacted) and People (roommate requests and messages) ──
+  async function requestsPage(kind) {
+    const blocked = gate("renter");
+    if (blocked !== undefined) return blocked;
+    const interests = kind === "rooms" ? await loadMyInterests() : null;
+    const tabs = `
+      <nav class="rm-tabs" aria-label="Request types">
+        <a href="/requests/rooms"${rmCurrent(kind === "rooms")}>Rooms</a>
+        <a href="/requests/people"${rmCurrent(kind === "people")}>People<span class="rm-badge rm-badge-inline" data-rm-badge aria-hidden="true" hidden></span></a>
+      </nav>`;
+    const note = demoOn() ? `<p class="rm-count">Demo mode is on, but requests are always real: demo previews are never sent, so they don't show here.</p>` : "";
+    return rmPage({
+      title: kind === "rooms" ? "Room requests" : "Roommate requests",
+      active: "requests",
+      body: `
+        <div class="rm-head">
+          <div>
+            <h1 class="rm-title rm-title-sm" tabindex="-1">Your <em>requests.</em></h1>
+            <p class="rm-sub">${kind === "rooms" ? "Landlords you told you're interested in a room. They reply by email." : "Roommate introductions you sent and received, and messages once you're connected."}</p>
+          </div>
+        </div>
+        <div class="rm-bar">${tabs}</div>
+        ${note}
+        ${
+          kind === "rooms"
+            ? `<section class="rm-panel" aria-labelledby="contacted-heading"><h2 class="rm-h2" id="contacted-heading">Landlords you've contacted</h2><div id="contacted">${contactedHtml(interests)}</div></section>`
+            : `<section class="rm-panel" aria-labelledby="requests-heading"><h2 class="rm-h2" id="requests-heading">Roommate requests <span class="count" id="req-count"></span></h2><div id="requests-body"><p class="small muted">Loading…</p></div></section>`
+        }`,
+      mount: kind === "people" ? loadRequests : null,
+    });
+  }
+
+  // ── Saved: rooms and people the renter bookmarked (the same list as the assistant's Saved, for the current mode) ──
+  async function savedPage() {
+    const blocked = gate("renter");
+    if (blocked !== undefined) return blocked;
+    const [state] = await Promise.all([api("/api/assistant"), loadMyInterests(), loadSavedIndex()]);
+    me.demo = !!state.demo;
+    for (const k of [...chatCards.keys()]) if (k.startsWith("saved:")) chatCards.delete(k);
+    return rmPage({
+      title: "Saved",
+      active: "",
+      body: `
+        <div class="rm-head">
+          <div>
+            <h1 class="rm-title rm-title-sm" tabindex="-1">Saved for <em>later.</em></h1>
+            <p class="rm-sub">Rooms and people you bookmarked. Nobody is told.</p>
+          </div>
+        </div>
+        ${state.demo ? rmDemoNote("Showing what you saved from made-up profiles and listings. Your real saved items come back when Demo mode is off.") : ""}
+        ${
+          state.saved.length
+            ? `<ul class="side-cards rm-saved" role="list">${state.saved.map(savedCard).join("")}</ul>`
+            : emptyState("Nothing saved yet", "Tap the bookmark on a roommate, or Save on a room, to keep it here.", `<a class="btn btn-quiet" href="/roommates">Browse roommates</a><a class="btn btn-quiet" href="/rooms">Rooms for you</a>`)
+        }`,
+    });
   }
 
   // ── Demo mode across the site: Listings, My matches, the assistant and the demo profile page ──
@@ -2772,7 +3215,9 @@
     try {
       await setDemo(on);
       toast(on ? "Demo mode on: made-up listings and people." : "Demo mode off: real listings and people again.");
-      render(false);
+      const fromMenu = !!(button && button.closest(".rm-menu"));
+      await render(false);
+      if (fromMenu) document.querySelector(".rm-acct")?.focus();
     } catch (e) {
       if (button) button.disabled = false;
       if (e.status === 401) return showView(errorView(e));
@@ -2806,14 +3251,17 @@
     try {
       if (saved) await api(`/api/assistant/saved/${encodeURIComponent(saved)}`, { method: "DELETE" });
       else await api("/api/assistant/saved", { method: "POST", body: kind === "room" ? { kind, unitId: target } : { kind, demoId: target } });
-      toast(saved ? "Removed from saved." : "Saved. It's under Saved in the assistant while Demo mode is on.");
+      toast(saved ? "Removed from saved." : "Saved. Find it under Saved in your account menu while Demo mode is on.");
     } catch (e) {
       button.disabled = false;
       if (e.status === 401) return showView(errorView(e));
       return toast(e.message);
     }
     await loadSavedIndex();
-    document.querySelectorAll(`[data-action="demo-save"][data-target="${CSS.escape(target)}"]`).forEach((b) => (b.outerHTML = demoSaveButton(kind, target)));
+    const host = button.closest("article, .details-body");
+    const icon = button.dataset.style === "icon";
+    document.querySelectorAll(`[data-action="demo-save"][data-target="${CSS.escape(target)}"]`).forEach((b) => (b.outerHTML = b.dataset.style === "icon" ? rmSaveIcon(kind, target, b.dataset.name) : demoSaveButton(kind, target)));
+    host?.querySelector(`[data-action="demo-save"]${icon ? '[data-style="icon"]' : ":not([data-style])"}`)?.focus();
     if (document.getElementById("chat-log")) reloadChat();
   }
 
@@ -2950,99 +3398,9 @@
     marker.togglePopup();
   }
 
-  // ── All demo profiles: the 197 that chose to be found, with filters and counts ──
-  const PEOPLE_FILTERS0 = { q: "", hood: "", month: "", level: "", sleep_schedule: "", cleanliness: "", noise: "", pets: "", smoking: "", only: "", sort: "best" };
-  const peopleFilters = { ...PEOPLE_FILTERS0 };
-  let demoPeople = null;
+  // Program levels of the made-up profiles, for the Program filter on Roommates.
   const LEVELS = [["senior", "Seniors"], ["masters", "Master's students"], ["phd", "PhD students"], ["mba", "MBA students"]];
   const levelOf = (program) => (/^MBA|MBA student/.test(program) ? "mba" : /PhD/.test(program) ? "phd" : /master's/i.test(program) ? "masters" : "senior");
-
-  function filteredPeople() {
-    const f = peopleFilters;
-    const q = f.q.trim().toLowerCase();
-    const list = demoPeople.people.filter((p) => {
-      const a = p.answers;
-      return (
-        (!q || `${p.firstName} ${p.program} ${(p.interests || []).join(" ")} ${p.intro || ""}`.toLowerCase().includes(q)) &&
-        (!f.hood || a.looking_in.includes(f.hood)) &&
-        (!f.month || a.move_in_month === f.month) &&
-        (!f.level || levelOf(p.program) === f.level) &&
-        ["sleep_schedule", "cleanliness", "noise", "pets", "smoking"].every((k) => !f[k] || a[k] === f[k]) &&
-        (!f.only || p.compatible === true)
-      );
-    });
-    const byName = (a, b) => a.firstName.localeCompare(b.firstName);
-    const order =
-      f.sort === "name"
-        ? byName
-        : f.sort === "month"
-          ? (a, b) => a.answers.move_in_month.localeCompare(b.answers.move_in_month) || byName(a, b)
-          : (a, b) => (b.score ?? -1) - (a.score ?? -1) || byName(a, b);
-    return list.sort(order);
-  }
-  const peopleFiltersActive = () => Object.keys(PEOPLE_FILTERS0).some((k) => k !== "sort" && peopleFilters[k] !== PEOPLE_FILTERS0[k]);
-
-  const peopleCount = (list) =>
-    `Showing ${list.length} of ${demoPeople.shown} demo profiles${demoPeople.compared ? ` · ${demoPeople.people.filter((p) => p.compatible).length} compatible with your preferences` : ""} · ${demoPeople.hidden} more chose not to be found${peopleFiltersActive() ? ` <button class="link-button" type="button" data-action="people-filters-clear">Clear filters</button>` : ""}`;
-  function demoPeopleGrid() {
-    const list = filteredPeople();
-    const count = document.getElementById("people-count");
-    if (count) count.innerHTML = peopleCount(list);
-    for (const k of [...chatCards.keys()]) if (k.startsWith("ppl:")) chatCards.delete(k);
-    if (!list.length)
-      return emptyState("No demo profiles match these filters", "Try another month or neighborhood, or clear the filters.", `<button class="btn btn-quiet" type="button" data-action="people-filters-clear">Clear filters</button>`);
-    return `<ul class="res-grid" role="list">${list.map((p) => personCard(p, `ppl:${p.id}`)).join("")}</ul>`;
-  }
-
-  async function demoPeoplePage() {
-    if (!cfg.demoData) return messageView("Demo mode isn't available", "The made-up profiles are switched off on this site right now.", `<a class="btn" href="/listings">See listings</a>`);
-    const head = (sub) => `
-      <div class="heading-row">
-        <div class="heading"><h1 tabindex="-1">Demo roommate profiles</h1><p class="muted">${sub}</p></div>
-        ${demoSwitchHtml()}
-      </div>`;
-    if (!demoOn())
-      return {
-        title: "Demo profiles",
-        html: `${head("Made-up seniors and grad students looking in Waltham, for trying coHabit.")}${emptyState("Demo mode is off", "Turn on Demo mode to browse the made-up profiles. Real people are only shown through roommate matching, never here.", `<button class="btn" type="button" data-action="demo-switch">Turn on Demo mode</button>`)}`,
-      };
-    const [d] = await Promise.all([api("/api/demo/people"), loadSavedIndex()]);
-    demoPeople = d;
-    const f = peopleFilters;
-    const months = [...new Set(d.people.map((p) => p.answers.move_in_month))].sort();
-    const life = (k, label, opts) => filterSelect(k, label, opts, f[k]);
-    return {
-      title: "Demo profiles",
-      html: `
-      ${head(`${d.shown} made-up seniors and grad students looking in Waltham, for trying coHabit.`)}
-      ${demoBannerHtml("These profiles are fictional people with illustrated avatars, not students.")}
-      ${d.compared ? "" : `<p class="small muted">${isRenter() ? `<a href="/renter">Save your preferences</a> to see who's compatible with you, worked out by coHabit's matching.` : "Sign in as a renter and save your preferences to see who's compatible with you."}</p>`}
-      <form class="filters" id="people-filters" role="search" aria-label="Filter demo profiles" novalidate>
-        <label class="filter filter-wide"><span>Search</span><input type="search" name="q" value="${esc(f.q)}" placeholder="Name, program or interest" autocomplete="off" /></label>
-        ${filterSelect("hood", "Looking in", HOOD_NAMES.map((h) => [h, h]), f.hood)}
-        ${filterSelect("month", "Move-in month", months.map((m) => [m, fmtDate(m)]), f.month)}
-        ${filterSelect("level", "Program", LEVELS, f.level)}
-        ${life("sleep_schedule", "Sleep", CHOICES.sleep_schedule[1])}
-        ${life("cleanliness", "Tidiness", CHOICES.cleanliness[1])}
-        ${life("noise", "Noise", CHOICES.noise[1])}
-        ${life("pets", "Pets", [["no_pets", "No pets, please"], ["ok_with_pets", "OK with pets"], ["have_pets", "Has a pet"]])}
-        ${life("smoking", "Smoking", [["no_smoking", "No smoking"], ["outside_ok", "OK outside"], ["smoker", "Smokes"]])}
-        ${d.compared ? `<label class="filter filter-check"><input type="checkbox" name="only" value="1"${f.only ? " checked" : ""} /><span>Only compatible with me</span></label>` : ""}
-        <label class="filter"><span>Sort by</span><select name="sort">${opt("best", d.compared ? "Best match" : "Name", f.sort)}${opt("name", "Name", f.sort)}${opt("month", "Move-in month", f.sort)}</select></label>
-      </form>
-      <p class="muted small" id="people-count" role="status"></p>
-      <div id="people-grid">${demoPeopleGrid()}</div>`,
-      mount: () => (document.getElementById("people-count").innerHTML = peopleCount(filteredPeople())),
-    };
-  }
-
-  function readPeopleFilters(form) {
-    for (const k of Object.keys(PEOPLE_FILTERS0)) {
-      const el = form.elements[k];
-      if (el) peopleFilters[k] = el.type === "checkbox" ? (el.checked ? "1" : "") : el.value;
-    }
-    document.getElementById("people-grid").innerHTML = demoPeopleGrid();
-  }
 
   // Admin: Demo mode status and removing bookmarks to demo cards.
   function adminDemoHtml(d) {
@@ -3120,7 +3478,6 @@
       el.classList.add("ai-filled");
       filled.push(k);
     }
-    if (prefs.hidden) togglePrefsForm();
     toast(filled.length ? "Filled in from your sentence. Check the answers, then Save." : "Nothing to fill in from that.");
   }
 
@@ -3436,6 +3793,8 @@
     "in:accepted": "Connected",
     "out:declined": "Declined",
     "in:declined": "You declined",
+    "out:withdrawn": "Cancelled",
+    "in:withdrawn": "Cancelled",
   };
   const requestBadge = (r) => (r && REQUEST_BADGE[`${r.direction}:${r.status}`] ? `<span class="badge-status">${REQUEST_BADGE[`${r.direction}:${r.status}`]}</span>` : "");
 
@@ -3598,7 +3957,7 @@
     const items = resShowAll ? people.items : people.items.slice(0, VISIBLE);
     const more = !resShowAll && people.items.length > VISIBLE ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${people.items.length - VISIBLE} more</button>` : "";
     return {
-      head: `<div class="res-head"><div><h2 class="res-title">Roommates</h2><p class="small muted">${people.total === 1 ? "1 person fits" : `${people.total} people fit`}: ${exactSplit(people.total, people.exact, true)}. ${chat.demo ? `Made-up profiles only. <a href="/demo/people">Browse all demo profiles</a>` : "Only students who chose to be found."}</p></div></div>`,
+      head: `<div class="res-head"><div><h2 class="res-title">Roommates</h2><p class="small muted">${people.total === 1 ? "1 person fits" : `${people.total} people fit`}: ${exactSplit(people.total, people.exact, true)}. ${chat.demo ? `Made-up profiles only. <a href="/roommates/explore">Browse all demo profiles</a>` : "Only students who chose to be found."}</p></div></div>`,
       list:
         groupedCards(items, (c) => personCard(c, `res:${c.ref}`), {
           exactLabel: "Strong matches",
@@ -3962,7 +4321,7 @@
     resSelected = null;
     resShowAll = false;
     resMap = null;
-    if (chat.results.goal === "roommates") resTab = "people";
+    if (chat.results.goal === "roommates" || new URLSearchParams(location.search).get("focus") === "roommates") resTab = "people";
     return {
       title: "Assistant",
       html: `
@@ -3984,7 +4343,7 @@
             <details class="fold" id="fold-requests"><summary>Roommate requests <span class="count" id="req-count"></span></summary><div id="requests-body"><p class="small muted">Loading…</p></div></details>
             <details class="fold"><summary>All your answers</summary><div id="side-memory">${memoryHtml()}</div></details>
             <details class="fold"><summary>Saved <span class="count" id="saved-count">${chat.saved.length || ""}</span></summary><div id="side-saved">${savedHtml()}</div></details>
-            <p class="links small">Prefer to browse? <a href="/listings">All listings</a> · <a href="/renter">My matches and questionnaire</a></p>
+            <p class="links small">Prefer to browse? <a href="/roommates">Roommates</a> · <a href="/rooms">Rooms</a> · <a href="/preferences">Preferences</a></p>
           </section>
           <section class="asst-chat" id="pane-chat" aria-labelledby="chat-heading">
             <div class="chat-head">
@@ -4175,7 +4534,7 @@
     const why = !c.theyShare
       ? `${esc(c.firstName)} hasn't chosen to share their budget, area, move-in month or lifestyle answers.`
       : !c.youShare
-        ? `${esc(c.firstName)} shares these with matches who share theirs. Turn on “Share my details with my matches” in <a href="/renter">your preferences</a> to see them.`
+        ? `${esc(c.firstName)} shares these with matches who share theirs. Turn on “Share my details with my matches” in <a href="/preferences#roommate-matching">your preferences</a> to see them.`
         : "";
     // Demo profiles also say what they're looking for (lease, rooms, furnishing); real renters' searches stay private.
     const extra = c.details
@@ -4196,9 +4555,10 @@
         : `<p class="small muted">None: your lifestyle answers match.</p>`
       : `<p class="small muted">${c.differenceCount ? `${plural(c.differenceCount, "lifestyle answer differs", "lifestyle answers differ")}. Talk them through before deciding.` : "None: your lifestyle answers match."}</p>`;
     let actions = "";
-    if (c.demo) actions = `${demoSaveButton("person", c.id)}<button class="btn" type="button" data-action="connect-open" data-key="${esc(key)}">Connect (preview)</button>`;
-    else if (!r) actions = `<button class="btn" type="button" data-action="connect-open" data-key="${esc(key)}">Connect</button>`;
-    else if (r.status === "pending" && r.direction === "out") actions = `<button class="btn btn-quiet" type="button" data-action="req-withdraw" data-id="${esc(r.id)}">Withdraw request</button>`;
+    const connect = key.startsWith("rm:") ? "Say hey" : "Connect";
+    if (c.demo) actions = `${demoSaveButton("person", c.id)}<button class="btn" type="button" data-action="connect-open" data-key="${esc(key)}">${connect} (preview)</button>`;
+    else if (!r) actions = `<button class="btn" type="button" data-action="connect-open" data-key="${esc(key)}">${connect}</button>`;
+    else if (r.status === "pending" && r.direction === "out") actions = `<button class="btn btn-quiet" type="button" data-action="req-withdraw" data-id="${esc(r.id)}">Cancel request</button>`;
     else if (r.status === "pending") actions = `<button class="btn btn-quiet" type="button" data-action="req-decline" data-id="${esc(r.id)}">Decline</button><button class="btn" type="button" data-action="req-accept" data-id="${esc(r.id)}">Accept</button>`;
     else if (r.status === "accepted") actions = `<button class="btn" type="button" data-action="messages-open" data-id="${esc(r.id)}" data-name="${esc(c.firstName)}">Message</button>`;
     return `
@@ -4215,7 +4575,7 @@
         c.compatible === false
           ? `<h3 class="details-h">Why coHabit doesn't match you</h3><ul class="miss-list">${(c.notMatching || []).map((f) => `<li>${esc(f)}</li>`).join("")}</ul>`
           : c.score == null && c.demo
-            ? `<p class="small muted">Not compared with you: ${isRenter() ? `<a href="/renter">save your preferences</a> to see what you have in common.` : "sign in as a renter and save your preferences to see what you have in common."}</p>`
+            ? `<p class="small muted">Not compared with you: ${isRenter() ? `<a href="/preferences">save your preferences</a> to see what you have in common.` : "sign in as a renter and save your preferences to see what you have in common."}</p>`
             : `<h3 class="details-h">What you have in common</h3>
       <ul class="fit-list">${c.fits.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>`
       }
@@ -4295,7 +4655,7 @@
   // Keeps every place a person shows up in step after a request changes.
   function afterPeopleChange(key) {
     if (document.getElementById("res-top")) renderResults();
-    if (document.getElementById("roommates")) document.getElementById("roommates").innerHTML = roommatesHtml(lastRoommates);
+    if (document.getElementById("rm-grid")) rmRefresh();
     const dialog = document.getElementById("details");
     if (dialog.open && dialog.dataset.person && chatCards.get(dialog.dataset.person)) dialog.querySelector(".details-body").innerHTML = personDetailsHtml(chatCards.get(dialog.dataset.person), dialog.dataset.person);
     loadRequests();
@@ -4315,16 +4675,20 @@
     body.innerHTML = requestsHtml(lastRequests);
     const count = document.getElementById("req-count");
     if (count) count.textContent = lastRequests.incoming.length || "";
+    setRmBadge(lastRequests.incoming.length);
     const fold = document.getElementById("fold-requests");
     if (fold && lastRequests.incoming.length) fold.open = true;
   }
 
   function requestsHtml(d) {
     const none = !d.incoming.length && !d.outgoing.length && !d.connected.length && !d.closed.length;
-    if (none) return `<p class="small muted">No requests yet. Tap Connect on a roommate match to introduce yourself.</p>`;
+    if (none) return `<p class="small muted">No requests yet. When you introduce yourself to a possible roommate, or someone introduces themselves to you, it shows up here.</p>`;
+    const when = (r) =>
+      `${r.direction === "out" ? "Sent" : "Received"} ${esc(fmtJoined(r.createdAt))}${r.decidedAt ? ` · ${{ accepted: "accepted", declined: "declined", withdrawn: "cancelled" }[r.status] || "answered"} ${esc(fmtJoined(r.decidedAt))}` : ""}`;
     const row = (r, extra) => `
       <li class="req">
         <div class="req-top"><span class="avatar-pic avatar-sm" aria-hidden="true">${esc(initials(r.firstName))}</span><strong>${esc(r.firstName)}</strong>${requestBadge(r)}</div>
+        <p class="small muted">${when(r)}</p>
         ${r.intro ? `<p class="small desc">“${esc(r.intro)}”</p>` : ""}
         ${extra || ""}
       </li>`;
@@ -4336,26 +4700,26 @@
         `${commonLine(r)}<div class="actions"><button class="btn btn-small" type="button" data-action="req-accept" data-id="${esc(r.id)}">Accept</button><button class="btn btn-small btn-quiet" type="button" data-action="req-decline" data-id="${esc(r.id)}">Decline</button></div>`
       ) +
       section("Connected", d.connected, (r) => `<div class="actions"><button class="btn btn-small" type="button" data-action="messages-open" data-id="${esc(r.id)}" data-name="${esc(r.firstName)}">Message${r.messages ? ` (${r.messages})` : ""}</button></div>`) +
-      section("Waiting for a reply", d.outgoing, (r) => `<div class="actions"><button class="btn btn-small btn-quiet" type="button" data-action="req-withdraw" data-id="${esc(r.id)}">Withdraw</button></div>`) +
+      section("Waiting for a reply", d.outgoing, (r) => `<div class="actions"><button class="btn btn-small btn-quiet" type="button" data-action="req-withdraw" data-id="${esc(r.id)}">Cancel request</button></div>`) +
       section("Earlier", d.closed, () => "")
     );
   }
 
   async function decideRequest(id, action) {
-    if (action === "withdraw" && !(await confirmDialog({ title: "Withdraw your request?", text: "They won't see it any more. You can send a new one later.", confirmLabel: "Withdraw" }))) return;
+    if (action === "withdraw" && !(await confirmDialog({ title: "Cancel this request?", text: "They won't see it any more. You can send a new one later.", confirmLabel: "Cancel request", cancelLabel: "Keep it" }))) return;
     if (action === "decline" && !(await confirmDialog({ title: "Decline this request?", text: "They'll see it was declined and can't send you another.", confirmLabel: "Decline" }))) return;
     try {
       const d = await api(`/api/roommates/requests/${encodeURIComponent(id)}`, { method: "POST", body: { action } });
-      toast(d.message);
+      toast(action === "withdraw" ? "Request cancelled." : d.message);
     } catch (e) {
       if (e.status === 401) return showView(errorView(e));
       toast(e.message);
     }
     // Refresh everything that shows this person's status.
     if (document.getElementById("res-top")) await reloadChat();
-    else if (document.getElementById("roommates")) {
-      lastRoommates = await api("/api/renter/roommates");
-      document.getElementById("roommates").innerHTML = roommatesHtml(lastRoommates);
+    else if (document.getElementById("rm-grid") && rmView && rmView.tab === "for-you" && isRenter()) {
+      lastRoommates = rmView.data = await api("/api/renter/roommates");
+      rmRefresh();
     }
     const dialog = document.getElementById("details");
     if (dialog.open && dialog.dataset.person) dialog.close();
@@ -4775,9 +5139,11 @@
   }
 
   // ── Account: who you are, and delete my account ──────────────────────────────
-  function accountPage() {
+  // ("Profile & settings" in the account menu.) Renters also see their saved preferences here.
+  async function accountPage() {
     const u = me.user;
     if (!u) return signInView("/account", "Account");
+    const prefs = u.accountType === "renter" ? (await api("/api/renter/preferences").catch(() => ({ preferences: null }))).preferences : null;
     const saved =
       u.accountType === "landlord"
         ? "all of your units"
@@ -4798,8 +5164,14 @@
         <div class="fact"><dt>coHabit Points</dt><dd>${u.points || 0}</dd></div>
       </dl>
       <p class="muted small">${POINTS_NOTE} ${u.points ? "Thanks for your check-in." : `Earn 100 for your first <button class="link-button" type="button" data-action="survey-open">Quick check-in</button>.`}</p>
-      ${u.accountType ? `<p class="links"><a href="${u.accountType === "landlord" ? "/landlord" : "/renter"}">${u.accountType === "landlord" ? "Go to your units" : "Go to your matches"}</a></p>` : ""}
-      ${u.accountType === "renter" ? `<p class="links"><a href="/setup/basics">Edit your basics and home energy</a></p>` : ""}
+      ${u.accountType === "landlord" ? `<p class="links"><a href="/landlord">Go to your units</a></p>` : ""}
+      ${
+        u.accountType === "renter"
+          ? `${prefs ? prefsSummary(prefs) : `<p class="links"><a href="/preferences?from=/account">Set your roommate and room preferences</a></p>`}
+      <p class="links"><a href="/roommates">Roommates</a> · <a href="/rooms">Rooms for you</a> · <a href="/saved">Saved</a> · <a href="/requests/people">Requests</a></p>
+      <p class="links"><a href="/setup/basics">Edit your basics and home energy</a></p>`
+          : ""
+      }
       <p class="muted small">Your name and email come from Google. See the <a href="/privacy">privacy policy</a> for what coHabit keeps.</p>
       <form class="form danger-zone" id="delete-account-form" novalidate>
         <fieldset>
@@ -4864,8 +5236,18 @@
     m = clean.match(/^\/landlord\/units\/([^/]+)$/);
     if (m) return unitPage(safeDecode(m[1]));
     if (clean === "/assistant") return assistantPage();
-    if (clean === "/demo/people") return demoPeoplePage();
-    if (clean === "/renter") return renterPage();
+    if (clean === "/roommates") return roommatesPage();
+    if (clean === "/roommates/for-you") return roommatesPage("for-you");
+    if (clean === "/roommates/explore") return roommatesPage("explore");
+    if (clean === "/rooms") return roomsPage();
+    if (clean === "/requests/rooms") return requestsPage("rooms");
+    if (clean === "/requests/people") return requestsPage("people");
+    if (clean === "/saved") return savedPage();
+    if (clean === "/preferences") return preferencesPage();
+    if (clean === "/requests" || clean === "/demo/people" || clean === "/renter") {
+      navigate(clean === "/requests" ? "/requests/people" : clean === "/demo/people" ? "/roommates/explore" : RENTER_MOVED[location.hash] || "/roommates", true);
+      return null;
+    }
     if (clean === "/admin") return adminPage();
     if (clean === "/admin/import") return adminImportPage();
     if (clean === "/admin/survey") return adminSurveyPage();
@@ -4978,7 +5360,6 @@
       else if (a === "interest-remove") removeInterest(action.dataset.id, action);
       else if (a === "reload") render(true);
       else if (a === "dismiss-notice") action.closest(".notice").remove();
-      else if (a === "edit-prefs") togglePrefsForm();
       else if (a === "clear-search") clearListingSearch();
       else if (a === "use-location") useMyLocation(action);
       else if (a === "jump-listing") jumpToListing(action.dataset.id);
@@ -5015,7 +5396,9 @@
           { method: "POST", body: action.dataset.kind === "room" ? { kind: "room", unitId: action.dataset.unit } : { kind: "person", ref: action.dataset.ref, firstName: action.dataset.first } },
           "Saved. You'll find it under Saved."
         ).then((d) => d && reloadChat());
-      else if (a === "chat-unsave") chatRequest(`/api/assistant/saved/${encodeURIComponent(action.dataset.id)}`, { method: "DELETE" }, "Removed from saved.").then((d) => d && reloadChat());
+      else if (a === "chat-unsave") chatRequest(`/api/assistant/saved/${encodeURIComponent(action.dataset.id)}`, { method: "DELETE" }, "Removed from saved.").then((d) => d && (document.getElementById("chat-log") ? reloadChat() : render(false)));
+      else if (a === "rm-filters") toggleRmFilters(!!action.dataset.close);
+      else if (a === "rm-filters-clear") clearRmFilters();
       else if (a === "pane") setPane(action.dataset.pane);
       else if (a === "demo-toggle") toggleDemo();
       else if (a === "demo-switch") switchDemo(action);
@@ -5033,9 +5416,6 @@
       }
       else if (a === "demo-filters-clear") {
         Object.assign(demoFilters, DEMO_FILTERS0);
-        render(false);
-      } else if (a === "people-filters-clear") {
-        Object.assign(peopleFilters, PEOPLE_FILTERS0);
         render(false);
       }
       else if (a === "res-tab") {
@@ -5189,12 +5569,16 @@
   });
 
   function toggleHomeMenu(button, open = button.getAttribute("aria-expanded") !== "true") {
-    const menu = document.getElementById("h-menu");
+    const menu = document.getElementById(button.getAttribute("aria-controls") || "h-menu");
     if (!menu) return;
     button.setAttribute("aria-expanded", String(open));
     menu.hidden = !open;
     if (open) menu.querySelector("a, button")?.focus();
   }
+  document.addEventListener("click", (e) => {
+    const button = document.querySelector('.rm-acct[aria-expanded="true"]');
+    if (button && !button.contains(e.target) && !document.getElementById("rm-menu")?.contains(e.target)) toggleHomeMenu(button, false);
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     const button = document.querySelector('[data-action="home-menu"][aria-expanded="true"]');
@@ -5212,7 +5596,7 @@
   document.addEventListener("input", (e) => {
     const filters = e.target.form;
     if (filters && filters.id === "demo-filters") return readDemoFilters(filters);
-    if (filters && filters.id === "people-filters") return readPeopleFilters(filters);
+    if (filters && filters.id === "rm-filters") return readRmFilters(filters);
     if (e.target.id === "chat-input") growInput(e.target);
     else if (e.target.id === "survey-comment") syncSurvey();
   });

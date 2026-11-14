@@ -46,7 +46,11 @@ Landlords list rooms. Renters (Brandeis students) chat with an assistant that le
 | One unit: details and its interested renters | `/landlord/units/<id>` | Landlords |
 | Add or edit a unit | `/landlord/units/new`, `/landlord/units/<id>/edit` | Landlords |
 | Assistant: guided chat beside results (list, map, roommates), Details, "I'm interested", Connect and messages, editable answers, Demo mode | `/assistant` | Renters |
-| Questionnaire, matching rooms, "I'm interested", possible roommates (opt-in), roommate requests and messages | `/renter` | Renters |
+| Roommates: For you (your matches) and Explore (profiles anyone may browse; made-up ones in Demo mode), Filters, Say hey, profile details, bookmarks | `/roommates`, `/roommates/for-you`, `/roommates/explore` | Anyone (For you: renters) |
+| Rooms for you: rooms that match your saved preferences, "I'm interested" (Explore is Listings) | `/rooms` | Renters |
+| Requests: landlords contacted (Rooms); roommate requests and messages (People) | `/requests/rooms`, `/requests/people` | Renters |
+| Saved rooms and people; the questionnaire (preferences, roommate matching and sharing) | `/saved`, `/preferences` | Renters |
+| Old addresses (redirect to the pages above) | `/renter`, `/demo/people` | Anyone |
 | User list (read only) | `/admin` | Admin |
 | Quick check-in results and CSV export | `/admin/survey` | Admin |
 
