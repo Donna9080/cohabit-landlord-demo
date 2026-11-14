@@ -344,7 +344,7 @@ function contextNote(turn, saved, pending) {
   const lines = [
     "coHabit system note (from coHabit, not from the student).",
     `Today: ${today()}.`,
-    ...(turn.state.welcomed ? [] : ['The page greeted the student with "Hey! What are you looking for?" and the buttons A room, A roommate and Both.']),
+    ...(turn.state.welcomed ? [] : ['The page greeted the student with "Hey, I\'m Vibe! I\'ll help you find a room, a roommate, or both, one quick question at a time. What are you looking for?" and the buttons A room, A roommate and Both.']),
     `Memory: ${Object.keys(v).length ? JSON.stringify({ values: v, must_have: strict.filter((f) => isRequired(turn.memory, f)), flexible: strict.filter((f) => !isRequired(turn.memory, f)) }) : "nothing yet."}`,
     `Still needed before a room search: ${missingBasics(turn.memory).map((f) => NOT_KNOWN[f]).join(", ") || "nothing"}.`,
     `Saved coHabit profile: ${saved ? `yes, roommate matching ${saved.roommate_visible ? "on" : "off"}` : "no"}.`,
@@ -607,7 +607,7 @@ async function basicTurn(ctx, text) {
   const lines = [];
 
   if (intents.has("greeting")) lines.push("Hey!");
-  else if (!understood) lines.push(`Sorry, I didn't catch that. ${BASIC_INTRO}`);
+  else if (!understood) lines.push(`Hmm, I didn't catch that. ${BASIC_INTRO}`);
   const said = r.changed.map((f) => describeAnswer(f, v[f])).filter(Boolean);
   if (said.length && !tapped) lines.push(`Noted: ${said.join(", ")}.`);
   for (const e of r.errors) lines.push(e.message);
@@ -665,7 +665,7 @@ async function basicTurn(ctx, text) {
     lines.push(q.text);
     quick = q.options;
   } else if (!turn.items && !turn.actions.length) {
-    lines.push("Anything else? Tap an option or type a change.");
+    lines.push("What's next? Tap an option or type a change.");
     quick = ["Show rooms", "Find a roommate", "What should I consider?"];
   }
   state.asked = ask || null;

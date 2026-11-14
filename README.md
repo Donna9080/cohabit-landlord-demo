@@ -45,7 +45,7 @@ Landlords list rooms. Renters (Brandeis students) chat with an assistant that le
 | Dashboard: your units and recent requests | `/landlord` | Landlords |
 | One unit: details and its interested renters | `/landlord/units/<id>` | Landlords |
 | Add or edit a unit | `/landlord/units/new`, `/landlord/units/<id>/edit` | Landlords |
-| Assistant: guided chat beside results (list, map, roommates), Details, "I'm interested", Connect and messages, editable answers, Demo mode | `/assistant` | Renters |
+| Vibe (the assistant): a panel on Roommates opened with **Ask Vibe** (beside the cards on laptops, full screen on phones): chat with answer chips, picks from the real matching, Details, Say hey, "I'm interested", editable answers, Save to my profile, Demo mode. `/assistant` opens it | `/assistant`, `/roommates` | Renters (visitors are asked to sign in) |
 | Roommates: For you (your matches) and Explore (profiles anyone may browse; made-up ones in Demo mode), Filters, Say hey, profile details, bookmarks | `/roommates`, `/roommates/for-you`, `/roommates/explore` | Anyone (For you: renters) |
 | Rooms for you: rooms that match your saved preferences, "I'm interested" (Explore is Listings) | `/rooms` | Renters |
 | Requests: landlords contacted (Rooms); roommate requests and messages (People) | `/requests/rooms`, `/requests/people` | Renters |

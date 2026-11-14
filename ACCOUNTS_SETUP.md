@@ -363,6 +363,29 @@ Renters get one chat at `/assistant`, now their first stop after sign-in. The qu
   - A "Guided chat" note explains the free mode's limits and how the chat is stored.
 - **Demo mode.** A switch on the assistant page (see "Demo mode" below).
 
+**Vibe (2026-11-14): the assistant as a panel on Roommates.** No server logic, database or permission change: the
+same chat, AI and guided fallback, history, limits, Demo mode and confirmation cards, with warmer wording.
+- **Where.** "Ask Vibe" on `/roommates` opens it beside the cards on laptops (380 to 440 px; the cards reflow) and full
+  screen on phones and tablets (sized to the visible area, so the message box stays above the keyboard). Closing only
+  hides it: messages, answers, filters, cards and the scroll position stay; reopening carries on. `/assistant` opens
+  Roommates with Vibe open (For you for renters, Explore for visitors, who are asked to sign in). The old full-page
+  assistant with its results map is gone; rooms still come up as picks with the same Details box.
+- **Look.** Cream panel, purple avatar, "Vibe" / "Roommate vibe check", white bubbles for Vibe, black for you, purple
+  answer chips right under the current question, lime pick cards.
+- **Picks.** Under the latest reply, from the current results only (the same matching, scores and reasons; labeled
+  P1, R1... as Vibe refers to them). Say hey is the same introduction and request; the picture or name opens Details;
+  the bookmark is the same saved options. No picks when nothing matches; for rooms, the must-haves to loosen instead.
+- **Saved versus chat answers.** "Your answers" lists what the chat learned (tap to change, Must-have / Flexible,
+  forget) and says they only steer Vibe until saved. "Save to my profile" asks the chat for the usual confirmation
+  card; once confirmed, For you is fetched again in place. For you's count says "your saved preferences".
+- **Status.** One notice at the top while the chat is guided for a reason (AI limit, busy, unavailable), not one per
+  reply. Progress ("Vibe check: 6 of 10 answers for roommate matching") shows only while the server reports answers
+  missing.
+- **Safety.** One message at a time (Send, chips and answer changes wait while Vibe replies; typing ahead works); a
+  reply that comes back after a newer change doesn't overwrite it (the latest state is fetched instead).
+- **Note.** Clearing the chat also turns Demo mode off (as before); the page now redraws to match, and the
+  confirmation says so.
+
 **What it does.**
 - It asks one question at a time and learns:
   - Budget, move-in month, and towns or distance from Brandeis.

@@ -11,15 +11,17 @@
 //   /landlord/units/new      Add a unit
 //   /landlord/units/<id>     One unit: details and the renters interested in it
 //   /landlord/units/<id>/edit  Edit or delete a unit
-//   /assistant               A renter's chat assistant: rooms and roommates that fit, with reasons
+//   /assistant               Opens Vibe, the chat assistant, as a panel on Roommates (rooms and roommates that
+//                            fit, with reasons)
 //   /roommates               Roommates: For you (/roommates/for-you, a renter's matches) and Explore
-//                            (/roommates/explore, profiles anyone may browse: the made-up ones in Demo mode)
+//                            (/roommates/explore, profiles anyone may browse: the made-up ones in Demo mode),
+//                            with "Ask Vibe" (the assistant beside the cards on laptops, full screen on phones)
 //   /rooms                   Rooms for you: units that match a renter's saved preferences (Explore is /listings)
 //   /requests/rooms, /requests/people  A renter's requests: landlords contacted; roommate requests and messages
 //   /saved                   A renter's saved rooms and people
 //   /preferences             A renter's match preferences (the questionnaire)
 //   /renter, /demo/people    Old addresses: redirect to the pages above
-//                            (Demo mode also turns Listings, Roommates, Rooms and /assistant to the made-up data)
+//                            (Demo mode also turns Listings, Roommates, Rooms and Vibe to the made-up data)
 //   /admin                   Read-only user list (admins only; enforced by the server)
 //   /admin/import            Import external listings from an authorized source (admins only)
 (function () {
@@ -2715,6 +2717,8 @@
     filters: '<path d="M4 6.5h16M7 12h10M10 17.5h4"/>',
     sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
     arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    send: '<path d="M4.5 12h11"/><path d="M4 4.5l16 7.5-16 7.5 3-7.5Z"/>',
   };
   const rmIcon = (name, size = 20, filled = false) =>
     `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${RM_ICONS[name]}</svg>`;
@@ -2722,7 +2726,7 @@
 
   // The account menu: the same destinations as the top bar and the home page's menu, plus Saved, Requests and Demo
   // mode. Opened by the lime button; Escape or a click outside closes it (toggleHomeMenu).
-  function rmMenu() {
+  function rmMenu(active) {
     const u = me.user;
     const role = u && u.accountType;
     const link = (href, label, extra = "") => `<a class="rm-menu-item" href="${href}"${extra}>${label}</a>`;
@@ -2734,7 +2738,7 @@
         link("/saved", "Saved") +
         `<p class="rm-menu-label" id="rm-menu-req">Requests</p>
          <div class="rm-menu-sub" role="group" aria-labelledby="rm-menu-req">${link("/requests/rooms", "Rooms")}${link("/requests/people", `People<span class="rm-badge rm-badge-inline" data-rm-badge hidden></span>`)}</div>` +
-        link("/assistant", "Assistant");
+        (active === "roommates" ? `<button class="rm-menu-item" type="button" data-action="vibe-open" aria-controls="vibe">Ask Vibe</button>` : link("/assistant", "Ask Vibe"));
     else if (role === "landlord") items = link("/landlord", "Dashboard") + link("/account", "Profile &amp; settings");
     else if (u) items = link("/welcome", "Get started") + link("/account", "Profile &amp; settings");
     else items = link("/signin", "Sign in") + link("/signup?as=renter", "Create an account", ' data-path="renter"');
@@ -2769,7 +2773,7 @@
         <div class="rm-actions">
           ${flag}${messages}
           <button class="rm-acct" type="button" data-action="home-menu" aria-expanded="false" aria-controls="rm-menu" aria-label="${u ? `Account menu for ${esc(u.name || u.email)}` : "Account menu"}" title="Account">${rmIcon("user", 21)}</button>
-          ${rmMenu()}
+          ${rmMenu(active)}
         </div>
       </header>`;
   }
@@ -2781,10 +2785,12 @@
       </footer>`;
 
   // One frame for these pages. The shared top bar and footer are hidden while it shows.
-  const rmPage = ({ title, active, body, mount }) => ({
+  const rmPage = ({ title, active, body, mount, side = "", vibe = false, after = null }) => ({
     title,
     page: "people",
-    html: `<div class="rm-page">${rmHeader(active)}<div class="rm-main">${body}</div>${rmFooter()}</div>`,
+    vibe,
+    after,
+    html: `<div class="rm-page">${rmHeader(active)}<div class="rm-main">${body}</div>${rmFooter()}</div>${side}`,
     mount: () => {
       if (isRenter() && mount !== loadRequests) api("/api/roommates/requests").then((d) => setRmBadge(d.incoming.length)).catch(() => {});
       if (mount) mount();
@@ -2952,7 +2958,7 @@
     const all = rmPeople().length;
     const filtered = rmFiltersActive() ? ` · ${shown} shown with your filters <button class="rm-link" type="button" data-action="rm-filters-clear">Clear filters</button>` : "";
     if (v.tab === "explore") return `${d.shown || all} made-up profiles${d.compared ? ` · ${d.people.filter((p) => p.compatible).length} compatible with you` : ""} · ${d.hidden || 0} more chose not to be found${filtered}`;
-    return `${d.demo ? `${plural(all, "made-up profile", "made-up profiles")} of ${d.total}` : plural(all, "person", "people")} ${all === 1 ? "matches" : "match"} your preferences${filtered}`;
+    return `${d.demo ? `${plural(all, "made-up profile", "made-up profiles")} of ${d.total}` : plural(all, "person", "people")} ${all === 1 ? "matches" : "match"} your saved preferences${filtered}`;
   }
 
   function rmGridHtml() {
@@ -3038,6 +3044,30 @@
     if (!rmFiltersOpen) document.getElementById("rm-filters-btn")?.focus();
   }
 
+  // After the saved preferences change (a confirmed "Save to my profile" card in Vibe), For you is fetched again and
+  // redrawn in place: the filters, the panel and the scroll position stay. An older fetch never overwrites a newer one.
+  let rmSeq = 0;
+  async function rmReload() {
+    if (!rmView || rmView.tab !== "for-you" || !isRenter() || !document.getElementById("rm-grid")) return;
+    const seq = ++rmSeq;
+    const listed = !rmEmpty();
+    let data;
+    try {
+      data = await api("/api/renter/roommates");
+    } catch {
+      return;
+    }
+    if (seq !== rmSeq || !document.getElementById("rm-grid")) return;
+    lastRoommates = rmView.data = data;
+    rmView.demo = !!data.demo;
+    if (listed !== !rmEmpty()) {
+      // The tools above the cards change too, so the page is drawn again; focus stays in Vibe if it was there.
+      if (document.getElementById("vibe")?.contains(document.activeElement) || document.activeElement === document.body) vibeFocusPending = true;
+      return render(false);
+    }
+    rmRefresh();
+  }
+
   async function roommatesPage(tabParam) {
     if (me.user && !me.user.accountType) {
       navigate("/welcome?next=" + encodeURIComponent(location.pathname), true);
@@ -3047,6 +3077,7 @@
     const tab = tabParam || (renter ? "for-you" : "explore");
     const demo = demoOn();
     let data = null;
+    rmSeq++;
     if (tab === "for-you" && renter) {
       [data] = await Promise.all([api("/api/renter/roommates"), loadSavedIndex()]);
       lastRoommates = data;
@@ -3055,6 +3086,7 @@
     }
     rmView = { tab, data, demo: tab === "for-you" ? !!(data && data.demo) : demo };
     const showsList = !rmEmpty();
+    const vibeOn = !(me.user && !renter); // renters, and visitors (who are asked to sign in)
     const self = tab === "explore" ? "/roommates/explore" : "/roommates/for-you";
     const demoText =
       tab === "explore"
@@ -3066,7 +3098,7 @@
       body: `
         <div class="rm-head">
           <h1 class="rm-title" tabindex="-1">Meet your <em>kind of people.</em></h1>
-          ${me.user && !renter ? "" : `<a class="rm-vibe" href="/assistant?focus=roommates" title="Opens the assistant on your roommate results">${rmIcon("sparkle", 18)}<span>Ask Vibe</span></a>`}
+          ${vibeOn ? `<button class="rm-vibe" id="rm-vibe-btn" type="button" data-action="vibe-open" aria-expanded="${vibeOpen}" aria-controls="vibe" title="Chat with Vibe, coHabit's assistant">${rmIcon("sparkle", 18)}<span>Ask Vibe</span></button>` : ""}
         </div>
         <div class="rm-bar">
           <nav class="rm-tabs" aria-label="Roommate views">
@@ -3083,6 +3115,9 @@
         <p class="rm-count" id="rm-count" role="status"></p>
         <div id="rm-grid">${rmGridHtml()}</div>`,
       mount: rmRefresh,
+      vibe: vibeOn,
+      side: vibeOn ? vibePanelHtml() : "",
+      after: vibeOn ? vibeMount : null,
     });
   }
 
@@ -3209,7 +3244,7 @@
       ? `<button class="demo-switch" type="button" role="switch" data-action="demo-switch" aria-checked="${demoOn()}"><span class="demo-knob" aria-hidden="true"></span>Demo mode</button>`
       : "";
   async function switchDemo(button) {
-    if (document.getElementById("chat-log") && chat) return toggleDemo(); // the assistant keeps its page in place
+    if (chatBusy) return toast("One sec: Vibe is still replying.");
     if (button) button.disabled = true;
     const on = !demoOn();
     try {
@@ -3259,9 +3294,11 @@
     }
     await loadSavedIndex();
     const host = button.closest("article, .details-body");
-    const icon = button.dataset.style === "icon";
-    document.querySelectorAll(`[data-action="demo-save"][data-target="${CSS.escape(target)}"]`).forEach((b) => (b.outerHTML = b.dataset.style === "icon" ? rmSaveIcon(kind, target, b.dataset.name) : demoSaveButton(kind, target)));
-    host?.querySelector(`[data-action="demo-save"]${icon ? '[data-style="icon"]' : ":not([data-style])"}`)?.focus();
+    const style = button.dataset.style;
+    document
+      .querySelectorAll(`[data-action="demo-save"][data-target="${CSS.escape(target)}"]`)
+      .forEach((b) => (b.outerHTML = b.dataset.style === "icon" ? rmSaveIcon(kind, target, b.dataset.name) : b.dataset.style === "vibe" ? vibeDemoSave(kind, target, b.dataset.name) : demoSaveButton(kind, target)));
+    host?.querySelector(`[data-action="demo-save"]${style ? `[data-style="${style}"]` : ":not([data-style])"}`)?.focus();
     if (document.getElementById("chat-log")) reloadChat();
   }
 
@@ -3591,28 +3628,20 @@
     }
   }
 
-  // ── Assistant: results on the left, guided chat on the right (Chat / Results tabs on phones) ──
-  // Results come from /api/assistant, worked out by code from the renter's answers every time they change. The chat
-  // asks the questions. Nothing is saved to the profile or sent to a landlord until the renter clicks Confirm.
+  // ── Vibe, the assistant (the panel on the Roommates page is under "Vibe" below) ──
+  // Picks come from /api/assistant, worked out by code from the renter's answers every time they change. The chat
+  // asks the questions. Nothing is saved to the profile or sent to anyone until the renter clicks Confirm.
   const GOALS = ["A room", "A roommate", "Both"];
   const BASIC_REASONS = {
-    user_limit: "You've used today's AI replies, so the chat is guided until tomorrow (UTC). Your answers are kept.",
-    site_limit: "The AI assistant has reached today's limit for coHabit, so the chat is guided until tomorrow (UTC).",
-    unavailable: "The AI assistant isn't available right now, so the chat is guided. Try again in a little while.",
-    busy: "The AI assistant is busy right now, so the chat is guided. Try again in a minute.",
+    user_limit: "You've used today's AI replies, so Vibe is in guided mode until tomorrow (UTC). Your answers are kept.",
+    site_limit: "Vibe's AI has hit today's limit for coHabit, so Vibe is in guided mode until tomorrow (UTC). Your answers are kept.",
+    unavailable: "Vibe's AI didn't answer this time, so Vibe is in guided mode. It tries the AI again with your next message.",
+    busy: "Vibe's AI is busy right now, so Vibe is in guided mode. It tries the AI again with your next message.",
   };
   const STRICT_FIELDS = ["budget_max", "move_in_month", "areas", "max_distance_km"];
-  const BRANDEIS_LNGLAT = [-71.2589, 42.3656];
   let chat = null; // what /api/assistant returned: messages, memory, results, saved, mode…
-  let chatBusy = false;
-  let chatPane = "chat"; // phones: which tab is showing
-  let resTab = "rooms"; // "Both": which results tab is showing
-  let resView = "list"; // rooms: list or map
-  let resShowAll = false;
-  let resSelected = null; // ref of the card selected on the list or the map
-  let resMap = null;
-  let resMapReady = null;
-  let resMarkers = [];
+  let chatBusy = false; // a message is on its way
+  let chatSeq = 0; // goes up with every request that changes answers or results; an older reply never overwrites newer ones
   const chatCards = new Map(); // key -> card, for the details box
 
   // Server text -> safe HTML: paragraphs, with "- " lines as a list.
@@ -3751,41 +3780,7 @@
       ? `<p class="small muted pic-credit">Illustrative demo photo by <a href="${esc(u.photo.creditUrl)}" target="_blank" rel="noopener">${esc(u.photo.credit)}</a> on <a href="${esc(u.photo.sourceUrl)}" target="_blank" rel="noopener">${esc(u.photo.source)}</a> (<a href="${esc(u.photo.licenseUrl)}" target="_blank" rel="noopener">${esc(u.photo.license)}</a>). It shows a similar kind of room, not this listing.</p>`
       : "";
   const matchPill = (m, person) => (m === "exact" ? `<span class="pill pill-ok">${person ? "Strong match" : "Matches everything"}</span>` : `<span class="pill pill-warn">Partial match</span>`);
-  // The card: the two strongest reasons and the most important mismatch. Everything else is in Details.
-  const shortReasons = (c) =>
-    (c.highlights && c.highlights.length ? `<ul class="fit-list" aria-label="Why it fits">${c.highlights.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : "") +
-    (c.mainMiss ? `<ul class="miss-list" aria-label="What doesn't fit"><li>${esc(c.mainMiss)}</li></ul>` : "");
-
-  function roomCard(c) {
-    const key = `res:${c.ref}`;
-    chatCards.set(key, c);
-    const u = c.unit;
-    const save = u.demo
-      ? demoSaveButton("room", u.id)
-      : c.savedId
-        ? unsaveButton(c.savedId)
-        : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="room" data-unit="${esc(u.id)}" aria-pressed="false" title="A bookmark for you. Nobody is told.">Save</button>`;
-    return `
-      <li>
-        <article class="res-card${resSelected === c.ref ? " selected" : ""}${u.demo ? " is-demo" : ""}" data-ref="${esc(c.ref)}" tabindex="-1" aria-label="${esc(c.ref)}: ${esc(u.name)}">
-          ${roomPicture(u)}
-          <div class="res-body">
-            <div class="res-card-top"><span class="ref">${esc(c.ref)}</span>${matchPill(c.match)}${u.demo ? demoTag : ""}${u.sample ? sampleTagSmall : ""}${!u.demo && myInterests.has(u.id) ? `<span class="badge-status">Request sent</span>` : ""}</div>
-            <h3 class="mini-title">${esc(u.name)}</h3>
-            <p class="small muted">${esc(u.area)}${c.km != null ? ` · about ${c.km} km from Brandeis` : ""}</p>
-            <p class="mini-stats">${priceLine(u)} · from ${fmtDate(u.move_in_date)}</p>
-            ${shortReasons(c)}
-            <div class="mini-actions">
-              <button class="btn btn-small" type="button" data-action="chat-details" data-key="${esc(key)}">Details</button>
-              ${save}
-              ${u.location ? `<button class="btn btn-small btn-quiet" type="button" data-action="res-on-map" data-ref="${esc(c.ref)}">On map</button>` : ""}
-            </div>
-          </div>
-        </article>
-      </li>`;
-  }
-
-  // ── People: one card and one Details view, used by the assistant and My matches ──
+  // ── People: request status, used by Vibe's picks, Roommates and Details ──
   const REQUEST_BADGE = {
     "out:pending": "Request sent",
     "in:pending": "Wants to connect",
@@ -3798,50 +3793,33 @@
   };
   const requestBadge = (r) => (r && REQUEST_BADGE[`${r.direction}:${r.status}`] ? `<span class="badge-status">${REQUEST_BADGE[`${r.direction}:${r.status}`]}</span>` : "");
 
-  // The main button: Connect, Respond, Message, or nothing while waiting.
-  function personPrimary(c, key) {
-    const r = c.request;
-    if (!r) return `<button class="btn btn-small" type="button" data-action="connect-open" data-key="${esc(key)}">Connect</button>`;
-    if (r.status === "pending" && r.direction === "in") return `<button class="btn btn-small" type="button" data-action="person-details" data-key="${esc(key)}">Respond</button>`;
-    if (r.status === "accepted") return `<button class="btn btn-small" type="button" data-action="messages-open" data-id="${esc(r.id)}" data-name="${esc(c.firstName)}">Message</button>`;
-    return "";
-  }
+  // ── Vibe: the assistant as a panel on the Roommates page ("Gen Z mode", 2026-11-14) ─────────────────────────
+  // "Ask Vibe" opens the chat in a panel: beside the cards on laptops (they reflow to fit), full screen on phones.
+  // It's the same chat as before: the same server, AI and guided fallback, history, limits, Demo mode and
+  // confirmation cards. Closing only hides it, so the cards, filters and scroll position stay, and reopening picks
+  // the conversation up again. The old address, /assistant, opens it too (see vibeEntry).
+  // What the chat learns is the chat's own search (Vibe's picks). The saved preferences, which For you uses, change
+  // only when the renter confirms a "Save to my profile" card; For you is then fetched again and redrawn in place.
+  let vibeOpen = false;
+  let vibeFocusPending = false; // move focus into the panel once the page is drawn (opened from /assistant)
+  let vibeDraft = ""; // unsent text, kept when the page is drawn again (a tab switch, Demo mode)
+  let vibePending = null; // the message on its way, drawn again if the page is redrawn meanwhile
+  let vibeError = null; // { text, message }: a message that didn't go through, with a Try again button
+  let vibeLoadError = false;
+  let vibeSheet = ""; // "answers" | "info": the drawer above the message box
+  let vibeMore = false; // picks: all of them instead of the top three
+  let vibePageY = null; // phones: where the page was scrolled to under the full-screen panel
+  let vibeChipFocus = false; // an answer chip was used, so focus goes to the next question's answers
+  let vibeStatusShown = "";
+  let interestsLoaded = false;
+  const VIBE_PICKS = 3;
+  // What roommate matching needs (src/assistant/memory.js, mergedPreferences): budget, move-in month, area, rooms
+  // and six lifestyle answers. The server lists which are still missing, so the progress shown is exact.
+  const ROOMMATE_ANSWERS = 10;
+  const VIBE_GREETING = "Hey, I'm Vibe! I'll help you find a room, a roommate, or both, one quick question at a time.";
+  const vibeWide = () => window.matchMedia("(min-width: 1024px)").matches;
 
-  function personCard(c, key, { save = true } = {}) {
-    chatCards.set(key, c);
-    const saveBtn = c.demo
-      ? demoSaveButton("person", c.id)
-      : !save
-        ? ""
-        : c.savedId
-          ? unsaveButton(c.savedId)
-          : `<button class="btn btn-small btn-quiet" type="button" data-action="res-save" data-kind="person" data-ref="${esc(c.ref)}" data-first="${esc(c.firstName)}" aria-pressed="false" title="A bookmark for you. Nobody is told.">Save</button>`;
-    // Demo profiles on the profile page may not be compared (no saved preferences) or may not be a match; they say so.
-    const scored = c.score != null;
-    const scoreText = scored ? `${c.score}% compatible` : c.compatible === false ? "Not a match for you" : "Not compared with you";
-    const pill = scored ? matchPill(c.match || (c.mainMiss ? "partial" : "exact"), true) : c.compatible === false ? `<span class="pill pill-off">Not a match</span>` : "";
-    const why = c.compatible === false && c.notMatching && c.notMatching.length ? `<ul class="miss-list" aria-label="Why it's not a match"><li>${esc(c.notMatching[0])}</li></ul>` : shortReasons(c);
-    return `
-      <li>
-        <article class="res-card person-card${c.demo ? " is-demo" : ""}" data-ref="${esc(c.ref || "")}" tabindex="-1" aria-label="${esc(c.firstName)}${c.demo ? ", demo profile" : ""}">
-          <div class="person-head">
-            ${personAvatar(c)}
-            <div class="person-name"><h3 class="mini-title">${esc(c.firstName)}</h3><span class="small muted" title="Compatibility score out of 100, worked out by coHabit">${scoreText}</span></div>
-          </div>
-          ${c.about ? `<p class="small muted">${esc(c.about)}</p>` : ""}
-          ${c.demo && c.details ? `<p class="small muted">${esc(c.details.area)} · ${esc(c.details.moveIn)} · ${esc(c.details.budget)}</p>` : ""}
-          <div class="res-card-top">${pill}${c.demo ? demoTag : ""}${c.sample ? sampleTagSmall : ""}${requestBadge(c.request)}</div>
-          ${why}
-          <div class="mini-actions">
-            ${personPrimary(c, key)}
-            <button class="btn btn-small btn-quiet" type="button" data-action="person-details" data-key="${esc(key)}">Details</button>
-            ${saveBtn}
-          </div>
-        </article>
-      </li>`;
-  }
-
-  // ── Results panel ──
+  // ── Answers: the chat's search criteria, changed from "Your answers" or a suggestion (no AI call) ──
   const findFact = (field) => chat.memory.find((f) => f.field === field);
   const CHIP_TEXT = {
     looking_for: (v) => ({ room: "Looking for a room", roommates: "Looking for a roommate", both: "Room + roommate" })[v],
@@ -3857,22 +3835,9 @@
   };
   const chipText = (f) => (CHIP_TEXT[f.field] ? CHIP_TEXT[f.field](f.raw) : CHOICES[f.field] ? (CHOICES[f.field][1].find((o) => o[0] === f.raw) || [, f.value])[1] : f.value);
 
-  function prefChipsHtml() {
-    const facts = chat.memory;
-    if (!facts.length) return "";
-    return `
-      <div class="pref-chips" role="group" aria-label="Your answers. Tap one to change it.">
-        ${facts
-          .map(
-            (f) =>
-              `<button class="pref-chip${f.mustHave ? " must" : ""}" type="button" data-action="pref-edit" data-field="${esc(f.field)}" aria-label="${esc(f.label)}: ${esc(f.value)}${f.mustHave ? ", must-have" : ""}. Change">${esc(chipText(f))}${f.mustHave ? `<span class="pref-must" aria-hidden="true">must</span>` : ""}</button>`
-          )
-          .join("")}
-      </div>`;
-  }
-
   const RELAX_FIELD = { budget: "budget_max", month: "move_in_month", area: "areas", distance: "max_distance_km", rooms: "rooms_needed" };
 
+  // No room fits every must-have: which ones block, and what changing each would bring back.
   function noRoomsHtml(rooms) {
     const musts = rooms.mustHaves.map(findFact).filter(Boolean);
     const relax = rooms.ifRelaxed
@@ -3880,225 +3845,18 @@
         const field = RELAX_FIELD[o.condition];
         const fact = findFact(field);
         const mode = fact && fact.mustHave ? "flexible" : "edit";
-        return `<button class="chip" type="button" data-action="res-relax" data-field="${field}" data-mode="${mode}">${esc(o.change)} <span class="muted">(+${o.extraRooms})</span></button>`;
+        return `<button class="chip" type="button" data-action="res-relax" data-field="${field}" data-mode="${mode}"${chatBusy ? " disabled" : ""}>${esc(o.change)} <span class="muted">(+${o.extraRooms})</span></button>`;
       })
       .join("");
     return `
-      <div class="empty res-empty">
-        <p class="empty-title">No rooms match all your must-haves</p>
-        ${musts.length ? `<p>Your must-haves: ${musts.map((f) => `<strong>${esc(chipText(f))}</strong>`).join(", ")}. We won't loosen these unless you do.</p>` : ""}
-        ${relax ? `<p>Changing one would help:</p><div class="quick res-relax">${relax}</div>` : `<p>Nothing comes close yet. New rooms get listed all the time, so check back, or <a href="/listings">browse all listings</a>.</p>`}
-        ${rooms.samplesHidden ? `<p class="small">${plural(rooms.samplesHidden, "sample (fictional) listing", "sample (fictional) listings")} would fit. Say “show sample listings” in the chat to include ${rooms.samplesHidden === 1 ? "it" : "them"}.</p>` : ""}
+      <div class="vibe-none">
+        <p class="vibe-none-title">No rooms match all your must-haves</p>
+        ${musts.length ? `<p>Your must-haves: ${musts.map((f) => `<strong>${esc(chipText(f))}</strong>`).join(", ")}. Vibe won't loosen these unless you do.</p>` : ""}
+        ${relax ? `<p>Changing one would help:</p><div class="quick vibe-chips">${relax}</div>` : `<p>Nothing comes close yet. New rooms get listed all the time, so check back, or <a href="/listings">browse all listings</a>.</p>`}
+        ${rooms.samplesHidden ? `<p class="small">${plural(rooms.samplesHidden, "sample (fictional) listing", "sample (fictional) listings")} would fit. Say “show sample listings” to include ${rooms.samplesHidden === 1 ? "it" : "them"}.</p>` : ""}
       </div>`;
   }
 
-  // Cards grouped as "Matches everything" and "Partial matches", in the order the search ranked them.
-  // The headings count the whole group, even while "Show more" hides part of it, so they agree with the summary.
-  function groupedCards(items, toHtml, { exactLabel, partialLabel, partialNote }, all = items) {
-    const exact = items.filter((c) => c.match === "exact");
-    const partial = items.filter((c) => c.match !== "exact");
-    const exactAll = all.filter((c) => c.match === "exact").length;
-    const partialAll = all.length - exactAll;
-    return (
-      (exact.length ? `<h3 class="res-group">${exactLabel} <span class="count">${exactAll}</span></h3><ul class="res-grid" role="list">${exact.map(toHtml).join("")}</ul>` : "") +
-      (partial.length
-        ? `<h3 class="res-group">${partialLabel} <span class="count">${partialAll}</span></h3><p class="small muted res-group-note">${partialNote}</p><ul class="res-grid" role="list">${partial.map(toHtml).join("")}</ul>`
-        : "")
-    );
-  }
-
-  const VISIBLE = 6;
-  // "2 match everything, 1 partly": the same words the guided chat uses.
-  function exactSplit(total, exact, people) {
-    if (exact >= total) return people ? (total === 1 ? "a strong match" : "all strong matches") : total === 1 ? "it matches everything" : "all match everything";
-    if (!exact) return total === 1 ? "a partial match" : "all partial matches";
-    return people ? `${exact} strong, ${total - exact} partial` : `${exact} ${exact === 1 ? "matches" : "match"} everything, ${total - exact} partly`;
-  }
-
-  function roomsParts(rooms) {
-    if (!rooms || rooms.status === "need_more") {
-      const left = rooms && rooms.missing.length ? ` Still to go: ${esc(rooms.missing.join(", "))}.` : "";
-      return { head: "", list: emptyState("Rooms show up here", `A couple more answers and they'll appear.${left}`), map: false };
-    }
-    if (rooms.status === "none") return { head: "", list: noRoomsHtml(rooms), map: false };
-    const showMap = resView === "map";
-    const items = showMap || resShowAll ? rooms.items : rooms.items.slice(0, VISIBLE);
-    const count = `${rooms.total === 1 ? "1 room fits" : `${rooms.total} rooms fit`} your must-haves${rooms.preliminary ? " so far" : ""}: ${exactSplit(rooms.total, rooms.exact)}${rooms.total > rooms.items.length ? ` (best ${rooms.items.length} shown)` : ""}`;
-    const head = `
-      <div class="res-head">
-        <div><h2 class="res-title">Rooms</h2><p class="small muted">${count}</p></div>
-        <div class="seg" role="group" aria-label="Show rooms as">
-          <button type="button" data-action="res-view" data-view="list" aria-pressed="${!showMap}">List</button>
-          <button type="button" data-action="res-view" data-view="map" aria-pressed="${showMap}">Map</button>
-        </div>
-      </div>
-      ${rooms.preliminary ? `<p class="prelim">Early results. Add your ${esc(rooms.missing.join(" and "))} to narrow them down.</p>` : ""}
-      ${rooms.samplesHidden ? `<p class="small muted">${plural(rooms.samplesHidden, "sample (fictional) listing also fits", "sample (fictional) listings also fit")}. They're hidden unless you ask for them.</p>` : ""}`;
-    const more = !showMap && !resShowAll && rooms.items.length > VISIBLE ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${rooms.items.length - VISIBLE} more</button>` : "";
-    return {
-      head,
-      list: groupedCards(items, roomCard, { exactLabel: "Matches everything", partialLabel: "Partial matches", partialNote: "These meet your must-haves but miss something flexible; each card says what." }, rooms.items) + more,
-      map: showMap,
-    };
-  }
-
-  function peopleParts(people) {
-    if (!people) return { head: "", list: "" };
-    const ask = `<div class="quick"><button class="chip" type="button" data-action="chat-say" data-text="Find a roommate">Find a roommate</button></div>`;
-    if (people.status === "missing_answers" || ((people.status === "needs_profile" || people.status === "opt_in_required") && people.missing.length))
-      return { head: "", list: emptyState("Roommates show up here", `Answer the roommate questions in the chat first. Still to go: ${esc(people.missing.join(", "))}.`, ask) };
-    if (people.status === "needs_profile" || people.status === "opt_in_required")
-      return {
-        head: "",
-        list: emptyState("Turn on roommate matching to see people", "You'll only see students who turned it on too, and they only see your first name and what you have in common. The chat asks you to confirm.", ask),
-      };
-    if (people.status === "none")
-      return { head: "", list: emptyState("No roommate matches yet", "Nobody open to roommates fits your area, timing and lifestyle yet. Check back as more students join.") };
-    const items = resShowAll ? people.items : people.items.slice(0, VISIBLE);
-    const more = !resShowAll && people.items.length > VISIBLE ? `<button class="btn btn-quiet btn-small res-more" type="button" data-action="res-more">Show ${people.items.length - VISIBLE} more</button>` : "";
-    return {
-      head: `<div class="res-head"><div><h2 class="res-title">Roommates</h2><p class="small muted">${people.total === 1 ? "1 person fits" : `${people.total} people fit`}: ${exactSplit(people.total, people.exact, true)}. ${chat.demo ? `Made-up profiles only. <a href="/roommates/explore">Browse all demo profiles</a>` : "Only students who chose to be found."}</p></div></div>`,
-      list:
-        groupedCards(items, (c) => personCard(c, `res:${c.ref}`), {
-          exactLabel: "Strong matches",
-          partialLabel: "Partial matches",
-          partialNote: "Not every lifestyle answer matches; Details says where.",
-        }, people.items) + more,
-    };
-  }
-
-  const resultsCount = (r) => (r.rooms && r.rooms.status === "ok" ? r.rooms.total : 0) + (r.people && r.people.status === "ok" ? r.people.total : 0);
-
-  function renderResults() {
-    const top = document.getElementById("res-top");
-    if (!top || !chat) return;
-    for (const k of [...chatCards.keys()]) if (k.startsWith("res:")) chatCards.delete(k);
-    const r = chat.results;
-    document.getElementById("res-demo").innerHTML = chat.demo
-      ? demoBannerHtml(`Results here come from ${cfg.demoCounts ? `${cfg.demoCounts.listings} made-up listings and ${cfg.demoCounts.shown} made-up profiles` : "made-up listings and profiles"} in Waltham, matched to your answers with the usual rules. Your chat and answers stay as they are.`)
-      : "";
-    document.getElementById("demo-switch").setAttribute("aria-checked", String(!!chat.demo));
-    document.getElementById("res-chips").innerHTML = prefChipsHtml();
-    let parts = { head: "", list: "", map: false };
-    if (!r.goal) {
-      parts.list = `
-        <div class="res-opening">
-          <span class="res-opening-icon" aria-hidden="true">${icon("house", 28)}</span>
-          <p class="empty-title">Your matches will show up here</p>
-          <p class="muted">Answer a few quick questions and the rooms or roommates that fit appear here, with the reasons why.</p>
-        </div>`;
-    } else {
-      const tabs =
-        r.goal === "both"
-          ? `<div class="res-tabs" role="tablist" aria-label="Results">
-              <button role="tab" type="button" data-action="res-tab" data-tab="rooms" aria-selected="${resTab === "rooms"}">Rooms${r.rooms && r.rooms.status === "ok" ? ` <span class="count">${r.rooms.total}</span>` : ""}</button>
-              <button role="tab" type="button" data-action="res-tab" data-tab="people" aria-selected="${resTab === "people"}">Roommates${r.people && r.people.status === "ok" ? ` <span class="count">${r.people.total}</span>` : ""}</button>
-            </div>`
-          : "";
-      const showRooms = r.goal === "room" || (r.goal === "both" && resTab === "rooms");
-      parts = showRooms ? roomsParts(r.rooms) : peopleParts(r.people);
-      parts.head = tabs + parts.head;
-    }
-    top.innerHTML = parts.head;
-    document.getElementById("res-list").innerHTML = parts.list;
-    const box = document.getElementById("res-map-box");
-    box.hidden = !parts.map;
-    if (parts.map) drawResultsMap();
-    const n = resultsCount(r);
-    document.getElementById("results-count").textContent = n ? String(n) : "";
-    document.getElementById("side-memory").innerHTML = memoryHtml();
-  }
-
-  // ── Map of the room results, kept in step with the list ──
-  function currentRooms() {
-    const r = chat && chat.results;
-    return r && r.rooms && r.rooms.status === "ok" ? r.rooms.items : [];
-  }
-
-  async function drawResultsMap() {
-    const box = document.getElementById("res-map");
-    const note = document.getElementById("res-map-note");
-    if (!box) return;
-    if (!resMap || resMap.getContainer() !== box) {
-      if (!resMapReady) {
-        box.innerHTML = `<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading map…</div>`;
-        resMapReady = createMap(box, { center: BRANDEIS_LNGLAT, zoom: 12 })
-          .then((m) => {
-            resMap = m;
-            const loading = box.querySelector(".loading");
-            if (loading) loading.remove();
-          })
-          .catch((e) => {
-            resMap = null;
-            box.innerHTML = `<p class="map-error small">${esc(e.message)} The list below still works.</p>`;
-          })
-          .finally(() => (resMapReady = null));
-      }
-      await resMapReady;
-      if (!resMap || !document.body.contains(box)) return;
-    }
-    const maplibregl = window.maplibregl;
-    resMarkers.forEach((m) => m.remove());
-    resMarkers = [];
-    const items = currentRooms();
-    const located = items.filter((c) => c.unit.location);
-    const areas = {
-      type: "FeatureCollection",
-      features: located
-        .filter((c) => c.unit.location.precision === "approximate")
-        .map((c) => ({ type: "Feature", properties: {}, geometry: circlePolygon([c.unit.location.lng, c.unit.location.lat], c.unit.location.radiusM || 500) })),
-    };
-    const source = resMap.getSource("res-areas");
-    if (source) source.setData(areas);
-    else {
-      resMap.addSource("res-areas", { type: "geojson", data: areas });
-      resMap.addLayer({ id: "res-areas-fill", type: "fill", source: "res-areas", paint: { "fill-color": "#1d4fbf", "fill-opacity": 0.1 } });
-      resMap.addLayer({ id: "res-areas-line", type: "line", source: "res-areas", paint: { "line-color": "#1d4fbf", "line-opacity": 0.4, "line-width": 1 } });
-    }
-    const campus = document.createElement("span");
-    campus.className = "campus-pin";
-    campus.textContent = "Brandeis";
-    resMarkers.push(new maplibregl.Marker({ element: campus }).setLngLat(BRANDEIS_LNGLAT).addTo(resMap));
-    for (const c of located) {
-      const pin = document.createElement("button");
-      pin.type = "button";
-      pin.className = "res-pin" + (c.unit.demo ? " res-pin-demo" : c.unit.sample ? " res-pin-sample" : "") + (resSelected === c.ref ? " selected" : "");
-      pin.dataset.ref = c.ref;
-      pin.textContent = c.ref;
-      pin.addEventListener("click", () => selectResult(c.ref, true));
-      resMarkers.push(new maplibregl.Marker({ element: pin }).setLngLat([c.unit.location.lng, c.unit.location.lat]).addTo(resMap));
-      pin.title = c.unit.demo ? `${c.ref}: demo listing (made up)` : `${c.ref}: ${c.unit.name}`;
-      pin.setAttribute("aria-label", `${c.ref}: ${c.unit.name}, ${money(c.unit.monthly_rent)} a month${c.unit.demo ? ", demo listing, made up" : c.unit.sample ? ", sample listing" : ""}${c.unit.location.precision === "approximate" ? ", approximate area" : ""}. Show its card.`);
-    }
-    const points = located.map((c) => [c.unit.location.lng, c.unit.location.lat]).concat([BRANDEIS_LNGLAT]);
-    const bounds = points.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(points[0], points[0]));
-    resMap.fitBounds(bounds, { padding: 56, maxZoom: 14, duration: 0 });
-    const unplaced = items.length - located.length;
-    note.textContent = located.length
-      ? `${chat.results.demo ? "Demo pins (dashed) are made-up spots, shown as approximate areas." : "Pins show approximate areas unless a landlord chose to share the exact spot."}${unplaced ? ` ${plural(unplaced, "room has", "rooms have")} no map location (still in the list).` : ""}`
-      : "None of these rooms has a map location yet. They're all in the list below.";
-    if (resSelected) selectResult(resSelected, false);
-  }
-
-  function selectResult(ref, fromMap) {
-    resSelected = ref;
-    document.querySelectorAll(".res-card").forEach((el) => el.classList.toggle("selected", el.dataset.ref === ref));
-    resMarkers.forEach((m) => {
-      const el = m.getElement();
-      if (el.dataset.ref) el.classList.toggle("selected", el.dataset.ref === ref);
-    });
-    const card = document.querySelector(`.res-card[data-ref="${CSS.escape(ref)}"]`);
-    if (fromMap && card) {
-      card.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      card.focus({ preventScroll: true });
-    }
-    const c = currentRooms().find((x) => x.ref === ref);
-    if (!fromMap && resMap && c && c.unit.location && !document.getElementById("res-map-box").hidden) {
-      resMap.easeTo({ center: [c.unit.location.lng, c.unit.location.lat], zoom: Math.max(resMap.getZoom(), 13), duration: 400 });
-    }
-  }
-
-  // ── Editing an answer from its chip ──
   const NUMBER_FIELDS = {
     budget_max: { min: 1, max: 50000, step: 50 },
     budget_min: { min: 0, max: 50000, step: 50 },
@@ -4116,6 +3874,7 @@
     const f = findFact(field);
     const dialog = document.getElementById("pref-editor");
     if (!f || !dialog) return;
+    if (chatBusy) return toast("One sec: Vibe is still replying.");
     let control;
     if (NUMBER_FIELDS[field]) {
       const n = NUMBER_FIELDS[field];
@@ -4130,32 +3889,25 @@
     document.getElementById("pref-must").checked = !!f.mustHave;
     document.getElementById("pref-error").textContent = "";
     dialog.dataset.field = field;
+    rememberReturn();
     dialog.showModal();
     document.getElementById("pref-value").focus();
   }
 
-  async function toggleDemo() {
-    try {
-      const d = await api("/api/assistant/demo", { method: "POST", body: { on: !chat.demo } });
-      me.demo = d.demo; // the same switch as on Listings and My matches
-      resSelected = null;
-      resShowAll = false;
-      // Reloaded so the saved list switches too (demo saves show only in Demo mode). The chat and answers stay.
-      await reloadChat();
-      toast(d.demo ? "Demo mode on: made-up listings and people." : "Demo mode off: real listings and people again.");
-    } catch (e) {
-      if (e.status === 401) return showView(errorView(e));
-      toast(e.message);
-    }
-  }
-
-  function applyChatUpdate(d) {
+  // A change made outside the chat. If something newer happened meanwhile, the latest state is fetched instead.
+  function applyChatUpdate(d, seq) {
+    if (seq !== chatSeq) return reloadChat();
     if (d.memory) chat.memory = d.memory;
     if (d.results) chat.results = d.results;
-    if (d.event) {
-      chat.messages.push(d.event);
-      refreshChat();
-    } else renderResults();
+    if (d.event) chat.messages.push(d.event);
+    refreshChat({ scroll: false });
+  }
+
+  async function changeAnswer(body) {
+    if (chatBusy) return toast("One sec: Vibe is still replying.");
+    const seq = ++chatSeq;
+    const d = await chatRequest("/api/assistant/memory", { method: "POST", body });
+    if (d) applyChatUpdate(d, seq);
   }
 
   async function savePref(forget) {
@@ -4170,9 +3922,12 @@
       body.value = NUMBER_FIELDS[field] ? Number(raw) : field === "areas" || field === "wishes" ? raw.split(",").map((s) => s.trim()).filter(Boolean) : raw;
       if (STRICT_FIELDS.includes(field)) body.mustHave = document.getElementById("pref-must").checked;
     }
+    if (chatBusy) return (errorEl.textContent = "One sec: Vibe is still replying.");
+    const seq = ++chatSeq;
     try {
-      applyChatUpdate(await api("/api/assistant/memory", { method: "POST", body }));
+      const d = await api("/api/assistant/memory", { method: "POST", body });
       dialog.close();
+      applyChatUpdate(d, seq);
     } catch (e) {
       if (e.status === 401) return showView(errorView(e));
       errorEl.textContent = e.message;
@@ -4182,29 +3937,32 @@
   async function relaxResult(button) {
     const { field, mode } = button.dataset;
     if (mode === "edit") return openPrefEditor(field);
+    if (chatBusy) return;
     button.disabled = true;
+    const seq = ++chatSeq;
     try {
-      applyChatUpdate(await api("/api/assistant/memory", { method: "POST", body: { field, mustHave: false } }));
+      applyChatUpdate(await api("/api/assistant/memory", { method: "POST", body: { field, mustHave: false } }), seq);
     } catch (e) {
       button.disabled = false;
       toast(e.message);
     }
   }
 
-  // ── Chat ──
+  // ── Confirmation cards: "Save to my profile", roommate matching, contacting a landlord ──
   function actionCard(a) {
     const pending = a.status === "pending";
     const status =
       a.status === "done"
-        ? `<p class="saved small">${a.kind === "save_profile" ? "Saved to your profile." : "Request sent to the landlord."}</p>`
+        ? `<p class="saved small">${a.kind === "save_profile" ? "Saved to your profile. For you uses these now." : "Request sent to the landlord."}</p>`
         : a.status === "dismissed"
           ? `<p class="small muted">Not done. Nothing was changed or sent.</p>`
           : "";
+    const off = chatBusy ? " disabled" : "";
     const buttons = (confirmLabel) => `
       <p class="field-error" role="alert"></p>
       <div class="actions">
-        <button class="btn btn-small" type="button" data-action="chat-confirm" data-id="${esc(a.id)}">${confirmLabel}</button>
-        <button class="btn btn-small btn-quiet" type="button" data-action="chat-dismiss" data-id="${esc(a.id)}">Not now</button>
+        <button class="btn btn-small" type="button" data-action="chat-confirm" data-id="${esc(a.id)}"${off}>${confirmLabel}</button>
+        <button class="btn btn-small btn-quiet" type="button" data-action="chat-dismiss" data-id="${esc(a.id)}"${off}>Not now</button>
       </div>`;
     if (a.kind === "save_profile") {
       const rows = a.changes
@@ -4213,7 +3971,7 @@
       return `
         <div class="action-card" data-card="${esc(a.id)}">
           <p class="action-title">${a.roommateOptIn ? "Turn on roommate matching?" : "Save these answers to your profile?"}</p>
-          ${a.roommateOptIn ? `<p class="small">Renters who also turned it on will see your first name, a compatibility score and what you have in common. You can turn it off any time.</p>` : ""}
+          ${a.roommateOptIn ? `<p class="small">Renters who also turned it on will see your first name, a compatibility score and what you have in common. You can turn it off any time.</p>` : `<p class="small">Your saved preferences power For you. Nothing changes until you confirm.</p>`}
           <table class="changes"><tbody>${rows}</tbody></table>
           ${pending ? `${a.roommateOptIn ? `<label class="check small"><input type="checkbox" name="share_email" /><span>Also let my roommate matches see my email (${esc(me.user.email)})</span></label><label class="check small"><input type="checkbox" name="share_profile" /><span>Also share my budget, area, move-in month and lifestyle answers with matches who share theirs</span></label>` : ""}${buttons(a.roommateOptIn ? "Turn on and save" : "Save to my profile")}` : status}
         </div>`;
@@ -4232,183 +3990,343 @@
       </div>`;
   }
 
-  function chatMessage(m, isLast) {
+  // ── The conversation ──
+  // One status line while Vibe is guided for a reason (an AI limit, or the AI didn't answer), instead of a note on
+  // every reply. It goes away when AI replies are back.
+  const vibeStatus = () =>
+    chat && chat.mode !== "ai" && BASIC_REASONS[chat.basicReason]
+      ? `<p class="vibe-status"><span class="vibe-status-dot" aria-hidden="true"></span><span>${esc(BASIC_REASONS[chat.basicReason])}</span></p>`
+      : "";
+
+  // How far the roommate questions are: only while some are missing, counted from what the server says is missing.
+  function vibeProgress() {
+    const r = chat.results;
+    const p = r && (r.goal === "roommates" || r.goal === "both") ? r.people : null;
+    if (!p || !Array.isArray(p.missing) || !p.missing.length || p.missing.length > ROOMMATE_ANSWERS) return "";
+    const done = ROOMMATE_ANSWERS - p.missing.length;
+    return `
+      <div class="vibe-progress">
+        <label for="vibe-meter">Vibe check: ${done} of ${ROOMMATE_ANSWERS} answers for roommate matching</label>
+        <progress id="vibe-meter" max="${ROOMMATE_ANSWERS}" value="${done}">${done} of ${ROOMMATE_ANSWERS}</progress>
+      </div>`;
+  }
+
+  const vibeChips = (options) =>
+    `<div class="quick vibe-chips" role="group" aria-label="Answers">${options.map((q) => `<button class="chip" type="button" data-action="chat-say" data-text="${esc(q)}">${esc(q)}</button>`).join("")}</div>`;
+
+  const vibeSaveBtn = (attrs, saved, name) =>
+    `<button class="vibe-save" type="button" ${attrs} aria-pressed="${saved}" aria-label="Save ${esc(name)}" title="${saved ? "Saved. Click to remove." : "Save. Nobody is told."}"${chatBusy ? " disabled" : ""}>${rmIcon("bookmark", 18, saved)}</button>`;
+  function vibeDemoSave(kind, id, name) {
+    if (!isRenter()) return "";
+    const savedId = savedIndex.get(`${kind}:${id}`);
+    return vibeSaveBtn(`data-action="demo-save" data-style="vibe" data-kind="${kind}" data-target="${esc(id)}" data-name="${esc(name)}"${savedId ? ` data-saved="${esc(savedId)}"` : ""}`, !!savedId, name);
+  }
+  const realSave = (c, attrs, name) => (c.savedId ? vibeSaveBtn(`data-action="chat-unsave" data-id="${esc(c.savedId)}"`, true, name) : vibeSaveBtn(`data-action="res-save" ${attrs}`, false, name));
+
+  // A person among Vibe's picks: the same card data as For you (score, what you have in common, request status).
+  function vibePersonCard(c) {
+    const key = `vibe:${c.ref}`;
+    chatCards.set(key, c);
+    const name = esc(c.firstName);
+    const pic = c.avatar ? `<span class="vibe-pic has-art">${avatarSvg(c.avatar)}</span>` : `<span class="vibe-pic ${rmTint(c.firstName)}">${esc(initials(c.firstName))}</span>`;
+    const why = (c.highlights && c.highlights.length ? c.highlights : c.fits || []).slice(0, 2);
+    const meta = [c.score != null ? `${c.score}% match` : "", c.details && c.details.area ? c.details.area : ""].filter(Boolean);
+    const save = c.demo ? vibeDemoSave("person", c.id, c.firstName) : realSave(c, `data-kind="person" data-ref="${esc(c.ref)}" data-first="${name}"`, c.firstName);
+    return `
+      <li>
+        <article class="vibe-card${c.demo ? " is-demo" : ""}" aria-label="${esc(c.ref)}: ${name}${c.demo ? ", demo profile" : ""}">
+          <button class="vibe-card-main" type="button" data-action="person-details" data-key="${esc(key)}" aria-label="${name}: view profile">
+            ${pic}
+            <span class="vibe-card-text"><span class="vibe-card-name">${name}</span>${meta.length ? `<span class="vibe-card-meta">${meta.map(esc).join(" · ")}</span>` : ""}</span>
+          </button>
+          <p class="vibe-card-tags"><span class="vibe-ref" title="Vibe calls this pick ${esc(c.ref)}">${esc(c.ref)}</span>${c.demo ? `<span class="vibe-tag vibe-tag-dark">Demo</span>` : c.sample ? `<span class="vibe-tag">Sample</span>` : ""}${c.match === "exact" ? `<span class="vibe-tag">Strong match</span>` : c.match ? `<span class="vibe-tag">Partial match</span>` : ""}</p>
+          ${why.length ? `<ul class="vibe-why" aria-label="What you have in common">${why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
+          <div class="vibe-card-act">${rmPrimary(c, key)}${isRenter() ? save : ""}</div>
+        </article>
+      </li>`;
+  }
+
+  // A room among Vibe's picks; Details is the same room details box as everywhere else.
+  function vibeRoomCard(c) {
+    const key = `vibe:${c.ref}`;
+    chatCards.set(key, c);
+    const u = c.unit;
+    const save = u.demo ? vibeDemoSave("room", u.id, u.name) : realSave(c, `data-kind="room" data-unit="${esc(u.id)}"`, u.name);
+    const why = c.mainMiss ? `<ul class="vibe-why is-miss" aria-label="What doesn't fit"><li>${esc(c.mainMiss)}</li></ul>` : c.highlights && c.highlights.length ? `<ul class="vibe-why" aria-label="Why it fits">${c.highlights.slice(0, 2).map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : "";
+    return `
+      <li>
+        <article class="vibe-card${u.demo ? " is-demo" : ""}" aria-label="${esc(c.ref)}: ${esc(u.name)}${u.demo ? ", demo listing" : ""}">
+          <button class="vibe-card-main" type="button" data-action="chat-details" data-key="${esc(key)}" aria-label="${esc(u.name)}: view details">
+            <span class="vibe-pic is-room" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false">${ART[ART_FOR[u.kind] || "house"]}</svg></span>
+            <span class="vibe-card-text">
+              <span class="vibe-card-name">${esc(u.name)}</span>
+              <span class="vibe-card-meta">${esc(u.area)}${c.km != null ? ` · ${c.km} km from Brandeis` : ""}</span>
+              <span class="vibe-card-meta">${u.demo ? shareLine(u) : priceLine(u)} · from ${fmtDate(u.move_in_date)}</span>
+            </span>
+          </button>
+          <p class="vibe-card-tags"><span class="vibe-ref" title="Vibe calls this pick ${esc(c.ref)}">${esc(c.ref)}</span>${u.demo ? `<span class="vibe-tag vibe-tag-dark">Demo</span>` : u.sample ? `<span class="vibe-tag">Sample</span>` : ""}<span class="vibe-tag">${c.match === "exact" ? "Matches everything" : "Partial match"}</span>${!u.demo && myInterests.has(u.id) ? `<span class="vibe-tag">Request sent</span>` : ""}</p>
+          ${why}
+          <div class="vibe-card-act"><button class="rm-hey rm-hey-plain" type="button" data-action="chat-details" data-key="${esc(key)}" aria-label="Details: ${esc(u.name)}">Details</button>${isRenter() ? save : ""}</div>
+        </article>
+      </li>`;
+  }
+
+  // Vibe's picks: compact cards under the latest reply, straight from the current results (the same matching, scores
+  // and reasons as everywhere else). Nothing is shown unless the matching found someone or something.
+  function vibePicks(m) {
+    const r = chat.results;
+    // What the reply searched; otherwise what the renter is looking for (the picks follow every change, such as
+    // loosening a must-have, and a search that found no room still gets what would help).
+    const peopleOk = r.people && r.people.status === "ok";
+    const roomsShown = r.rooms && (r.rooms.status === "ok" || r.rooms.status === "none");
+    const kind = m.cards.length
+      ? m.cards[0].kind
+      : r.goal === "room"
+        ? "room"
+        : peopleOk && r.goal !== "room"
+          ? "person"
+          : r.goal === "both" && roomsShown
+            ? "room"
+            : null;
+    const set = kind === "room" ? r.rooms : kind === "person" ? r.people : null;
+    if (!set) return "";
+    if (set.status === "none") return kind === "room" ? noRoomsHtml(set) : "";
+    if (set.status !== "ok" || !set.items.length) return "";
+    const people = kind === "person";
+    const items = vibeMore ? set.items : set.items.slice(0, VIBE_PICKS);
+    const found = people ? plural(set.total, "person fits", "people fit") : `${set.total === 1 ? "1 room fits" : `${set.total} rooms fit`} your must-haves`;
+    const source = chat.demo ? `Made-up demo ${people ? "profiles" : "listings"}` : people ? "Real renters who chose to be found" : "Real listings";
+    const more =
+      set.items.length > VIBE_PICKS
+        ? `<button class="vibe-more" type="button" data-action="vibe-more" aria-expanded="${vibeMore}">${vibeMore ? "Show fewer" : `Show all ${set.items.length}`}</button>`
+        : "";
+    return `
+      <section class="vibe-picks" aria-label="${people ? "Vibe's roommate picks" : "Vibe's room picks"}">
+        <p class="vibe-picks-head"><strong>${people ? "Your top people right now" : "Rooms that fit right now"}</strong><span>${found}${set.preliminary ? " so far" : ""} · ${source} · from your chat answers</span></p>
+        <ul class="vibe-cards" role="list">${items.map(people ? vibePersonCard : vibeRoomCard).join("")}</ul>
+        ${more}
+      </section>`;
+  }
+
+  function chatMessage(m, { last, chips }) {
     if (m.event) return `<li class="msg-event"><span>${esc(m.text)}</span></li>`;
     if (m.role === "user") return `<li class="msg msg-user"><span class="sr-only">You said:</span><div class="bubble">${richText(m.text)}</div></li>`;
     return `
       <li class="msg msg-bot">
-        <span class="sr-only">coHabit said:</span>
-        ${m.notice ? `<p class="msg-notice">${esc(m.notice)}</p>` : ""}
+        <span class="sr-only">Vibe said:</span>
         <div class="bubble">${richText(m.text)}</div>
-        ${m.cards.length ? `<button class="see-results" type="button" data-action="pane" data-pane="results">See results</button>` : ""}
+        ${chips && m.quickReplies.length ? vibeChips(m.quickReplies) : ""}
         ${m.actions.map(actionCard).join("")}
-        ${isLast && m.quickReplies.length ? `<div class="quick" aria-label="Answers">${m.quickReplies.map((q) => `<button class="chip" type="button" data-action="chat-say" data-text="${esc(q)}">${esc(q)}</button>`).join("")}</div>` : ""}
+        ${last ? vibePicks(m) : ""}
       </li>`;
   }
 
   function chatLogHtml() {
-    if (!chat.messages.length) {
-      return `
-        <li class="msg msg-bot">
-          <div class="bubble"><p>Hey! What are you looking for?</p></div>
-          <div class="quick" aria-label="Answers">${GOALS.map((q) => `<button class="chip" type="button" data-action="chat-say" data-text="${esc(q)}">${esc(q)}</button>`).join("")}</div>
-        </li>`;
-    }
-    // Answer buttons belong to the latest question, even if notes about chip changes came after it.
+    const pending = vibePending
+      ? `<li class="msg msg-user pending"><span class="sr-only">You said:</span><div class="bubble">${richText(vibePending)}</div></li>
+         <li class="msg msg-bot typing"><div class="bubble"><span class="dots" aria-hidden="true"><span></span><span></span><span></span></span><span class="sr-only">Vibe is typing.</span></div></li>`
+      : "";
+    if (!chat.messages.length)
+      return `<li class="msg msg-bot"><span class="sr-only">Vibe said:</span><div class="bubble"><p>${esc(VIBE_GREETING)}</p><p>What are you looking for?</p></div>${vibePending ? "" : vibeChips(GOALS)}</li>${pending}`;
+    // Answer chips belong to the latest question, even if notes about answer changes came after it.
     const lastUser = chat.messages.map((m) => m.role).lastIndexOf("user");
     let lastReply = -1;
     chat.messages.forEach((m, i) => m.role === "assistant" && !m.event && (lastReply = i));
-    return chat.messages.map((m, i) => chatMessage(m, i === lastReply && lastReply > lastUser)).join("");
+    return chat.messages.map((m, i) => chatMessage(m, { last: i === lastReply && !vibePending, chips: i === lastReply && lastReply > lastUser && !vibePending })).join("") + pending;
   }
 
-  function memoryHtml() {
-    if (!chat.memory.length) return `<p class="small muted">Nothing yet. Your answers show up here, and you can change them any time.</p>`;
-    return `
-      <ul class="memory" role="list">${chat.memory
-        .map(
-          (f) => `
-        <li>
-          <div class="memory-text"><span class="small muted">${esc(f.label)}</span><span>${esc(f.value)}</span></div>
-          <div class="memory-actions">
-            ${f.mustHave === undefined ? "" : `<button class="toggle${f.mustHave ? " on" : ""}" type="button" data-action="chat-strict" data-field="${esc(f.field)}" data-must="${f.mustHave ? "false" : "true"}" aria-pressed="${f.mustHave}" title="${f.mustHave ? "A must-have: rooms that miss it are hidden. Click to make it flexible." : "Flexible: it changes the order but hides nothing. Click to make it a must-have."}">${f.mustHave ? "Must-have" : "Flexible"}</button>`}
-            <button class="icon-btn" type="button" data-action="chat-forget" data-field="${esc(f.field)}" aria-label="Forget ${esc(f.label.toLowerCase())}" title="Forget this">×</button>
-          </div>
-        </li>`
-        )
-        .join("")}</ul>
-      <p class="hint">Must-haves filter the results. Flexible answers only change the order. This isn't your saved profile until you confirm it.</p>`;
-  }
-
-  const savedHtml = () =>
-    chat.saved.length ? `<ul class="side-cards" role="list">${chat.saved.map(savedCard).join("")}</ul>` : `<p class="small muted">Tap Save on a room or person to keep it here.</p>`;
-
-  const modeNotice = () => (chat.mode === "ai" || !BASIC_REASONS[chat.basicReason] ? "" : `<p class="msg-notice">${esc(BASIC_REASONS[chat.basicReason])}</p>`);
-
-  function chatInfoHtml() {
-    const ai = chat.mode === "ai";
-    return `
-      <details class="chat-info">
-        <summary>${ai ? "AI assistant" : "Guided chat"} <span class="muted">· how it works</span></summary>
-        <div class="chat-info-body small">
-          ${
-            ai
-              ? `<p>An AI model writes the replies. Results and reasons come from coHabit's own search, never from the AI.</p>`
-              : `<p>This free chat follows a set of questions. Tap an answer, or type something short like a budget, a month, a town or a distance. It can't answer open-ended questions.</p>`
-          }
-          <p>Your chat and answers stay on your account so you can pick up later, until you clear the chat, delete your account, or leave it unused for ${chat.keepDays} days. ${ai ? (chat.aiProvider === "openrouter" ? "Replies are written by a free AI model through OpenRouter. Your messages go to OpenRouter and the model's provider, which may keep them to improve their models; other students' names and contact details never do. " : "Messages go to Anthropic (the company behind Claude) to write replies; other students' names and contact details never do. ") : ""}Please don't share phone numbers or addresses. <a href="/privacy">Privacy policy</a></p>
-        </div>
-      </details>`;
-  }
-
-  async function assistantPage() {
-    if (!me.user) {
-      return {
-        title: "Assistant",
-        html: `
-        <div class="panel">
-          <p class="eyebrow">coHabit for Brandeis students</p>
-          <h1 tabindex="-1">Find your room. Find your people.</h1>
-          <p class="muted">Answer a few quick questions. See rooms and roommates that fit, and why.</p>
-          <div class="actions"><button class="btn" type="button" data-action="sign-in" data-next="/assistant">${icon("google", 18)} Sign in with Google</button></div>
-        </div>`,
-      };
+  // "Your answers" (the chat's search criteria, with must-have or flexible) and "How it works", above the message box.
+  function vibeSheetHtml() {
+    if (!chat || !vibeSheet) return "";
+    const close = `<button class="vibe-x vibe-x-sm" type="button" data-action="vibe-sheet" data-sheet="" aria-label="Close" title="Close">${rmIcon("close", 16)}</button>`;
+    if (vibeSheet === "info") {
+      const ai = chat.mode === "ai";
+      return `
+        <div class="vibe-sheet-top"><h3 class="vibe-sheet-title">How Vibe works${ai ? "" : " (guided mode)"}</h3>${close}</div>
+        <p>${ai ? "An AI model writes Vibe's replies. Picks, scores and reasons come from coHabit's own matching, never from the AI." : "Right now Vibe follows a set of questions. Tap an answer, or type something short like a budget, a month, a town or a distance. It can't answer open-ended questions."}</p>
+        <p>Your chat and answers stay on your account so you can pick up later, until you clear the chat, delete your account, or leave it unused for ${chat.keepDays || 90} days. ${ai ? (chat.aiProvider === "openrouter" ? "Replies are written by a free AI model through OpenRouter. Your messages go to OpenRouter and the model's provider, which may keep them to improve their models; other students' names and contact details never do. " : "Messages go to Anthropic (the company behind Claude) to write replies; other students' names and contact details never do. ") : ""}Please don't share phone numbers or addresses. <a href="/privacy">Privacy policy</a></p>`;
     }
-    const blocked = gate("renter");
-    if (blocked !== undefined) return blocked;
-    const [state] = await Promise.all([api("/api/assistant"), loadMyInterests(), loadSavedIndex()]);
-    me.demo = !!state.demo;
-    chat = state;
-    resSelected = null;
-    resShowAll = false;
-    resMap = null;
-    if (chat.results.goal === "roommates" || new URLSearchParams(location.search).get("focus") === "roommates") resTab = "people";
-    return {
-      title: "Assistant",
-      html: `
-      <div class="asst" data-pane="${chatPane}">
-        <div class="asst-top">
-          <h1 tabindex="-1">Find your room. Find your people.</h1>
-          <button class="demo-switch" type="button" role="switch" id="demo-switch" data-action="demo-toggle" aria-checked="${!!chat.demo}"><span class="demo-knob" aria-hidden="true"></span>Demo mode</button>
-        </div>
-        <div class="pane-tabs" role="tablist" aria-label="Show">
-          <button role="tab" type="button" id="tab-chat" data-action="pane" data-pane="chat" aria-controls="pane-chat" aria-selected="${chatPane === "chat"}">Chat</button>
-          <button role="tab" type="button" id="tab-results" data-action="pane" data-pane="results" aria-controls="pane-results" aria-selected="${chatPane === "results"}">Results <span class="count" id="results-count"></span></button>
-        </div>
-          <section class="asst-results" id="pane-results" aria-label="Results">
-            <div id="res-demo"></div>
-            <div id="res-chips"></div>
-            <div id="res-top"></div>
-            <div class="res-map-box" id="res-map-box" hidden><div class="res-map" id="res-map"></div><p class="small muted" id="res-map-note"></p></div>
-            <div id="res-list"></div>
-            <details class="fold" id="fold-requests"><summary>Roommate requests <span class="count" id="req-count"></span></summary><div id="requests-body"><p class="small muted">Loading…</p></div></details>
-            <details class="fold"><summary>All your answers</summary><div id="side-memory">${memoryHtml()}</div></details>
-            <details class="fold"><summary>Saved <span class="count" id="saved-count">${chat.saved.length || ""}</span></summary><div id="side-saved">${savedHtml()}</div></details>
-            <p class="links small">Prefer to browse? <a href="/roommates">Roommates</a> · <a href="/rooms">Rooms</a> · <a href="/preferences">Preferences</a></p>
-          </section>
-          <section class="asst-chat" id="pane-chat" aria-labelledby="chat-heading">
-            <div class="chat-head">
-              <h2 class="sr-only" id="chat-heading">Chat</h2>
-              <div id="chat-info">${chatInfoHtml()}</div>
-              <button class="btn btn-small btn-quiet" type="button" data-action="chat-clear" id="chat-clear">Clear chat</button>
-            </div>
-            <div id="chat-mode">${modeNotice()}</div>
-            <ol class="chat-log" id="chat-log" role="log" aria-live="polite" aria-label="Conversation">${chatLogHtml()}</ol>
-            <form class="chat-form" id="chat-form" novalidate>
-              <label class="sr-only" for="chat-input">Message (optional: you can tap answers instead)</label>
-              <textarea id="chat-input" name="text" rows="1" maxlength="800" placeholder="Or type a reply…" autocomplete="off"></textarea>
-              <button class="btn" type="submit" id="chat-send">Send</button>
-            </form>
-            <p class="field-error" id="chat-error" role="alert"></p>
-          </section>
-      </div>`,
-      mount: () => {
-        document.getElementById("chat-clear").disabled = !chat.messages.length;
-        renderResults();
-        scrollChat();
-        loadRequests();
-      },
-    };
+    const off = chatBusy ? " disabled" : "";
+    const facts = chat.memory;
+    const rows = facts
+      .map(
+        (f) => `
+        <li>
+          <button class="vibe-fact" type="button" data-action="pref-edit" data-field="${esc(f.field)}"${off} aria-label="${esc(f.label)}: ${esc(f.value)}. Change"><span>${esc(f.label)}</span><strong>${esc(f.value)}</strong></button>
+          ${f.mustHave === undefined ? "" : `<button class="vibe-must${f.mustHave ? " on" : ""}" type="button" data-action="chat-strict" data-field="${esc(f.field)}" data-must="${f.mustHave ? "false" : "true"}" aria-pressed="${f.mustHave}"${off} title="${f.mustHave ? "A must-have: picks that miss it are hidden. Click to make it flexible." : "Flexible: it changes the order but hides nothing. Click to make it a must-have."}">${f.mustHave ? "Must-have" : "Flexible"}</button>`}
+          <button class="vibe-forget" type="button" data-action="chat-forget" data-field="${esc(f.field)}" aria-label="Forget ${esc(f.label.toLowerCase())}" title="Forget this"${off}>${rmIcon("close", 14)}</button>
+        </li>`
+      )
+      .join("");
+    return `
+      <div class="vibe-sheet-top"><h3 class="vibe-sheet-title">Your chat answers</h3>${close}</div>
+      <p class="vibe-sheet-note">They steer Vibe's picks and stay in this chat. Your <strong>saved preferences</strong>, which For you uses, only change when you save these to your profile and confirm.</p>
+      ${
+        facts.length
+          ? `<ul class="vibe-facts" role="list">${rows}</ul><p class="vibe-sheet-hint">Tap an answer to change it. Must-haves filter Vibe's picks; the others only change the order.</p>`
+          : `<p class="vibe-sheet-hint">Nothing yet. Answer a question and it shows up here.</p>`
+      }
+      <div class="vibe-sheet-actions">${facts.length ? `<button class="vibe-pill" type="button" data-action="chat-say" data-text="Save my answers to my profile"${off}>Save to my profile</button>` : ""}<a class="vibe-link" href="/preferences?from=${encodeURIComponent(location.pathname)}">Edit saved preferences</a></div>`;
   }
 
-  function setPane(pane) {
-    chatPane = pane;
-    const root = document.querySelector(".asst");
-    if (!root) return;
-    root.dataset.pane = pane;
-    document.getElementById("tab-chat").setAttribute("aria-selected", String(pane === "chat"));
-    document.getElementById("tab-results").setAttribute("aria-selected", String(pane === "results"));
-    if (pane === "results") {
-      if (resMap) resMap.resize();
-      document.querySelector(".pane-tabs").scrollIntoView({ block: "start" });
-    } else scrollChat();
+  const vibeErrorHtml = () => (vibeError ? `<span>${esc(vibeError.message)}</span> <button class="rm-link" type="button" data-action="vibe-retry">Try again</button>` : "");
+
+  const vibeVisitorHtml = () => `
+    <div class="vibe-scroll">
+      <ol class="vibe-log" aria-label="Vibe">
+        <li class="msg msg-bot">
+          <div class="bubble"><p>${esc(VIBE_GREETING)}</p><p>Make a free renter account or sign in, and we'll start your vibe check.</p></div>
+          <div class="vibe-cta"><a class="rm-hey rm-hey-plain" href="/signup?as=renter" data-path="renter">Create an account</a><a class="vibe-pill vibe-pill-light" href="/signin?next=/assistant">Sign in</a></div>
+        </li>
+      </ol>
+    </div>`;
+
+  function vibeBodyHtml() {
+    if (!me.user) return vibeVisitorHtml();
+    if (!chat)
+      return vibeLoadError
+        ? `<div class="vibe-center"><p>Vibe couldn't load just now.</p><button class="vibe-pill" type="button" data-action="vibe-reload">Try again</button></div>`
+        : `<div class="vibe-center" role="status"><span class="spinner" aria-hidden="true"></span>Loading Vibe…</div>`;
+    vibeStatusShown = vibeStatus();
+    return `
+      <div class="vibe-mode" id="chat-mode" role="status">${vibeStatusShown}</div>
+      <div class="vibe-scroll" id="vibe-scroll">
+        <div id="vibe-progress">${vibeProgress()}</div>
+        <ol class="vibe-log" id="chat-log" role="log" aria-live="polite" aria-label="Conversation with Vibe">${chatLogHtml()}</ol>
+      </div>
+      <div class="vibe-foot">
+        <div class="vibe-sheet" id="vibe-sheet"${vibeSheet ? "" : " hidden"}>${vibeSheetHtml()}</div>
+        <div class="vibe-tools">
+          <button class="vibe-tool" type="button" data-action="vibe-sheet" data-sheet="answers" id="vibe-answers-btn" aria-expanded="${vibeSheet === "answers"}" aria-controls="vibe-sheet">Your answers<span class="vibe-count" id="vibe-answers-count">${chat.memory.length || ""}</span></button>
+          <button class="vibe-tool" type="button" data-action="vibe-sheet" data-sheet="info" id="vibe-info-btn" aria-expanded="${vibeSheet === "info"}" aria-controls="vibe-sheet">How it works</button>
+          <button class="vibe-tool" type="button" data-action="chat-clear" id="chat-clear"${chat.messages.length && !chatBusy ? "" : " disabled"}>Clear chat</button>
+        </div>
+        <form class="vibe-form" id="chat-form" novalidate>
+          <label class="sr-only" for="chat-input">Message Vibe (or tap an answer above)</label>
+          <textarea id="chat-input" name="text" rows="1" maxlength="800" placeholder="Type a reply…" autocomplete="off" enterkeyhint="send">${esc(vibeDraft)}</textarea>
+          <button class="vibe-send" type="submit" id="chat-send" aria-label="Send" title="Send"${chatBusy ? " disabled" : ""}>${rmIcon("send", 20)}</button>
+        </form>
+        <p class="field-error vibe-error" id="chat-error" role="alert">${vibeErrorHtml()}</p>
+      </div>`;
   }
 
-  const isPhone = () => window.matchMedia("(max-width: 900px)").matches;
+  const vibeFlag = () => (chat && chat.demo ? `<span class="rm-demo-flag" title="Demo mode is on: Vibe's picks are made up">Demo</span>` : "");
+
+  function vibePanelHtml() {
+    return `
+      <aside class="vibe" id="vibe" aria-labelledby="vibe-title"${vibeOpen ? "" : " hidden"}>
+        <header class="vibe-head">
+          <span class="vibe-avatar" aria-hidden="true">${rmIcon("sparkle", 22)}</span>
+          <div class="vibe-name"><h2 id="vibe-title" tabindex="-1">Vibe</h2><p>Roommate vibe check</p></div>
+          <span id="vibe-flag">${vibeFlag()}</span>
+          <button class="vibe-x" type="button" data-action="vibe-close" aria-label="Close Vibe" title="Close">${rmIcon("close", 20)}</button>
+        </header>
+        <div class="vibe-body" id="vibe-body">${vibeBodyHtml()}</div>
+      </aside>`;
+  }
+
+  // What had focus in the panel, as a selector, so it can get focus back after a redraw.
+  function focusSelector(el) {
+    if (!el || el === document.body) return null;
+    if (el.id) return `#${CSS.escape(el.id)}`;
+    const a = el.dataset && el.dataset.action;
+    if (!a) return null;
+    const attrs = ["key", "field", "id", "target", "text", "sheet", "unit", "ref"]
+      .filter((k) => el.dataset[k] != null)
+      .map((k) => `[data-${k}="${CSS.escape(el.dataset[k])}"]`)
+      .join("");
+    return `[data-action="${a}"]${attrs}`;
+  }
+  const focusTarget = () => (vibeWide() && document.getElementById("chat-input")) || document.getElementById("vibe-title");
+
+  // Shows the newest exchange: from your last message down, so a long reply is read from its start.
   function scrollChat() {
+    const box = document.getElementById("vibe-scroll");
     const log = document.getElementById("chat-log");
-    if (!log) return;
-    log.scrollTop = log.scrollHeight;
-    // On phones the page scrolls, not the log: bring the newest message into view.
-    if (isPhone() && chatPane === "chat" && log.lastElementChild) log.lastElementChild.scrollIntoView({ block: "end" });
+    if (!box || !log || !vibeOpen) return;
+    const mine = log.querySelectorAll(".msg-user");
+    const from = mine[mine.length - 1];
+    if (!from) return void (box.scrollTop = chat && chat.messages.length ? box.scrollHeight : 0);
+    box.scrollTop = Math.max(0, from.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 12);
   }
 
-  function refreshChat() {
-    if (!document.getElementById("chat-log")) return;
-    chatCards.clear();
-    document.getElementById("chat-log").innerHTML = chatLogHtml();
-    document.getElementById("chat-info").innerHTML = chatInfoHtml();
-    document.getElementById("chat-mode").innerHTML = modeNotice();
-    document.getElementById("chat-clear").disabled = !chat.messages.length;
-    document.getElementById("side-saved").innerHTML = savedHtml();
-    document.getElementById("saved-count").textContent = chat.saved.length || "";
-    renderResults();
-    scrollChat();
+  function vibeToolsSync() {
+    const count = document.getElementById("vibe-answers-count");
+    if (count) count.textContent = chat.memory.length || "";
+    for (const [id, sheet] of [["vibe-answers-btn", "answers"], ["vibe-info-btn", "info"]]) document.getElementById(id)?.setAttribute("aria-expanded", String(vibeSheet === sheet));
+    const clear = document.getElementById("chat-clear");
+    if (clear) clear.disabled = !chat.messages.length || chatBusy;
+    const send = document.getElementById("chat-send");
+    if (send) send.disabled = chatBusy;
   }
 
+  // Redraws what changed in the panel. The message box isn't redrawn, so typing ahead while Vibe replies works.
+  function refreshChat({ scroll = true } = {}) {
+    const body = document.getElementById("vibe-body");
+    if (!body) return;
+    const flag = document.getElementById("vibe-flag");
+    if (flag) flag.innerHTML = vibeFlag();
+    const log = document.getElementById("chat-log");
+    if (!log || !chat) {
+      body.innerHTML = vibeBodyHtml();
+      const input = document.getElementById("chat-input");
+      if (input) {
+        growInput(input);
+        // Opened before the chat had loaded: on laptops, focus moves on from the title to the message box.
+        if (vibeWide() && document.activeElement && document.activeElement.id === "vibe-title") input.focus({ preventScroll: true });
+      }
+      if (scroll) scrollChat();
+      return;
+    }
+    const panel = document.getElementById("vibe");
+    const active = document.activeElement;
+    const inPanel = panel.contains(active) && active.id !== "chat-input";
+    const keep = inPanel ? focusSelector(active) : null;
+    for (const k of [...chatCards.keys()]) if (k.startsWith("vibe:")) chatCards.delete(k);
+    const status = vibeStatus();
+    if (status !== vibeStatusShown) document.getElementById("chat-mode").innerHTML = vibeStatusShown = status;
+    document.getElementById("vibe-progress").innerHTML = vibeProgress();
+    log.innerHTML = chatLogHtml();
+    const sheet = document.getElementById("vibe-sheet");
+    sheet.hidden = !vibeSheet;
+    sheet.innerHTML = vibeSheetHtml();
+    vibeToolsSync();
+    document.getElementById("chat-error").innerHTML = vibeErrorHtml();
+    if (scroll) scrollChat();
+    // Focus: back where it was; after an answer chip, on the next question's answers.
+    const chip = !vibePending && vibeChipFocus && log.querySelector(".vibe-chips .chip");
+    const input = document.getElementById("chat-input");
+    if (chip && (inPanel || active === document.body || (active === input && !input.value))) chip.focus({ preventScroll: true });
+    else if (inPanel) {
+      const el = keep && panel.querySelector(keep);
+      (el && !el.disabled ? el : focusTarget())?.focus({ preventScroll: true });
+    }
+    if (!vibePending) vibeChipFocus = false;
+  }
+
+  // Fetches the chat again (when the panel opens, after a confirmation, a save or Demo mode). Skipped while a
+  // message is on its way: its reply brings the newest state.
   async function reloadChat() {
-    const [state] = await Promise.all([api("/api/assistant"), loadSavedIndex()]);
-    chat = state;
-    me.demo = !!state.demo;
+    if (!isRenter() || chatBusy) return;
+    const seq = ++chatSeq;
+    try {
+      const [state] = await Promise.all([api("/api/assistant"), loadSavedIndex(), interestsLoaded ? null : loadMyInterests().then(() => (interestsLoaded = true))]);
+      if (seq !== chatSeq) return;
+      const demoChanged = !!state.demo !== !!me.demo;
+      chat = state;
+      me.demo = !!state.demo;
+      vibeLoadError = false;
+      // Demo mode changed elsewhere (clearing the chat also turns it off): redraw the page so the cards match Vibe.
+      if (demoChanged && document.getElementById("rm-grid")) {
+        if (document.getElementById("vibe")?.contains(document.activeElement) || document.activeElement === document.body) vibeFocusPending = true;
+        return render(false);
+      }
+    } catch (e) {
+      if (seq !== chatSeq) return;
+      if (e.status === 401) return showView(errorView(e));
+      if (chat) return toast(e.message);
+      vibeLoadError = true;
+    }
     refreshChat();
   }
 
@@ -4417,46 +4335,133 @@
     el.style.height = Math.min(el.scrollHeight, 140) + "px";
   }
 
-  async function sendChat(text) {
+  async function sendChat(text, { typed = false } = {}) {
     text = String(text || "").trim();
-    const log = document.getElementById("chat-log");
-    if (!text || chatBusy || !log) return;
-    chatBusy = true;
+    if (!text || chatBusy || !chat || !document.getElementById("chat-log")) return;
     const input = document.getElementById("chat-input");
-    const send = document.getElementById("chat-send");
-    const errorEl = document.getElementById("chat-error");
-    errorEl.textContent = "";
-    log.querySelectorAll(".quick").forEach((q) => q.remove());
-    if (!chat.messages.length) log.innerHTML = "";
-    log.insertAdjacentHTML(
-      "beforeend",
-      `<li class="msg msg-user pending"><span class="sr-only">You said:</span><div class="bubble">${richText(text)}</div></li>
-       <li class="msg msg-bot typing"><div class="bubble"><span class="dots" aria-hidden="true"><span></span><span></span><span></span></span><span class="sr-only">Writing a reply.</span></div></li>`
-    );
-    input.value = "";
-    growInput(input);
-    send.disabled = true;
-    scrollChat();
-    try {
-      const data = await api("/api/assistant/messages", { method: "POST", body: { text } });
-      const goalBefore = chat.results.goal;
-      chat.messages = chat.messages.concat(data.messages);
-      Object.assign(chat, { memory: data.memory, saved: data.saved, results: data.results, mode: data.mode, basicReason: data.basicReason, usage: data.usage });
-      if (data.results.goal !== goalBefore) {
-        resTab = data.results.goal === "roommates" ? "people" : "rooms";
-        resShowAll = false;
-      }
-      refreshChat();
-    } catch (e) {
-      if (e.status === 401) return showView(errorView(e));
-      refreshChat();
-      input.value = text;
+    chatBusy = true;
+    vibePending = text;
+    vibeError = null;
+    if (typed && input) {
+      input.value = vibeDraft = "";
       growInput(input);
-      errorEl.textContent = e.message;
-    } finally {
-      chatBusy = false;
-      send.disabled = false;
     }
+    const seq = ++chatSeq;
+    refreshChat();
+    let data;
+    try {
+      data = await api("/api/assistant/messages", { method: "POST", body: { text } });
+    } catch (e) {
+      chatBusy = false;
+      vibePending = null;
+      vibeChipFocus = false;
+      if (e.status === 401) return showView(errorView(e));
+      vibeError = { text, message: e.message };
+      const box = document.getElementById("chat-input");
+      if (typed && box && !box.value) {
+        box.value = vibeDraft = text;
+        growInput(box);
+      }
+      return refreshChat();
+    }
+    chatBusy = false;
+    vibePending = null;
+    const known = new Set(chat.messages.map((m) => m.id));
+    chat.messages = chat.messages.concat(data.messages.filter((m) => !known.has(m.id)));
+    if (seq === chatSeq) {
+      Object.assign(chat, { memory: data.memory, saved: data.saved, results: data.results, mode: data.mode, basicReason: data.basicReason, usage: data.usage });
+      vibeMore = false;
+    }
+    refreshChat();
+    if (seq !== chatSeq) reloadChat(); // something newer changed meanwhile: fetch the latest rather than use this reply's state
+  }
+
+  // ── Opening and closing ──
+  // Laptops: the page keeps working beside the panel, and the card at the top of the screen stays there while the
+  // cards reflow. Phones: the panel covers the page, which can't be reached until it closes.
+  function vibeInert() {
+    const page = document.querySelector(".rm-page");
+    if (page) page.inert = vibeOpen && !vibeWide();
+  }
+
+  // Phones: keep the panel the size of the visible area, so the message box stays above the keyboard.
+  function fitVibe() {
+    const panel = document.getElementById("vibe");
+    const vv = window.visualViewport;
+    if (!panel || !vv) return;
+    panel.style.setProperty("--vibe-h", `${Math.round(vv.height)}px`);
+    panel.style.setProperty("--vibe-top", `${Math.round(vv.offsetTop)}px`);
+    if (document.activeElement && document.activeElement.id === "chat-input") scrollChat();
+  }
+
+  function rmAnchor() {
+    if (window.scrollY <= 0) return null;
+    const el = [...document.querySelectorAll(".rm-grid > li, .rm-main .empty")].find((x) => x.getBoundingClientRect().bottom > 72);
+    return el ? { el, y: el.getBoundingClientRect().top } : null;
+  }
+
+  function setVibe(open, { focus = true } = {}) {
+    const panel = document.getElementById("vibe");
+    if (!panel) return;
+    const wide = vibeWide();
+    const anchor = wide ? rmAnchor() : null;
+    if (open && !vibeOpen && !wide) vibePageY = window.scrollY;
+    vibeOpen = open;
+    panel.hidden = !open;
+    document.body.classList.toggle("vibe-open", open);
+    vibeInert();
+    const button = document.getElementById("rm-vibe-btn");
+    if (button) button.setAttribute("aria-expanded", String(open));
+    if (anchor) window.scrollBy(0, anchor.el.getBoundingClientRect().top - anchor.y);
+    if (!open && vibePageY != null) {
+      window.scrollTo(0, vibePageY);
+      vibePageY = null;
+    }
+    if (open) {
+      fitVibe();
+      scrollChat();
+      if (isRenter()) reloadChat();
+      if (focus) focusTarget()?.focus({ preventScroll: true });
+    } else if (focus) button?.focus({ preventScroll: true });
+  }
+
+  // After the Roommates page is drawn (also after a tab switch or Demo mode while the panel is open).
+  function vibeMount() {
+    document.body.classList.toggle("vibe-open", vibeOpen);
+    vibeInert();
+    if (!vibeOpen) return;
+    fitVibe();
+    if (chat) {
+      const input = document.getElementById("chat-input");
+      if (input) growInput(input);
+      scrollChat();
+    }
+    if (isRenter()) reloadChat();
+    if (vibeFocusPending) focusTarget()?.focus({ preventScroll: true });
+    vibeFocusPending = false;
+  }
+
+  // /assistant (the old assistant page) opens Vibe on Roommates: For you for renters, Explore for visitors.
+  function vibeEntry() {
+    if (me.user && me.user.accountType !== "renter") return gate("renter");
+    vibeOpen = true;
+    vibeFocusPending = true;
+    navigate(isRenter() ? "/roommates/for-you" : "/roommates/explore", true);
+    return null;
+  }
+
+  // Where focus goes back to when a details or connect box closes, if what opened it was redrawn meanwhile.
+  let dialogReturn = null;
+  const rememberReturn = () => (dialogReturn = focusSelector(document.activeElement));
+  function restoreDialogFocus() {
+    setTimeout(() => {
+      if (document.querySelector("dialog[open]")) return; // another box is still open; this runs again when it closes
+      const sel = dialogReturn;
+      dialogReturn = null;
+      if (!sel || (document.activeElement && document.activeElement !== document.body)) return;
+      const el = document.querySelector(sel) || (sel.includes("vibe:") && focusTarget());
+      el?.focus({ preventScroll: true });
+    });
   }
 
   async function chatRequest(path, options, okText) {
@@ -4472,6 +4477,7 @@
   }
 
   async function decideChatAction(button, decision) {
+    if (chatBusy) return;
     const card = button.closest(".action-card");
     const id = button.dataset.id;
     const errorEl = card.querySelector(".field-error");
@@ -4489,8 +4495,9 @@
     try {
       const data = await api(`/api/assistant/actions/${encodeURIComponent(id)}`, { method: "POST", body });
       if (data.interest) myInterests.add(data.interest.unitId);
-      if (decision === "confirm") toast(data.interest ? "Request sent. The landlord can reply by email." : "Saved to your profile.");
+      if (decision === "confirm") toast(data.interest ? "Request sent. The landlord can reply by email." : "Saved to your profile. For you is up to date.");
       await reloadChat();
+      if (data.preferences) rmReload();
     } catch (e) {
       if (e.status === 401) return showView(errorView(e));
       if (e.status === 409 || e.status === 404) return reloadChat().then(() => toast(e.message));
@@ -4526,6 +4533,7 @@
       ${u.demo ? `<p class="hint">Demo listing ${esc(u.id)}: made up so you can try coHabit. It isn't available.</p>` : `<p class="hint">Listings don't record lease length, utilities, furnishing or fees unless the description says so. Ask the landlord.</p>`}
       ${u.demo && isRenter() ? `<div class="mini-actions">${demoSaveButton("room", u.id)}</div>` : ""}
       ${interestFooter(u)}`;
+    if (!document.querySelector("dialog[open]")) rememberReturn();
     if (!dialog.open) dialog.showModal();
   }
 
@@ -4600,6 +4608,7 @@
     if (!c || !dialog) return;
     dialog.querySelector(".details-body").innerHTML = personDetailsHtml(c, key);
     dialog.dataset.person = key;
+    if (!document.querySelector("dialog[open]")) rememberReturn();
     if (!dialog.open) dialog.showModal();
   }
 
@@ -4618,6 +4627,7 @@
     document.getElementById("connect-help").hidden = !(aiHelpOn() && isRenter());
     document.getElementById("connect-error").textContent = "";
     dialog.dataset.key = key;
+    if (!document.querySelector("dialog[open]")) rememberReturn();
     dialog.showModal();
     document.getElementById("connect-intro").focus();
   }
@@ -4654,8 +4664,10 @@
 
   // Keeps every place a person shows up in step after a request changes.
   function afterPeopleChange(key) {
-    if (document.getElementById("res-top")) renderResults();
+    if (document.getElementById("chat-log")) refreshChat({ scroll: false });
     if (document.getElementById("rm-grid")) rmRefresh();
+    if (key && key.startsWith("vibe:")) rmReload();
+    else if (key && key.startsWith("rm:") && chat && document.getElementById("chat-log")) reloadChat();
     const dialog = document.getElementById("details");
     if (dialog.open && dialog.dataset.person && chatCards.get(dialog.dataset.person)) dialog.querySelector(".details-body").innerHTML = personDetailsHtml(chatCards.get(dialog.dataset.person), dialog.dataset.person);
     loadRequests();
@@ -4716,11 +4728,8 @@
       toast(e.message);
     }
     // Refresh everything that shows this person's status.
-    if (document.getElementById("res-top")) await reloadChat();
-    else if (document.getElementById("rm-grid") && rmView && rmView.tab === "for-you" && isRenter()) {
-      lastRoommates = rmView.data = await api("/api/renter/roommates");
-      rmRefresh();
-    }
+    if (chat && document.getElementById("chat-log")) reloadChat();
+    await rmReload();
     const dialog = document.getElementById("details");
     if (dialog.open && dialog.dataset.person) dialog.close();
     loadRequests();
@@ -4775,10 +4784,7 @@
     if (sent) myInterests.add(unitId);
     else myInterests.delete(unitId);
     document.querySelectorAll(`[data-interest="${CSS.escape(unitId)}"]`).forEach((box) => (box.innerHTML = interestState(unitId)));
-    if (document.getElementById("res-top")) {
-      renderResults();
-      document.getElementById("side-saved").innerHTML = savedHtml();
-    }
+    if (document.getElementById("chat-log")) refreshChat({ scroll: false });
     refreshContacted().catch(() => {});
   }
 
@@ -5235,7 +5241,7 @@
     if (m) return unitForm(safeDecode(m[1]));
     m = clean.match(/^\/landlord\/units\/([^/]+)$/);
     if (m) return unitPage(safeDecode(m[1]));
-    if (clean === "/assistant") return assistantPage();
+    if (clean === "/assistant") return vibeEntry();
     if (clean === "/roommates") return roommatesPage();
     if (clean === "/roommates/for-you") return roommatesPage("for-you");
     if (clean === "/roommates/explore") return roommatesPage("explore");
@@ -5274,6 +5280,10 @@
       ? `<div class="notice notice-success" role="status"><span>${esc(flash)}</span><button class="notice-close" type="button" data-action="dismiss-notice" aria-label="Dismiss message">×</button></div>`
       : "";
     flash = null;
+    if (!view.vibe) {
+      vibeOpen = false; // Vibe lives on the Roommates pages; it's closed when you come back to them
+      document.body.classList.remove("vibe-open");
+    }
     app.innerHTML = notice + view.html;
     if (view.mount) {
       try {
@@ -5300,6 +5310,7 @@
       target.focus({ preventScroll: true });
     }
     pendingFocus = false;
+    if (view.after) view.after();
   }
 
   async function render(moveFocus) {
@@ -5377,7 +5388,33 @@
       else if (a === "survey-open") openSurvey();
       else if (a === "survey-close") document.getElementById("survey").close();
       else if (a === "survey-pick") surveyPick(action.dataset.q, action.dataset.v);
-      else if (a === "chat-say") sendChat(action.dataset.text);
+      else if (a === "chat-say") {
+        if (action.closest(".vibe-sheet")) vibeSheet = "";
+        vibeChipFocus = !!action.closest(".vibe-chips");
+        sendChat(action.dataset.text);
+      } else if (a === "vibe-open") {
+        const menuButton = document.querySelector('.rm-acct[aria-expanded="true"]');
+        if (menuButton) toggleHomeMenu(menuButton, false);
+        if (document.getElementById("vibe")) setVibe(action.id === "rm-vibe-btn" ? !vibeOpen : true);
+        else navigate("/assistant");
+      } else if (a === "vibe-close") setVibe(false);
+      else if (a === "vibe-sheet") {
+        vibeSheet = action.dataset.sheet && vibeSheet !== action.dataset.sheet ? action.dataset.sheet : "";
+        refreshChat({ scroll: false });
+        if (!vibeSheet) document.getElementById(action.dataset.sheet === "info" ? "vibe-info-btn" : "vibe-answers-btn")?.focus();
+      } else if (a === "vibe-more") {
+        vibeMore = !vibeMore;
+        refreshChat({ scroll: false });
+      } else if (a === "vibe-retry") {
+        const text = vibeError && vibeError.text;
+        const input = document.getElementById("chat-input");
+        if (input && input.value.trim() === text) input.value = vibeDraft = "";
+        if (text) sendChat(text);
+      } else if (a === "vibe-reload") {
+        vibeLoadError = false;
+        refreshChat();
+        reloadChat();
+      }
       else if (a === "chat-details") openChatDetails(action.dataset.key);
       else if (a === "person-details") openPersonDetails(action.dataset.key);
       else if (a === "connect-open") openConnect(action.dataset.key);
@@ -5399,8 +5436,6 @@
       else if (a === "chat-unsave") chatRequest(`/api/assistant/saved/${encodeURIComponent(action.dataset.id)}`, { method: "DELETE" }, "Removed from saved.").then((d) => d && (document.getElementById("chat-log") ? reloadChat() : render(false)));
       else if (a === "rm-filters") toggleRmFilters(!!action.dataset.close);
       else if (a === "rm-filters-clear") clearRmFilters();
-      else if (a === "pane") setPane(action.dataset.pane);
-      else if (a === "demo-toggle") toggleDemo();
       else if (a === "demo-switch") switchDemo(action);
       else if (a === "demo-save") toggleDemoSave(action);
       else if (a === "demo-on-map") showOnListingMap(action.dataset.id);
@@ -5418,38 +5453,20 @@
         Object.assign(demoFilters, DEMO_FILTERS0);
         render(false);
       }
-      else if (a === "res-tab") {
-        resTab = action.dataset.tab;
-        resShowAll = false;
-        renderResults();
-      } else if (a === "res-view") {
-        resView = action.dataset.view;
-        renderResults();
-      } else if (a === "res-more") {
-        resShowAll = true;
-        renderResults();
-      } else if (a === "res-on-map") {
-        resView = "map";
-        resSelected = action.dataset.ref;
-        renderResults();
-        document.getElementById("res-map-box").scrollIntoView({ block: "nearest", behavior: "smooth" });
-      } else if (a === "res-relax") relaxResult(action);
+      else if (a === "res-relax") relaxResult(action);
       else if (a === "pref-edit") openPrefEditor(action.dataset.field);
       else if (a === "pref-cancel") document.getElementById("pref-editor").close();
       else if (a === "pref-remove") savePref(true);
-      else if (a === "chat-strict" || a === "chat-forget") {
-        const body = a === "chat-forget" ? { field: action.dataset.field, forget: true } : { field: action.dataset.field, mustHave: action.dataset.must === "true" };
-        chatRequest("/api/assistant/memory", { method: "POST", body }).then((d) => d && applyChatUpdate(d));
-      } else if (a === "chat-clear")
-        confirmDialog({ title: "Clear this chat?", text: "This deletes your messages and the answers in it. Your saved options and saved profile stay.", confirmLabel: "Clear chat", danger: true }).then(
+      else if (a === "chat-strict" || a === "chat-forget") changeAnswer(a === "chat-forget" ? { field: action.dataset.field, forget: true } : { field: action.dataset.field, mustHave: action.dataset.must === "true" });
+      else if (a === "chat-clear" && !chatBusy)
+        confirmDialog({ title: "Clear this chat?", text: `This deletes your messages and the answers in it. Your saved options and saved profile stay.${chat && chat.demo ? " Demo mode turns off too." : ""}`, confirmLabel: "Clear chat", danger: true }).then(
           (ok) =>
             ok &&
             chatRequest("/api/assistant/clear", { method: "POST", body: {} }, "Chat cleared.").then((d) => {
               if (!d) return;
-              resTab = "rooms";
-              resView = "list";
-              resShowAll = false;
-              resSelected = null;
+              vibeMore = false;
+              vibeSheet = "";
+              vibeError = null;
               reloadChat();
             })
         );
@@ -5465,12 +5482,6 @@
     navigate(url.pathname + url.search + url.hash);
   });
 
-  document.addEventListener("click", (e) => {
-    // Only the assistant's cards (they have a ref like R1) are selectable; demo cards elsewhere aren't.
-    const card = e.target.closest(".res-card");
-    if (card && card.dataset.ref && document.getElementById("res-list") && !e.target.closest("button, a")) selectResult(card.dataset.ref, false);
-  });
-
   document.addEventListener("submit", (e) => {
     if (e.target.id === "unit-form") {
       e.preventDefault();
@@ -5480,7 +5491,7 @@
       submitPrefs(e.target);
     } else if (e.target.id === "chat-form") {
       e.preventDefault();
-      sendChat(e.target.elements.text.value);
+      sendChat(e.target.elements.text.value, { typed: true });
     } else if (e.target.id === "connect-form") {
       e.preventDefault();
       sendConnect();
@@ -5582,22 +5593,48 @@
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     const button = document.querySelector('[data-action="home-menu"][aria-expanded="true"]');
-    if (!button) return;
-    toggleHomeMenu(button, false);
-    button.focus();
+    if (button) {
+      toggleHomeMenu(button, false);
+      button.focus();
+      return;
+    }
+    const panel = document.getElementById("vibe");
+    if (!vibeOpen || !panel || panel.hidden || document.querySelector("dialog[open]")) return;
+    if (vibeWide() && !panel.contains(document.activeElement)) return; // laptops: only from inside the panel
+    if (vibeSheet && panel.contains(document.activeElement)) {
+      const sheet = vibeSheet;
+      vibeSheet = "";
+      refreshChat({ scroll: false });
+      document.getElementById(sheet === "info" ? "vibe-info-btn" : "vibe-answers-btn")?.focus();
+      return;
+    }
+    setVibe(false);
   });
+
+  // Vibe: phones and laptops lay the panel out differently, and on phones it follows the on-screen keyboard.
+  window.matchMedia("(min-width: 1024px)").addEventListener("change", () => {
+    vibeInert();
+    fitVibe();
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", fitVibe);
+    window.visualViewport.addEventListener("scroll", fitVibe);
+  }
 
   // Chat box: Enter sends, Shift+Enter adds a line; the box grows with the text.
   document.addEventListener("keydown", (e) => {
     if (e.target.id !== "chat-input" || e.key !== "Enter" || e.shiftKey || e.isComposing) return;
     e.preventDefault();
-    sendChat(e.target.value);
+    sendChat(e.target.value, { typed: true });
   });
   document.addEventListener("input", (e) => {
     const filters = e.target.form;
     if (filters && filters.id === "demo-filters") return readDemoFilters(filters);
     if (filters && filters.id === "rm-filters") return readRmFilters(filters);
-    if (e.target.id === "chat-input") growInput(e.target);
+    if (e.target.id === "chat-input") {
+      growInput(e.target);
+      vibeDraft = e.target.value;
+    }
     else if (e.target.id === "survey-comment") syncSurvey();
   });
 
@@ -5619,6 +5656,7 @@
     true
   );
   document.getElementById("details").addEventListener("close", (e) => delete e.target.dataset.person);
+  for (const id of ["details", "connect", "pref-editor"]) document.getElementById(id).addEventListener("close", restoreDialogFocus);
   document.getElementById("survey").addEventListener("close", surveyClosed);
 
   window.addEventListener("popstate", () => render(true));

@@ -1082,13 +1082,13 @@ try {
     check("Assistant: over the daily AI limit → basic mode", r.data.mode === "basic" && r.data.basicReason === "user_limit");
     r = await say(chatBasic, "hello");
     reply = replyOf(r);
-    check("Guided chat: a greeting gets \"Hey!\" and the opening question once, with answer buttons and why it's guided", reply.text === "Hey!\nWhat are you looking for?" && reply.quickReplies.join() === "A room,A roommate,Both" && /today's 20 AI replies/.test(reply.notice || ""), JSON.stringify(reply));
+    check("Guided chat: a greeting gets \"Hey!\" and the opening question once, with answer buttons and why it's guided", reply.text === "Hey!\nSo what's the mission: a room, a roommate, or both?" && reply.quickReplies.join() === "A room,A roommate,Both" && /today's 20 AI replies/.test(reply.notice || ""), JSON.stringify(reply));
     const basicTexts = [];
     for (const [text, expect] of [
-      ["A room", /^What's your max rent per month\?$/],
-      ["Up to $1,300", /^Noted: budget up to \$1,300\.\nWhen do you want to move in\?$/], // not one of the buttons, so it counts as typed
-      ["June 2027", /^Where do you want to live\? Pick a town, or how far from campus works\.$/],
-      ["Waltham", /^How many rooms do you need\?$/],
+      ["A room", /^Real talk: what's the most you can pay in rent each month\?$/],
+      ["Up to $1,300", /^Noted: budget up to \$1,300\.\nWhen do you want to move in\? A month is plenty\.$/], // not one of the buttons, so it counts as typed
+      ["June 2027", /^Where should home base be\? Pick a town, or say how far from campus works\.$/],
+      ["Waltham", /^Flying solo or bringing friends\? How many rooms do you need\?$/],
     ]) {
       r = await say(chatBasic, text);
       basicTexts.push(replyOf(r).text);
@@ -1114,7 +1114,7 @@ try {
     basicTexts.push(replyOf(r).text);
     check("Guided chat: never says \"Got it\"", basicTexts.every((t) => !/got it/i.test(t)), basicTexts.join(" | "));
     r = await say(chatFresh, "A room");
-    check("Guided chat: the first tap answers the opening question (looking for a room), then the next question", r.data.memory.find((f) => f.field === "looking_for")?.raw === "room" && replyOf(r).text === "What's your max rent per month?" && r.data.results.goal === "room", replyOf(r).text);
+    check("Guided chat: the first tap answers the opening question (looking for a room), then the next question", r.data.memory.find((f) => f.field === "looking_for")?.raw === "room" && replyOf(r).text === "Real talk: what's the most you can pay in rent each month?" && r.data.results.goal === "room", replyOf(r).text);
 
     // Demo mode
     r = await api("/api/assistant/demo", { method: "POST", as: chatFresh, body: { on: "yes" } });

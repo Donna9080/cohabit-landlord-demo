@@ -175,27 +175,27 @@ export function understand(text, today, lastAsked) {
   return { updates, intents };
 }
 
-// Same questions, order and answers as before; only the wording is shorter. Each answer button keeps its meaning
-// (OPTION_ANSWERS maps the labels to the stored values; the rest are read by understand()).
+// Same questions, order and answers as before; only the wording is warmer (Vibe, 2026-11-14). Each answer button
+// keeps its label and meaning (OPTION_ANSWERS maps the labels to the stored values; the rest are read by understand()).
 const QUESTIONS = {
-  looking_for: () => ({ text: "What are you looking for?", options: OPTION_ANSWERS.looking_for.map(([l]) => l) }),
-  budget_max: () => ({ text: "What's your max rent per month?", options: ["Up to $900", "Up to $1,200", "Up to $1,500", "Up to $2,000"] }),
+  looking_for: () => ({ text: "So what's the mission: a room, a roommate, or both?", options: OPTION_ANSWERS.looking_for.map(([l]) => l) }),
+  budget_max: () => ({ text: "Real talk: what's the most you can pay in rent each month?", options: ["Up to $900", "Up to $1,200", "Up to $1,500", "Up to $2,000"] }),
   move_in_month: (today) => ({
-    text: "When do you want to move in?",
+    text: "When do you want to move in? A month is plenty.",
     options: [1, 5, 6, 9].map((n) => nextOccurrence(n, today)).sort().map((ym) => fmtMonth(ym).replace(/^(\w+)/, (m) => ({ Jan: "January", May: "May", Jun: "June", Sep: "September" })[m] || m)),
   }),
   areas: (today, memory) =>
     memory?.v.max_distance_km != null
-      ? { text: "Which town should go on your profile? Roommate matching goes by town.", options: ["Waltham", "Newton", "Watertown"] }
-      : { text: "Where do you want to live? Pick a town, or how far from campus works.", options: ["Waltham", "Newton", "Watertown", "Within 3 km of campus"] },
-  rooms_needed: () => ({ text: "How many rooms do you need?", options: ["Just me", "2 rooms", "3 rooms"] }),
-  sleep_schedule: () => ({ text: "Now a few roommate questions. Early bird, night owl, or flexible?", options: OPTION_ANSWERS.sleep_schedule.map(([l]) => l) }),
-  cleanliness: () => ({ text: "How tidy do you keep your place?", options: OPTION_ANSWERS.cleanliness.map(([l]) => l) }),
-  noise: () => ({ text: "How much noise is OK at home?", options: OPTION_ANSWERS.noise.map(([l]) => l) }),
+      ? { text: "Which town should go on your profile? Roommate matching works by town.", options: ["Waltham", "Newton", "Watertown"] }
+      : { text: "Where should home base be? Pick a town, or say how far from campus works.", options: ["Waltham", "Newton", "Watertown", "Within 3 km of campus"] },
+  rooms_needed: () => ({ text: "Flying solo or bringing friends? How many rooms do you need?", options: ["Just me", "2 rooms", "3 rooms"] }),
+  sleep_schedule: () => ({ text: "Now the vibe check, starting with sleep: early bird, night owl, or flexible?", options: OPTION_ANSWERS.sleep_schedule.map(([l]) => l) }),
+  cleanliness: () => ({ text: "No judgment: how tidy do you keep your place?", options: OPTION_ANSWERS.cleanliness.map(([l]) => l) }),
+  noise: () => ({ text: "Library quiet or a little lively? How much noise is OK at home?", options: OPTION_ANSWERS.noise.map(([l]) => l) }),
   guests: () => ({ text: "How often do you have people over?", options: OPTION_ANSWERS.guests.map(([l]) => l) }),
-  pets: () => ({ text: "How do you feel about pets?", options: OPTION_ANSWERS.pets.map(([l]) => l) }),
-  smoking: () => ({ text: "And smoking?", options: OPTION_ANSWERS.smoking.map(([l]) => l) }),
-  chores: () => ({ text: "Last one, and optional: how do you like to split chores?", options: OPTION_ANSWERS.chores.map(([l]) => l) }),
+  pets: () => ({ text: "Furry roommates: how do you feel about pets?", options: OPTION_ANSWERS.pets.map(([l]) => l) }),
+  smoking: () => ({ text: "And what about smoking?", options: OPTION_ANSWERS.smoking.map(([l]) => l) }),
+  chores: () => ({ text: "Last one, totally optional: how do you like to split chores?", options: OPTION_ANSWERS.chores.map(([l]) => l) }),
 };
 
 export function question(field, today, memory) {
@@ -238,7 +238,7 @@ export function describeRooms(found) {
     if (found.ifRelaxed.length) {
       lines.push("Changing one would help:");
       for (const o of found.ifRelaxed) lines.push(`- ${o.change}: ${plural(o.extraRooms, "more room")}`);
-      lines.push("Want to change one? Tap it in Results, or tell me.");
+      lines.push("Want to change one? Tap it below, or tell me.");
     } else lines.push("Nothing comes close yet. New rooms get listed all the time, so check back.");
   }
   if (found.samplesHidden) lines.push(`${plural(found.samplesHidden, "sample (fictional) listing")} also ${found.samplesHidden === 1 ? "fits" : "fit"}. Say “show sample listings” to see ${found.samplesHidden === 1 ? "it" : "them"}.`);
