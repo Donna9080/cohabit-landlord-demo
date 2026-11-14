@@ -747,32 +747,43 @@
 
   // The home page's photo: free under the Unsplash License, loaded from Unsplash's image servers (like demo photos).
   const HOME_PHOTO = {
-    src: "https://images.unsplash.com/photo-1772724317856-156cf12b366f",
-    page: "https://unsplash.com/photos/three-friends-making-dough-together-in-a-kitchen-2O2tcQaU7Yc",
-    by: "Apartment Life",
-    profile: "https://unsplash.com/@apartmentlife",
-    alt: "Three housemates laughing while they make dough together in their kitchen",
+    src: "https://images.unsplash.com/photo-1758526213774-8ae08c1d48c2",
+    page: "https://unsplash.com/photos/two-young-women-singing-into-hair-dryers-on-couch-ckss5NBt37s",
+    by: "Vitaly Gariev",
+    profile: "https://unsplash.com/@silverkblack",
+    alt: "Two housemates laughing and singing into hair dryers on the sofa in their bright living room",
   };
   const homePhotoUrl = (w) => `${HOME_PHOTO.src}?auto=format&fit=crop&w=${w}&q=70`;
 
-  // The home page's own header and menu (the shared top bar is hidden there). Same destinations as everywhere else,
-  // named for what people look for: Assistant, Matches, Listings, Messages, Profile, Sign out.
+  // "List your place" on the home page goes into the existing landlord flow: visitors sign up as a landlord (the
+  // choice is remembered), landlords add a unit, and signed-in people without an account type choose one first.
+  // Renters don't see it (their account can't list).
+  function homeListPlace() {
+    const u = me.user;
+    const role = u && u.accountType;
+    if (role === "renter") return null;
+    if (role === "landlord") return { href: "/landlord/units/new" };
+    if (u) return { href: "/welcome" };
+    return { href: "/signup?as=landlord", path: "landlord" };
+  }
+
+  // The home page's own header and menu (the shared top bar is hidden there). Same destinations as everywhere else.
   function homeNavItems() {
     const u = me.user;
     const role = u && u.accountType;
     const items = [];
-    if (role === "renter") items.push(["/assistant", "Assistant"], ["/renter", "Matches"], ["/listings", "Listings"], ["/renter#requests-heading", "Messages"], ["/account", "Profile"]);
-    else if (role === "landlord") items.push(["/landlord", "Dashboard"], ["/listings", "Listings"], ["/landlord", "Requests"], ["/account", "Profile"]);
-    else if (u) items.push(["/welcome", "Get started"], ["/listings", "Listings"], ["/account", "Profile"]);
-    else items.push(["/listings", "Listings"], ["/sample", "Sample dashboard"]);
+    if (role === "renter") items.push(["/assistant", "Assistant"], ["/renter", "Matches"], ["/renter#requests-heading", "Messages"], ["/account", "Profile"]);
+    else if (role === "landlord") items.push(["/landlord", "Dashboard"], ["/landlord", "Requests"], ["/account", "Profile"]);
+    else if (u) items.push(["/welcome", "Get started"], ["/account", "Profile"]);
     if (u && u.isAdmin) items.push(["/admin", "Admin"]);
     return items;
   }
   function homeHeader() {
     const u = me.user;
-    const links = homeNavItems()
-      .map(([href, label]) => `<a class="h-link" href="${href}">${label}</a>`)
-      .join("");
+    const items = homeNavItems();
+    const links = items.map(([href, label]) => `<a class="h-link" href="${href}">${label}</a>`).join("");
+    const list = homeListPlace();
+    const listLink = (cls) => (list ? `<a class="${cls}" href="${list.href}"${list.path ? ` data-path="${list.path}"` : ""}>List your place</a>` : "");
     const feedback = `<button class="h-icon-btn" type="button" data-action="survey-open" aria-haspopup="dialog" aria-label="Quick check-in: share feedback" title="Quick check-in"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><use href="#i-feedback" /></svg></button>`;
     const account = u
       ? `<a class="h-who" href="/account" title="Your account: ${esc(u.email)}"><span class="h-avatar" aria-hidden="true">${esc(initials(u.name || u.email))}</span><span class="sr-only">Your profile</span></a><button class="h-out" type="button" data-action="sign-out">Sign out</button>`
@@ -780,15 +791,17 @@
     return `
       <header class="h-top">
         <a class="h-logo" href="/" aria-label="coHabit, home">co<span class="h-logo-h" aria-hidden="true">H</span><span class="sr-only">H</span>abit</a>
-        <nav class="h-nav" aria-label="Main">${links}</nav>
-        <div class="h-actions">${feedback}${account}</div>
+        ${items.length ? `<nav class="h-nav" aria-label="Main">${links}</nav>` : ""}
+        <div class="h-actions">${feedback}${listLink("h-list")}${account}</div>
+        ${listLink("h-list h-list-phone")}
         <button class="h-menu-btn" type="button" data-action="home-menu" aria-expanded="false" aria-controls="h-menu" aria-label="Menu">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 9h14M5 15h14"/></svg>
         </button>
       </header>
       <div class="h-menu" id="h-menu" hidden>
-        <nav aria-label="Menu">${links}</nav>
-        <div class="h-menu-foot">
+        ${items.length ? `<nav aria-label="Menu">${links}</nav>` : ""}
+        <div class="h-menu-foot${items.length ? "" : " is-only"}">
+          ${listLink("h-menu-item")}
           <button class="h-menu-item" type="button" data-action="survey-open" aria-haspopup="dialog">Quick check-in</button>
           ${u ? `<button class="h-menu-item h-menu-out" type="button" data-action="sign-out">Sign out</button>` : `<a class="h-menu-item" href="/signin">Sign in</a>`}
         </div>
@@ -796,13 +809,12 @@
   }
 
   // ── Public pages ─────────────────────────────────────────────────────────────
-  // Home: the design from the Figma home screen. Styles live under .h-page in styles.css, so no other page changes.
+  // Home: "Gen Z mode" from the Figma home screen. Styles live under .h-page in styles.css, so no other page changes.
   function home() {
     const u = me.user;
     const role = u && u.accountType;
     const first = u ? esc((u.name || "").split(" ")[0] || "there") : "";
-    const last = rememberedPath();
-    // The main button goes where each person finds their match.
+    // The main button goes where each person finds their match ("List your place" in the header covers listing).
     const cta =
       role === "renter"
         ? { href: "/renter", label: "Find my match" }
@@ -811,29 +823,9 @@
           : u
             ? { href: "/welcome", label: "Get started" }
             : { href: "/signup?as=renter", label: "Find my match", path: "renter" };
-    const second =
-      role === "renter" ? `<a class="h-ghost" href="/assistant">Chat with the assistant</a>` : `<a class="h-ghost" href="/listings">Browse listings</a>`;
     const arrow = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`;
     const step = (n, title, text) => `<li class="h-step"><span class="h-step-num" aria-hidden="true">${n}</span><h3>${title}</h3><p>${text}</p></li>`;
-    // Visitors pick a path (remembered in this browser for next time); signed-in people see their own side.
-    const pathCard = (as, signedIn) => {
-      const renter = as === "renter";
-      const href = signedIn ? (renter ? "/assistant" : "/landlord") : `/signup?as=${as}`;
-      const title = signedIn ? (renter ? "Your housing assistant" : "Your dashboard") : renter ? "Find a room or roommate" : "List your space";
-      const text = renter
-        ? "Chat about your budget, move-in month and how you like to live. See rooms and roommates that fit, and why."
-        : "List rooms in Waltham, Newton and nearby, keep rent and move-in dates current, and hear from interested renters.";
-      const action = signedIn ? (renter ? "Continue the chat" : "Open your dashboard") : !signedIn && last === as ? "Continue" : "Get started";
-      return `
-          <a class="h-path h-path-${as}${last === as && !signedIn ? " is-last" : ""}" href="${href}"${signedIn ? "" : ` data-path="${as}"`}>
-            ${last === as && !signedIn ? `<span class="h-path-badge">Your last choice</span>` : ""}
-            <span class="h-path-title">${title}</span>
-            <span class="h-path-text">${text}</span>
-            <span class="h-path-go">${action} ${arrow}</span>
-          </a>`;
-    };
-    const paths = role === "landlord" ? pathCard("landlord", true) : role === "renter" ? pathCard("renter", true) : u ? pathCard("renter", true) + pathCard("landlord", true) : pathCard("renter") + pathCard("landlord");
-    const words = ["Rooms", "Roommates", "Your vibe", "Near Brandeis", "Waltham", "Newton"];
+    const words = ["Rooms", "Roommates", "Your vibe", "Your people", "Your place", "Massachusetts"];
     const band = words.map((w) => `<span>${w}</span><span class="h-star">✦</span>`).join("");
     return {
       title: "Welcome",
@@ -843,13 +835,13 @@
         ${homeHeader()}
         <section class="h-hero" aria-labelledby="h-title">
           <div class="h-hero-text">
-            <p class="h-eyebrow"><span class="h-num" aria-hidden="true">01</span>${u ? `Welcome back, ${first}` : "Made for student life near Brandeis"}</p>
-            <h1 class="h-title" id="h-title" tabindex="-1">Your people.<br />Your <em>place.</em></h1>
-            <p class="h-lead">Find rooms and roommates who match how you actually want to live, in Waltham, Newton and around campus.</p>
+            <p class="h-eyebrow"><span class="h-num" aria-hidden="true">01</span>${u ? `Welcome back, ${first}` : "Find your kind of home."}</p>
+            <h1 class="h-title" id="h-title" tabindex="-1"><span class="h-line">Your people.</span> <span class="h-line">Your <em>place.</em></span></h1>
+            <p class="h-lead">Find rooms and roommates who match how you actually want to live.</p>
           </div>
           <figure class="h-photo">
             <div class="h-photo-frame">
-              <img src="${homePhotoUrl(900)}" srcset="${homePhotoUrl(600)} 600w, ${homePhotoUrl(900)} 900w, ${homePhotoUrl(1300)} 1300w" sizes="(max-width: 860px) 92vw, 46vw" alt="${esc(HOME_PHOTO.alt)}" width="900" height="675" decoding="async" fetchpriority="high" data-home-photo="1" />
+              <img src="${homePhotoUrl(900)}" srcset="${homePhotoUrl(600)} 600w, ${homePhotoUrl(900)} 900w, ${homePhotoUrl(1300)} 1300w" sizes="(max-width: 900px) 92vw, 40vw" alt="${esc(HOME_PHOTO.alt)}" width="900" height="675" decoding="async" fetchpriority="high" data-home-photo="1" />
             </div>
             <span class="h-sticker-good" aria-hidden="true"><strong>Good</strong><small>vibes only</small></span>
             <span class="h-sticker-pill" aria-hidden="true">Roomies, but make it right →</span>
@@ -857,7 +849,6 @@
           </figure>
           <div class="h-cta-row">
             <a class="h-cta" href="${cta.href}"${cta.path ? ` data-path="${cta.path}"` : ""}><span>${cta.label}</span><span class="h-cta-arrow">${arrow}</span></a>
-            ${second}
           </div>
         </section>
         <div class="h-band" aria-hidden="true"><div class="h-band-track">${band}${band}</div></div>
@@ -865,21 +856,10 @@
           <p class="h-eyebrow"><span class="h-num" aria-hidden="true">02</span>How it works</p>
           <h2 class="h-h2" id="h-how">Less scrolling. <em>Better fits.</em></h2>
           <ol class="h-steps">
-            ${step("1", "Say what you want", "Budget in dollars a month, move-in month, the area and how you like to live: sleep, tidiness, guests, pets.")}
-            ${step("2", "See what fits, and why", "Rooms and roommates that match, with the reasons up front, like “within your $1,200 budget” or “both early birds”.")}
-            ${step("3", "Connect when it feels right", "Send an introduction or tell a landlord you're interested. Nothing is shared or sent until you choose.")}
+            ${step("1", "Drop your preferences", "Tell us your budget, move-in date, and what home feels like to you.")}
+            ${step("2", "Meet your possible matches", "Explore rooms and roommates that fit, with clear reasons why.")}
+            ${step("3", "Make your move", "Say hello or reach out about a room when you're ready.")}
           </ol>
-        </section>
-        <section class="h-section" aria-labelledby="h-paths">
-          <p class="h-eyebrow"><span class="h-num" aria-hidden="true">03</span>${u ? "Pick up where you left off" : "Pick your path"}</p>
-          <h2 class="h-h2" id="h-paths">${u ? `Ready when you are, ${first}.` : `Looking or <em>listing?</em>`}</h2>
-          <div class="h-paths${role ? " is-one" : ""}">${paths}
-          </div>
-          <p class="h-more">
-            <a href="/listings">Browse all listings</a>
-            ${role === "renter" ? `<a href="/renter">My matches</a>` : `<a href="/sample">View a sample dashboard</a>`}
-            ${u ? "" : `<a href="/signin">Sign in</a>`}
-          </p>
         </section>
       </div>`,
     };
