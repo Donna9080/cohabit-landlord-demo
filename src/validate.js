@@ -219,16 +219,28 @@ function newPasswordOf(body, field) {
   return password;
 }
 
+// A renter's first name: letters (any language), spaces, hyphens, apostrophes and dots; up to 50 characters.
+export function parseFirstName(value, field = "name") {
+  const name = oneLine(value);
+  if (!name) throw new InvalidInput(field, "Enter your first name.");
+  if (name.length > 50) throw new InvalidInput(field, "Keep it under 50 characters.");
+  if (!NAME_SHAPE.test(name)) throw new InvalidInput(field, "Use letters only. Spaces, hyphens and apostrophes are fine.");
+  return name;
+}
+
 export const OCCUPATIONS = ["student", "working", "other"];
 export function parseSignup(body) {
   if (!isObj(body)) throw new InvalidInput(null, "Send a JSON object.");
   const as = body.signupAs;
   if (as !== "renter" && as !== "landlord") throw new InvalidInput("signupAs", "Choose whether you're looking for a room or listing a space.");
-  const name = oneLine(body.name);
-  const max = as === "renter" ? 50 : 80;
-  if (!name) throw new InvalidInput("name", as === "renter" ? "Enter your first name." : "Enter your name.");
-  if (name.length > max) throw new InvalidInput("name", `Keep it under ${max} characters.`);
-  if (!NAME_SHAPE.test(name)) throw new InvalidInput("name", "Use letters only. Spaces, hyphens and apostrophes are fine.");
+  // Renters sign up with just an email and a password; their first name comes in setup ("Your next chapter?").
+  // A name sent anyway is checked the same way. Landlords still give their name.
+  const name = as === "renter" && !oneLine(body.name) ? "" : as === "renter" ? parseFirstName(body.name) : oneLine(body.name);
+  if (as === "landlord") {
+    if (!name) throw new InvalidInput("name", "Enter your name.");
+    if (name.length > 80) throw new InvalidInput("name", "Keep it under 80 characters.");
+    if (!NAME_SHAPE.test(name)) throw new InvalidInput("name", "Use letters only. Spaces, hyphens and apostrophes are fine.");
+  }
   const email = emailOf(body);
   const password = newPasswordOf(body, "password");
 

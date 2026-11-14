@@ -1121,3 +1121,134 @@ body[data-page="home"] .site-footer a[href="/listings"], body[data-page="home"] 
   .h-band-track { animation: none; }
   .h-cta { transition: none; }
 }
+
+/* ── Renter sign-in, sign-up and setup ("Gen Z mode", 2026-11-14) ──────────────────────────────────────────
+   Sign in ("Hey, you. Welcome back."), renter sign-up ("Make yourself at home."), and setup ("Your next chapter?",
+   "What's your home energy?"). Same palette as the home page. Scoped: .ob-* classes only exist on these screens, and
+   the shared top bar, page frame and footer change only while <body data-page="auth"> or "setup" is set. The landlord
+   sign-up form keeps its own look. */
+body[data-page="auth"], body[data-page="setup"] { background: #f3efe6; }
+body[data-page="auth"] .topbar, body[data-page="setup"] .topbar { display: none; }
+body[data-page="auth"] #app.container, body[data-page="setup"] #app.container { max-width: none; padding: 0; gap: 0; }
+body[data-page="auth"] #app > .notice, body[data-page="setup"] #app > .notice { margin: 16px 20px 0; }
+body[data-page="auth"] .site-footer, body[data-page="setup"] .site-footer {
+  padding: 18px max(20px, calc((100% - 1200px) / 2)); background: #f3efe6; border-top: 1.5px solid rgba(20, 20, 20, 0.12);
+  color: #4a4a4a; font-size: 14px;
+}
+body[data-page="auth"] .site-footer a, body[data-page="setup"] .site-footer a { color: #141414; font-weight: 600; }
+body[data-page="auth"] .site-footer a[href="/listings"], body[data-page="auth"] .site-footer a[href="/sample"],
+body[data-page="setup"] .site-footer a[href="/listings"], body[data-page="setup"] .site-footer a[href="/sample"] { display: none; }
+
+.ob-page {
+  --ob-cream: #f3efe6; --ob-ink: #141414; --ob-soft: #3d3d3d; --ob-pink: #e5348b; --ob-purple: #5b3ff2; --ob-lime: #c8f23a;
+  --ob-line: rgba(20, 20, 20, 0.12); --ob-display: "Arial Black", "Arial Bold", "Inter", system-ui, sans-serif;
+  display: flex; flex-direction: column; align-items: center; padding: 0 20px 40px; color: var(--ob-ink); overflow-x: clip;
+}
+.ob-page :focus-visible { box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--ob-purple); border-radius: 12px; }
+.ob-page em { font-style: normal; color: var(--ob-pink); }
+.ob-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: min(100%, 1200px); padding: 14px 0 10px; }
+.ob-logo {
+  display: inline-flex; align-items: center; font-family: var(--ob-display); font-weight: 900; font-size: 24px;
+  letter-spacing: -0.04em; color: var(--ob-ink); text-decoration: none; line-height: 1;
+}
+.ob-logo-h {
+  display: inline-grid; place-items: center; width: 1.12em; height: 1.12em; margin: 0 0.04em; border-radius: 50%;
+  background: var(--ob-purple); color: #fff; font-size: 0.86em; letter-spacing: 0;
+}
+.ob-step {
+  padding: 6px 12px; border: 1.5px solid var(--ob-ink); border-radius: 999px; background: #fff;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+}
+
+/* The card. */
+.ob-card {
+  display: flex; flex-direction: column; gap: 16px; width: min(100%, 440px); margin-top: 8px; padding: 26px 24px 22px;
+  background: #fff; border: 1.5px solid var(--ob-ink); border-radius: 28px; box-shadow: 6px 6px 0 var(--ob-ink);
+}
+.ob-card-wide { width: min(100%, 560px); }
+.ob-title { margin: 0; font-family: var(--ob-display); font-weight: 900; font-size: clamp(30px, 7.4vw, 40px); line-height: 1.03; letter-spacing: -0.035em; }
+.ob-sub { margin: -6px 0 0; font-size: 16.5px; line-height: 1.5; color: var(--ob-soft); }
+.ob-form { display: flex; flex-direction: column; gap: 14px; }
+
+/* Fields: clear labels, rounded controls. */
+.ob-card .field { gap: 6px; }
+.ob-card .field label, .ob-label { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--ob-ink); }
+.ob-card .field input, .ob-card .field select, .ob-card .place-field input {
+  width: 100%; min-height: 50px; padding: 0 16px; border: 1.5px solid var(--ob-ink); border-radius: 14px;
+  background: #fff; color: var(--ob-ink); font: inherit; font-size: 16px;
+}
+.ob-card .field select { padding-right: 36px; }
+.ob-card .field input:focus, .ob-card .field select:focus, .ob-card .place-field input:focus {
+  outline: none; border-color: var(--ob-purple); box-shadow: 0 0 0 3px rgba(91, 63, 242, 0.22);
+}
+.ob-card .field input[aria-invalid="true"] { border-color: #b42318; }
+.ob-card .hint { margin: 0; font-size: 13px; color: #5a5a5a; }
+.ob-card .pw-wrap { position: relative; }
+.ob-card .pw-wrap input { padding-right: 72px; }
+.ob-card .pw-toggle {
+  position: absolute; top: 50%; right: 8px; transform: translateY(-50%); min-height: 34px; padding: 0 10px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--ob-ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.ob-card .pw-toggle:hover { background: var(--ob-cream); }
+.ob-forgot { align-self: flex-start; font-size: 14px; font-weight: 600; color: var(--ob-ink); text-underline-offset: 3px; }
+.ob-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.ob-money { position: relative; }
+.ob-money > span { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-weight: 700; color: var(--ob-soft); pointer-events: none; }
+.ob-card .ob-money input { padding-left: 30px; }
+.ob-area-now { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0; font-size: 16px; }
+.ob-muted { font-size: 13.5px; color: #5a5a5a; }
+
+/* Answer chips: one pick per question; the picked one turns lime. */
+.ob-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ob-chips:focus { outline: none; }
+.ob-chip {
+  min-height: 42px; padding: 0 16px; border: 1.5px solid var(--ob-ink); border-radius: 999px; background: #fff;
+  color: var(--ob-ink); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.ob-chip:hover { background: var(--ob-cream); }
+.ob-chip[aria-pressed="true"] { background: var(--ob-lime); box-shadow: 0 2px 0 var(--ob-ink); }
+.ob-q { gap: 10px; }
+
+/* One main button per screen; Google and resend as quieter outline buttons. */
+.ob-primary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 54px;
+  padding: 6px 6px 6px 22px; border: 0; border-radius: 999px; background: var(--ob-ink); color: #fff;
+  font: inherit; font-size: 16.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 0 var(--ob-lime);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.ob-primary:hover { transform: translateY(-1px); box-shadow: 0 5px 0 var(--ob-lime); }
+.ob-primary:disabled { opacity: 0.6; cursor: progress; transform: none; }
+.ob-arrow { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 50%; background: var(--ob-lime); color: var(--ob-ink); }
+.ob-google-main { justify-content: center; padding: 0 20px; }
+.ob-google-main svg { flex: none; }
+.ob-google {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 50px; padding: 0 18px;
+  border: 1.5px solid var(--ob-ink); border-radius: 999px; background: #fff; color: var(--ob-ink);
+  font: inherit; font-size: 15.5px; font-weight: 700; cursor: pointer;
+}
+.ob-google:hover { background: var(--ob-cream); }
+.ob-or { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 13px; color: #5a5a5a; }
+.ob-or::before, .ob-or::after { content: ""; flex: 1; height: 1.5px; background: var(--ob-line); }
+.ob-links { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; font-size: 14.5px; }
+.ob-links p { margin: 0; }
+.ob-links a, .ob-aside a, .ob-fine a { color: var(--ob-ink); font-weight: 700; text-underline-offset: 3px; }
+.ob-link {
+  padding: 4px 0; border: 0; background: none; color: var(--ob-ink); font: inherit; font-size: 14.5px; font-weight: 700;
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.ob-link:hover, .ob-links a:hover { color: var(--ob-purple); }
+.ob-fine { margin: 0; font-size: 13px; line-height: 1.45; color: #5a5a5a; }
+.ob-aside { margin: 0; padding-top: 12px; border-top: 1.5px solid var(--ob-line); font-size: 13.5px; color: #5a5a5a; text-align: center; }
+
+@media (min-width: 480px) {
+  .ob-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+}
+@media (min-width: 900px) {
+  .ob-page { padding-bottom: 56px; }
+  .ob-top { padding-top: 16px; }
+  .ob-logo { font-size: 28px; }
+  .ob-card { margin-top: 18px; padding: 30px 30px 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ob-primary { transition: none; }
+}

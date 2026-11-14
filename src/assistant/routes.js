@@ -18,7 +18,7 @@ import { HttpError, readJson, rateLimit } from "../http.js";
 import { LISTING_FIELDS, activeListings, listingMapper } from "../listings.js";
 import { createInterest, loadPreferences, savePreferences } from "../profile.js";
 import { firstNameOf, scoreRoommate } from "../roommates.js";
-import { InvalidInput, isUnitId, parseChatText, parseInterest, parsePreferences } from "../validate.js";
+import { InvalidInput, isUnitId, parseChatText, parseFirstName, parseInterest, parsePreferences } from "../validate.js";
 import { AiUnavailable, MODELS, aiConfigured, aiProvider, allowedNumbers, groundReply, modelFor, runAiTurn } from "./ai.js";
 import { CHAT_REQUESTS_PER_REPLY, aiBlock, aiBudget, aiSettings, countRequests, pauseStatement, requestsToday, setSetting } from "../ai/budget.js";
 import { keyStatus, modelsFor } from "../ai/openrouter.js";
@@ -71,6 +71,63 @@ async function loadThread(db, userId, env) {
   const state = parseJson(row?.last_results, {});
   if (state.demo && !demoDataOn(env)) state.demo = false;
   return { memory: parseMemory(row?.memory), state };
+}
+
+// ── Renter setup ("Your next chapter?" and "What's your home energy?") ─────────────────────────────────────────
+// The answers go into the assistant's answers (memory), checked by the same rules; anything not answered stays unset.
+// Whether setup is finished or put off for later is kept with the thread (state.setup: "done" | "later").
+export const SETUP_FIELDS = ["looking_for", "budget_max", "move_in_month", "areas", "noise", "cleanliness", "guests"];
+const setupAnswers = (memory) => Object.fromEntries(SETUP_FIELDS.filter((f) => memory.v[f] != null).map((f) => [f, memory.v[f]]));
+
+// A new renter is offered setup once: not when they finished it or chose "Finish later", and not when they already
+// have answers (saved questionnaire, or a budget, month or what they're looking for from the chat).
+export async function renterSetupPending(db, userId) {
+  const [row, prefs] = await Promise.all([
+    db.prepare(`SELECT memory, last_results FROM assistant_threads WHERE user_id = ?1`).bind(userId).first(),
+    db.prepare(`SELECT 1 AS x FROM match_preferences WHERE user_id = ?1`).bind(userId).first(),
+  ]);
+  const state = parseJson(row?.last_results, {});
+  if (state.setup === "done" || state.setup === "later" || prefs) return false;
+  const v = parseMemory(row?.memory).v;
+  return !(v.budget_max != null || v.move_in_month != null || v.looking_for != null);
+}
+
+async function handleSetup({ request, db, env, user, method }) {
+  const thread = await loadThread(db, user.id, env);
+  if (method === "GET") {
+    const row = await db.prepare(`SELECT name FROM "user" WHERE id = ?1`).bind(user.id).first();
+    return { name: row?.name || "", answers: setupAnswers(thread.memory), status: thread.state.setup || null };
+  }
+  const body = await readJson(request);
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new InvalidInput(null, "Send a JSON object.");
+  const name = body.name === undefined ? null : parseFirstName(body.name);
+  let memory = thread.memory;
+  if (body.answers !== undefined) {
+    const a = body.answers;
+    if (!a || typeof a !== "object" || Array.isArray(a)) throw new InvalidInput("answers", "Send the answers as an object.");
+    const unknown = Object.keys(a).filter((f) => !SETUP_FIELDS.includes(f));
+    if (unknown.length) throw new InvalidInput("answers", `Unknown answer: ${unknown[0]}.`);
+    // A null (or empty) answer unsets that field; everything else is checked like the chat's answers.
+    const input = {};
+    const forget = [];
+    for (const [f, v] of Object.entries(a)) {
+      if (v === null || v === "" || (Array.isArray(v) && !v.length)) forget.push(f);
+      else input[f] = v;
+    }
+    if (forget.length) input.forget = forget;
+    const r = applyUpdates(memory, input, today());
+    if (r.errors.length) throw new InvalidInput(r.errors[0].field || "answers", r.errors[0].message);
+    memory = r.memory;
+  }
+  const state = { ...thread.state };
+  if (body.status !== undefined) {
+    if (body.status !== "done" && body.status !== "later") throw new InvalidInput("status", "Use done or later.");
+    if (!(body.status === "later" && state.setup === "done")) state.setup = body.status;
+  }
+  const writes = [saveThread(db, user.id, memory, state)];
+  if (name !== null) writes.push(db.prepare(`UPDATE "user" SET name = ?1, "updatedAt" = ?2 WHERE id = ?3`).bind(name, new Date().toISOString(), user.id));
+  await db.batch(writes);
+  return { saved: true, name: name ?? undefined, answers: setupAnswers(memory), status: state.setup || null };
 }
 
 // Whether this renter has Demo mode on. It's one switch for the whole site: Listings, My matches and the assistant.
@@ -835,6 +892,7 @@ async function saveOption({ request, env, db, user }) {
 export async function handleAssistant({ request, env, db, user, path, method, reply }) {
   const ctx = { request, env, db, user };
   if (path === "/api/assistant" && method === "GET") return reply(await pageState(db, env, user));
+  if (path === "/api/assistant/setup" && (method === "GET" || method === "POST")) return reply(await handleSetup({ request, db, env, user, method }));
   if (path === "/api/assistant/messages" && method === "POST") return reply(await handleMessage(ctx));
 
   if (path === "/api/assistant/memory" && method === "POST") {

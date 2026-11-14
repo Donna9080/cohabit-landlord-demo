@@ -26,7 +26,7 @@
 //   /api/admin/survey[.csv]      check-in summary, recent responses and spreadsheet export (admin only)
 import { DEMO_COUNTS, DEMO_LISTINGS, DEMO_PEOPLE, demoDataOn } from "./assistant/demo-data.js";
 import { handleAdminAi, handleAiHelp, helpersAvailable } from "./ai/features.js";
-import { assistantCleanup, assistantDeleteStatements, assistantUsageReport, demoModeOn, handleAssistant } from "./assistant/routes.js";
+import { assistantCleanup, assistantDeleteStatements, assistantUsageReport, demoModeOn, handleAssistant, renterSetupPending } from "./assistant/routes.js";
 import { BRANDEIS, kmBetween } from "./assistant/search.js";
 import { getAuth } from "./auth.js";
 import { connectionDeleteStatements, demoPersonView, handleConnections, personView, requestsByPerson } from "./connections.js";
@@ -273,6 +273,8 @@ async function handleApi(request, env, url) {
       user: u && { name: u.name, email: u.email, accountType: u.accountType, isAdmin: u.role === "admin", points: await pointsBalance(db, u.id), occupation: u.occupation, company: u.company },
       // Renters' Demo mode switch lives on the server so Listings, My matches and the assistant agree.
       demo: u?.accountType === "renter" ? await demoModeOn(db, env, u.id) : false,
+      // A new renter who hasn't finished or put off setup ("Your next chapter?") is offered it once.
+      setupPending: u?.accountType === "renter" ? await renterSetupPending(db, u.id) : false,
       sessionExpired: !!viewer.expired,
     });
   }

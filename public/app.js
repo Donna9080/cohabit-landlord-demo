@@ -434,6 +434,357 @@
   };
   const homeFor = (type) => (type === "landlord" ? "/landlord" : type === "renter" ? "/assistant" : "/welcome");
 
+  // ── Renter sign-up and setup ("Gen Z mode", same palette as the home page; styles under .ob-* in styles.css) ──
+  // Where people come back to: "Keep exploring" on sign-in and sign-up, the end of renter setup and "Finish later"
+  // all go back to the page the visitor came from. It's remembered in this browser for a day, so it survives the
+  // Google redirect and the email confirmation link opening in another tab.
+  const RETURN_KEY = "cohabit.returnTo";
+  const NOT_A_RETURN = /^\/(signin|signup|forgot-password|reset-password|welcome|setup|signin-error|dev\/)/;
+  const PRIVATE_PAGE = /^\/(assistant|renter|landlord|account|admin)(\/|$|\?|#)/;
+  const safeReturn = (p) => (typeof p === "string" && /^\/(?!\/)\S*$/.test(p) && p.length <= 300 && !NOT_A_RETURN.test(p) ? p : null);
+  let lastPage = null; // the last ordinary page shown in this tab (not sign-in, sign-up or setup)
+  function saveReturn(p) {
+    const s = safeReturn(p);
+    if (!s) return;
+    try {
+      localStorage.setItem(RETURN_KEY, JSON.stringify({ p: s, at: Date.now() }));
+    } catch {}
+  }
+  function storedReturn() {
+    try {
+      const r = JSON.parse(localStorage.getItem(RETURN_KEY) || "null");
+      return r && Date.now() - r.at < 86400000 ? safeReturn(r.p) : null;
+    } catch {
+      return null;
+    }
+  }
+  const clearReturn = () => {
+    try {
+      localStorage.removeItem(RETURN_KEY);
+    } catch {}
+  };
+  // "Keep exploring": the last ordinary page, or the requested page if anyone may see it, or the home page.
+  const explorePath = (next) => safeReturn(lastPage) || (safeReturn(next) && !PRIVATE_PAGE.test(next) ? next : null) || "/";
+  // After signing in or finishing setup, a renter goes back to where they were (or to the assistant).
+  const renterLanding = (next) => safeReturn(next) || storedReturn() || "/assistant";
+  // The renter sign-up screen's Google button: /welcome then knows they chose the renter path there, so it doesn't ask
+  // "landlord or renter?" again (password sign-up already saves it). Kept for 30 minutes, used once.
+  const RENTER_INTENT = "cohabit.signupRenter";
+  const markRenterIntent = () => {
+    try {
+      localStorage.setItem(RENTER_INTENT, String(Date.now()));
+    } catch {}
+  };
+  function takeRenterIntent() {
+    try {
+      const at = Number(localStorage.getItem(RENTER_INTENT));
+      localStorage.removeItem(RENTER_INTENT);
+      return at > 0 && Date.now() - at < 30 * 60000;
+    } catch {
+      return false;
+    }
+  }
+  // A place picked in the Listings search, carried into setup as the area (this browser only, 7 days).
+  const AREA_KEY = "cohabit.searchArea";
+  const AREA_SHAPE = /^[A-Za-z][A-Za-z .'-]{1,39}$/;
+  function storeSearchArea(name) {
+    if (!AREA_SHAPE.test(name || "")) return;
+    try {
+      localStorage.setItem(AREA_KEY, JSON.stringify({ name, at: Date.now() }));
+    } catch {}
+  }
+  function storedSearchArea() {
+    try {
+      const r = JSON.parse(localStorage.getItem(AREA_KEY) || "null");
+      return r && Date.now() - r.at < 7 * 86400000 && AREA_SHAPE.test(r.name) ? r.name : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const obArrow = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`;
+  const obHeader = (step) => `
+      <header class="ob-top">
+        <a class="ob-logo" href="/" aria-label="coHabit, home">co<span class="ob-logo-h" aria-hidden="true">H</span><span class="sr-only">H</span>abit</a>
+        ${step ? `<span class="ob-step">Step ${step} of 2</span>` : ""}
+      </header>`;
+  const obGoogle = (next, primary, action = "sign-in") =>
+    `<button class="${primary ? "ob-primary ob-google-main" : "ob-google"}" type="button" data-action="${action}" data-next="${esc(next || "")}">${icon("google", 18)}<span>Continue with Google</span></button>`;
+  const obEmail = () => field("email", "Email", input("email", 'type="email" autocomplete="email" inputmode="email" required maxlength="254" spellcheck="false" autocapitalize="off"', ""));
+  const obMain = (label, type = "submit", extra = "") => `<button class="ob-primary" type="${type}"${extra}><span>${label}</span><span class="ob-arrow">${obArrow}</span></button>`;
+  const obTerms = `<a href="/terms">terms</a> and <a href="/privacy">privacy policy</a>`;
+
+  // Sign up (renters): "Make yourself at home." Only what an account needs: email and password where passwords are on,
+  // or Google. The first name and the rest come in setup. Terms and privacy are agreed to here, as before.
+  function renterSignUpPage() {
+    const next = new URLSearchParams(location.search).get("next") || "";
+    saveReturn(next || lastPage || "/");
+    const explore = explorePath(next);
+    const signinHref = `/signin${next ? `?next=${encodeURIComponent(next)}` : ""}`;
+    return {
+      title: "Create an account",
+      page: "auth",
+      html: `
+      <div class="ob-page">
+        ${obHeader()}
+        <section class="ob-card" aria-labelledby="ob-title">
+          <h1 class="ob-title" id="ob-title" tabindex="-1">Make yourself <em>at home.</em></h1>
+          <p class="ob-sub">Join for picks that feel more you.</p>
+          ${
+            cfg.passwordSignIn
+              ? `<form class="ob-form" id="signup-form" data-as="renter" novalidate>
+            ${obEmail()}
+            ${passwordField("password", "Password", "new-password", "At least 8 characters.")}
+            <p class="form-error" id="form-error" role="alert"></p>
+            ${obMain("Create account")}
+            <p class="ob-fine">We'll email you a link to confirm your address. By creating an account you agree to the ${obTerms}.</p>
+          </form>
+          <p class="ob-or"><span>or</span></p>
+          ${obGoogle(next, false, "signup-google")}`
+              : `${obGoogle(next, true, "signup-google")}
+          <p class="ob-fine">We only get your name and email address from Google. By continuing you agree to the ${obTerms}.</p>`
+          }
+          <div class="ob-links">
+            <p>Have an account? <a href="${signinHref}">Sign in</a></p>
+            <button class="ob-link" type="button" data-action="keep-exploring" data-to="${esc(explore)}">Keep exploring</button>
+          </div>
+          <p class="ob-aside">Listing a place? <a href="/signup?as=landlord">Landlord sign-up</a></p>
+        </section>
+      </div>`,
+    };
+  }
+
+  function obCheckEmailHtml(email) {
+    return `
+        <section class="ob-card" aria-labelledby="ob-title" role="status">
+          <h1 class="ob-title" id="ob-title" tabindex="-1">Check your <em>email.</em></h1>
+          <p class="ob-sub">We sent a link to <strong>${esc(email)}</strong>. Open it to finish creating your account. It expires in 24 hours.</p>
+          <p class="ob-fine">Nothing there after a few minutes? Check your spam folder.${cfg.devInbox ? ` Local preview: emails go to the <a href="/dev/inbox">local test inbox</a> instead of being sent.` : ""}</p>
+          <button class="ob-google" type="button" data-action="resend-confirm" data-email="${esc(email)}"><span>Send the link again</span></button>
+          <div class="ob-links">
+            <p>Confirmed it? <a href="/signin">Sign in</a></p>
+            <button class="ob-link" type="button" data-action="keep-exploring" data-to="${esc(explorePath(""))}">Keep exploring</button>
+          </div>
+        </section>`;
+  }
+
+  // ── Renter setup: "Your next chapter?" then "What's your home energy?" ────────
+  // Saved to the renter's account (first name) and to the answers the assistant and its matching use; anything left
+  // blank stays unset. Each screen has one main button, plus Back and Finish later; both can be reopened any time.
+  const LOOKING = [["room", "A room"], ["roommates", "A roommate"], ["both", "Both"]];
+  const ENERGY = [
+    ["noise", "Your ideal weeknight?", [["quiet", "Quiet recharge"], ["moderate", "A little company"], ["lively", "Something social"]]],
+    ["cleanliness", "Your tidy level?", [["tidy", "Tidy daily"], ["average", "Some clutter is fine"], ["relaxed", "Flexible, but hygienic"]]],
+    ["guests", "Friends visiting?", [["rarely", "Rarely"], ["sometimes", "Sometimes"], ["often", "Often"]]],
+  ];
+  const obChips = (group, options, value, labelledBy) =>
+    `<div class="ob-chips" role="group" aria-labelledby="${labelledBy}" id="f-${group}" tabindex="-1">${options
+      .map(([v, l]) => `<button type="button" class="ob-chip" data-action="ob-pick" data-group="${group}" data-v="${v}" aria-pressed="${v === value}">${esc(l)}</button>`)
+      .join("")}</div>`;
+  const monthLabel = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  function upcomingMonths(n) {
+    const now = new Date();
+    return Array.from({ length: n }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      return [v, monthLabel(v)];
+    });
+  }
+  const setupActions = (mainLabel, backTo) => `
+            <p class="form-error" id="form-error" role="alert"></p>
+            ${obMain(mainLabel)}
+            <div class="ob-links">
+              <button class="ob-link" type="button" data-action="ob-back" data-to="${esc(backTo)}">Back</button>
+              <button class="ob-link" type="button" data-action="ob-later">Finish later</button>
+            </div>`;
+
+  async function setupBasicsPage() {
+    const blocked = gate("renter");
+    if (blocked !== undefined) return blocked;
+    const d = await api("/api/assistant/setup");
+    const a = d.answers || {};
+    const first = (d.name || "").trim().split(/\s+/)[0] || "";
+    const carried = !a.areas ? storedSearchArea() : null;
+    const area = (a.areas && a.areas[0]) || carried || "";
+    const months = upcomingMonths(18);
+    const monthValue = a.move_in_month || "";
+    const monthOptions = [["", "Not sure yet"], ...months, ...(monthValue && !months.some(([v]) => v === monthValue) ? [[monthValue, monthLabel(monthValue)]] : [])];
+    return {
+      title: "Your next chapter",
+      page: "setup",
+      html: `
+      <div class="ob-page">
+        ${obHeader(1)}
+        <section class="ob-card ob-card-wide" aria-labelledby="ob-title">
+          <h1 class="ob-title" id="ob-title" tabindex="-1">Your next <em>chapter?</em></h1>
+          <p class="ob-sub">A few basics so your picks fit. Not sure about one? Leave it blank.</p>
+          <form class="ob-form" id="ob-basics-form" novalidate>
+            ${field("name", "First name", input("name", 'type="text" autocomplete="given-name" maxlength="50"', first))}
+            <div class="field" data-field="looking_for">
+              <p class="ob-label" id="l-looking_for">Looking for</p>
+              ${obChips("looking_for", LOOKING, a.looking_for || "", "l-looking_for")}
+              <p class="field-error" id="e-looking_for"></p>
+            </div>
+            <div class="ob-row">
+              ${field("budget_max", "Monthly budget", `<div class="ob-money"><span aria-hidden="true">$</span>${input("budget_max", 'type="text" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="1200"', a.budget_max ?? "")}</div>`, "Your share, per month.")}
+              ${field("move_in_month", "Move-in", select("move_in_month", monthOptions, monthValue))}
+            </div>
+            <div class="field ob-area" data-field="areas">
+              <p class="ob-label">Area</p>
+              ${area ? `<p class="ob-area-now" id="ob-area-now"><strong>${esc(area)}</strong>${carried ? `<span class="ob-muted">from your search</span>` : ""}<button class="ob-link" type="button" data-action="ob-change-area">Change</button></p>` : ""}
+              <div class="ob-area-pick"${area ? " hidden" : ""}>${placeField({ id: "f-areas", label: '<span class="sr-only">Area</span>', placeholder: "Town or neighborhood, like Waltham", value: area })}</div>
+              <p class="field-error" id="e-areas"></p>
+            </div>
+            ${setupActions("Next", storedReturn() || explorePath(""))}
+          </form>
+        </section>
+      </div>`,
+      mount: () => {
+        const box = document.getElementById("f-areas");
+        if (box)
+          attachPlaceField(box, {
+            types: PLACE_TYPES,
+            onPick: (place) => {
+              const name = place.label.split(",")[0].trim();
+              box.value = AREA_SHAPE.test(name) ? name : place.town || name;
+            },
+            onUnavailable: () => {},
+          });
+      },
+    };
+  }
+
+  async function setupLifestylePage() {
+    const blocked = gate("renter");
+    if (blocked !== undefined) return blocked;
+    const a = (await api("/api/assistant/setup")).answers || {};
+    return {
+      title: "Your home energy",
+      page: "setup",
+      html: `
+      <div class="ob-page">
+        ${obHeader(2)}
+        <section class="ob-card ob-card-wide" aria-labelledby="ob-title">
+          <h1 class="ob-title" id="ob-title" tabindex="-1">What's your <em>home energy?</em></h1>
+          <p class="ob-sub">Tap what fits. Tap again to clear it.</p>
+          <form class="ob-form" id="ob-life-form" novalidate>
+            ${ENERGY.map(
+              ([f, q, opts]) => `
+            <div class="field ob-q" data-field="${f}">
+              <p class="ob-label" id="l-${f}">${q}</p>
+              ${obChips(f, opts, a[f] || "", `l-${f}`)}
+              <p class="field-error" id="e-${f}"></p>
+            </div>`
+            ).join("")}
+            ${setupActions("Finish", "/setup/basics")}
+          </form>
+        </section>
+      </div>`,
+    };
+  }
+
+  const pickedChip = (form, group) => form.querySelector(`[data-group="${group}"][aria-pressed="true"]`)?.dataset.v || null;
+  function pickObChip(button) {
+    const pressed = button.getAttribute("aria-pressed") === "true";
+    button
+      .closest(".ob-chips")
+      .querySelectorAll(".ob-chip")
+      .forEach((b) => b.setAttribute("aria-pressed", String(b === button && !pressed)));
+  }
+  function changeObArea() {
+    document.getElementById("ob-area-now")?.remove();
+    const pick = document.querySelector(".ob-area-pick");
+    const box = document.getElementById("f-areas");
+    if (!pick || !box) return;
+    pick.hidden = false;
+    box.value = "";
+    box.focus();
+  }
+  // The Basics answers, checked here first. With lenient (Finish later), anything that doesn't pass is left out.
+  function basicsBody(form, lenient) {
+    const errors = [];
+    const name = form.elements.name.value.trim();
+    const budget = form.elements.budget_max.value.replace(/[$,\s]/g, "");
+    const area = (document.getElementById("f-areas")?.value || "").split(",")[0].trim();
+    const body = { answers: { looking_for: pickedChip(form, "looking_for"), move_in_month: form.elements.move_in_month.value || null } };
+    if (name) {
+      if (/^[\p{L}\p{M}][\p{L}\p{M}' .-]{0,49}$/u.test(name)) body.name = name;
+      else errors.push({ field: "name", message: "Use letters only. Spaces, hyphens and apostrophes are fine." });
+    } else if (!lenient) errors.push({ field: "name", message: "Enter your first name." });
+    if (!budget) body.answers.budget_max = null;
+    else if (/^\d{1,5}$/.test(budget) && Number(budget) >= 1 && Number(budget) <= 50000) body.answers.budget_max = Number(budget);
+    else errors.push({ field: "budget_max", message: "Enter a whole number of dollars, like 1200." });
+    if (!area) body.answers.areas = null;
+    else if (AREA_SHAPE.test(area)) body.answers.areas = [area];
+    else errors.push({ field: "areas", message: "Use a town or neighborhood name, like Waltham." });
+    return { body, errors };
+  }
+  const lifeBody = (form) => ({ answers: Object.fromEntries(ENERGY.map(([f]) => [f, pickedChip(form, f)])) });
+
+  async function submitBasics(form) {
+    const { body, errors } = basicsBody(form, false);
+    if (errors.length) return showErrors(form, errors[0]);
+    const btn = form.querySelector("[type=submit]");
+    btn.disabled = true;
+    try {
+      await api("/api/assistant/setup", { method: "POST", body });
+    } catch (e) {
+      btn.disabled = false;
+      return showErrors(form, e.field && form.querySelector(`#e-${e.field}`) ? e : { message: e.message });
+    }
+    if (body.name) await loadMe();
+    navigate("/setup/lifestyle");
+  }
+
+  async function submitLifestyle(form) {
+    const btn = form.querySelector("[type=submit]");
+    btn.disabled = true;
+    try {
+      await api("/api/assistant/setup", { method: "POST", body: { ...lifeBody(form), status: "done" } });
+    } catch (e) {
+      btn.disabled = false;
+      return showErrors(form, e.field && form.querySelector(`#e-${e.field}`) ? e : { message: e.message });
+    }
+    await loadMe();
+    leaveSetup("You're all set. Your picks just got more you. Change your answers anytime from your account.");
+  }
+
+  // Finish later: what's on this screen and passes the checks is saved, then back to where they were.
+  async function finishLater(button) {
+    const form = button.closest("form");
+    const body = form.id === "ob-basics-form" ? basicsBody(form, true).body : lifeBody(form);
+    button.disabled = true;
+    try {
+      await api("/api/assistant/setup", { method: "POST", body: { ...body, status: "later" } });
+    } catch {
+      // A value the server refuses doesn't keep anyone here: the earlier answers stay, and setup is put off.
+      try {
+        await api("/api/assistant/setup", { method: "POST", body: { status: "later" } });
+      } catch {}
+    }
+    await loadMe();
+    leaveSetup("Saved for later. Pick up anytime from your account.");
+  }
+
+  async function obBack(button) {
+    const form = button.closest("form");
+    // Going back from the second screen keeps what was tapped there.
+    if (form && form.id === "ob-life-form") {
+      try {
+        await api("/api/assistant/setup", { method: "POST", body: lifeBody(form) });
+      } catch {}
+    }
+    navigate(button.dataset.to || "/");
+  }
+
+  function leaveSetup(message) {
+    const to = storedReturn() || "/assistant";
+    clearReturn();
+    setFlash(message);
+    navigate(to, true);
+  }
+
+
   const passwordField = (id, label, autocomplete, hint = "", after = "") =>
     field(
       id,
@@ -462,41 +813,45 @@
       </div>`;
   }
 
-  // Sign in: email and password (with "Forgot password?"), or Google.
+  // Sign in: "Hey, you. Welcome back." Email and password with "Forgot password?" where passwords are on, and Google;
+  // "Create account" and "Keep exploring". For renters and landlords, and wherever a page needs signing in.
   function signInPage(nextParam) {
     const next = nextParam ?? new URLSearchParams(location.search).get("next") ?? "";
     if (me.user) {
       navigate(homeFor(me.user.accountType) === "/welcome" ? "/welcome" + (next ? "?next=" + encodeURIComponent(next) : "") : next.startsWith(homeFor(me.user.accountType)) ? next : homeFor(me.user.accountType), true);
       return null;
     }
-        const expired = me.sessionExpired;
-    const path = rememberedPath();
-    const title = expired ? "Your session has ended" : "Sign in";
-    if (!cfg.passwordSignIn)
-      return {
-        title,
-        html: `
-      <div class="panel">
-        <h1 tabindex="-1">${expired ? "Your session has ended" : "Sign in to continue"}</h1>
-        <p class="muted">${expired ? "Sign in again to pick up where you left off." : "coHabit uses your Google account. We only get your name and email address."}</p>
-        <div class="actions"><button class="btn" type="button" data-action="sign-in" data-next="${esc(next)}">${icon("google", 18)} Sign in with Google</button></div>
-      </div>`,
-      };
+    const expired = me.sessionExpired;
+    saveReturn(next || lastPage || "/");
+    const explore = explorePath(next);
+    const signupHref = `/signup?as=renter${next ? `&next=${encodeURIComponent(next)}` : ""}`;
     return {
-      title,
+      title: expired ? "Your session has ended" : "Sign in",
+      page: "auth",
       html: `
-      <div class="auth-card">
-        <h1 tabindex="-1">${title}</h1>
-        <p class="muted">${expired ? "Sign in again to pick up where you left off." : "Welcome back."}</p>
-        <form class="auth-form" id="signin-form" data-next="${esc(next)}" novalidate>
-          ${field("email", "Email", input("email", 'type="email" autocomplete="email" inputmode="email" required maxlength="254" spellcheck="false" autocapitalize="off"', ""))}
-          ${passwordField("password", "Password", "current-password", "", `<a class="forgot" href="/forgot-password">Forgot password?</a>`)}
-          <p class="form-error" id="form-error" role="alert"></p>
-          <button class="btn btn-block" type="submit">Sign in</button>
-        </form>
-        ${orLine}
-        ${googleButton(next)}
-        <p class="auth-switch-line">New to coHabit? <a href="/signup${path ? `?as=${path}` : ""}">Create an account</a></p>
+      <div class="ob-page">
+        ${obHeader()}
+        <section class="ob-card" aria-labelledby="ob-title">
+          <h1 class="ob-title" id="ob-title" tabindex="-1">Hey, you. <em>Welcome back.</em></h1>
+          <p class="ob-sub">${expired ? "Your session ended. Sign in to pick up where you left off." : "Sign in for your picks and saved progress."}</p>
+          ${
+            cfg.passwordSignIn
+              ? `<form class="ob-form" id="signin-form" data-next="${esc(next)}" novalidate>
+            ${obEmail()}
+            ${passwordField("password", "Password", "current-password", "", `<a class="ob-forgot" href="/forgot-password">Forgot password?</a>`)}
+            <p class="form-error" id="form-error" role="alert"></p>
+            ${obMain("Sign in")}
+          </form>
+          <p class="ob-or"><span>or</span></p>
+          ${obGoogle(next, false)}`
+              : `${obGoogle(next, true)}
+          <p class="ob-fine">coHabit uses your Google account. We only get your name and email address.</p>`
+          }
+          <div class="ob-links">
+            <p>New here? <a href="${signupHref}">Create account</a></p>
+            <button class="ob-link" type="button" data-action="keep-exploring" data-to="${esc(explore)}">Keep exploring</button>
+          </div>
+        </section>
       </div>`,
     };
   }
@@ -520,8 +875,15 @@
     form.elements.password.value = "";
     await loadMe();
     renderAccount();
-    // Returning users go straight to their side; anyone without one answers the one-time question.
     const next = form.dataset.next || "";
+    // Renters: setup once if they're new, otherwise back to where they were.
+    if (me.user && me.user.accountType === "renter") {
+      if (me.user.setupPending) return navigate("/setup/basics", true);
+      const to = renterLanding(next);
+      clearReturn();
+      return navigate(to, true);
+    }
+    // Returning users go straight to their side; anyone without one answers the one-time question.
     const home = homeFor(me.user && me.user.accountType);
     navigate(home === "/welcome" ? "/welcome" + (next ? "?next=" + encodeURIComponent(next) : "") : next && next.startsWith(home) ? next : home, true);
   }
@@ -535,6 +897,8 @@
     const want = new URLSearchParams(location.search).get("as");
     const as = want === "landlord" || want === "renter" ? want : rememberedPath() || "renter";
     rememberPath(as);
+    // Renters: "Make yourself at home." Landlords keep the original form below, unchanged.
+    if (as === "renter") return renterSignUpPage();
         const renter = as === "renter";
     const next = renter ? "/assistant" : "/landlord";
     const tabs = `
@@ -600,7 +964,8 @@
   async function submitSignUp(form) {
     const btn = form.querySelector("[type=submit]");
     const as = form.dataset.as;
-    const body = { signupAs: as, name: form.elements.name.value.trim(), email: form.elements.email.value.trim(), password: form.elements.password.value };
+    // The renter screen asks only for an email and a password (the first name comes in setup).
+    const body = { signupAs: as, name: form.elements.name ? form.elements.name.value.trim() : undefined, email: form.elements.email.value.trim(), password: form.elements.password.value };
     if (as === "renter") {
       const picked = [...form.querySelectorAll("[data-action=occupation-pick][aria-pressed=true]")].map((b) => b.dataset.v);
       if (picked.length) body.occupation = picked;
@@ -609,7 +974,8 @@
     try {
       const d = await api("/api/auth/sign-up/email", { method: "POST", body });
       rememberPath(as);
-            form.closest(".auth-card").outerHTML = checkEmailHtml(d.email, "confirm", cfg);
+      const card = form.closest(".ob-card") || form.closest(".auth-card");
+      card.outerHTML = card.classList.contains("ob-card") ? obCheckEmailHtml(d.email) : checkEmailHtml(d.email, "confirm", cfg);
       focusHeading();
     } catch (e) {
       btn.disabled = false;
@@ -1450,6 +1816,7 @@
       types: PLACE_TYPES,
       onPick: (place) => {
         searchPoint = { center: place.center, label: place.label.split(",")[0], radiusKm: radiusFor(place) };
+        storeSearchArea(AREA_SHAPE.test(searchPoint.label) ? searchPoint.label : place.town);
         listingQuery = "";
         listingSort = "near";
         setLocationMsg("");
@@ -1743,6 +2110,26 @@
       return messageView("This link has expired", "Confirmation links work once and for 24 hours. Sign in with your email and password and we'll send you a new one.", `<a class="btn" href="/signin">Sign in</a>`);
     if (!me.user) return signInView(next || "/welcome");
     const t = me.user.accountType;
+    // From the renter sign-up screen's Google button: they chose the renter path there, so no second question.
+    if (!t && takeRenterIntent())
+      return (async () => {
+        try {
+          await api("/api/me/account-type", { method: "POST", body: { accountType: "renter" } });
+        } catch (e) {
+          if (e.code !== "already_chosen") throw e;
+        }
+        await loadMe();
+        return welcome();
+      })();
+    if (t === "renter") {
+      if (me.user.setupPending) navigate("/setup/basics", true);
+      else {
+        const to = renterLanding(next);
+        clearReturn();
+        navigate(to, true);
+      }
+      return null;
+    }
     if (t) {
       const allowed = t === "landlord" ? ["/landlord"] : ["/assistant", "/renter"];
       navigate(allowed.some((p) => next.startsWith(p)) ? next : allowed[0], true);
@@ -4412,6 +4799,7 @@
       </dl>
       <p class="muted small">${POINTS_NOTE} ${u.points ? "Thanks for your check-in." : `Earn 100 for your first <button class="link-button" type="button" data-action="survey-open">Quick check-in</button>.`}</p>
       ${u.accountType ? `<p class="links"><a href="${u.accountType === "landlord" ? "/landlord" : "/renter"}">${u.accountType === "landlord" ? "Go to your units" : "Go to your matches"}</a></p>` : ""}
+      ${u.accountType === "renter" ? `<p class="links"><a href="/setup/basics">Edit your basics and home energy</a></p>` : ""}
       <p class="muted small">Your name and email come from Google. See the <a href="/privacy">privacy policy</a> for what coHabit keeps.</p>
       <form class="form danger-zone" id="delete-account-form" novalidate>
         <fieldset>
@@ -4457,6 +4845,8 @@
     if (clean === "/listings") return listings();
     if (clean === "/sample") return sampleDashboard();
     if (clean === "/welcome") return welcome();
+    if (clean === "/setup" || clean === "/setup/basics") return setupBasicsPage();
+    if (clean === "/setup/lifestyle") return setupLifestylePage();
     if (clean === "/signin") return signInPage();
     if (clean === "/signup") return signUpPage();
     if (clean === "/forgot-password") return forgotPasswordPage();
@@ -4513,6 +4903,7 @@
     document.title = `${view.title} · coHabit`;
     if (view.page) document.body.dataset.page = view.page;
     else delete document.body.dataset.page;
+    if (view.page !== "auth" && view.page !== "setup" && safeReturn(location.pathname + location.search)) lastPage = location.pathname + location.search;
     app.setAttribute("aria-busy", "false");
     renderAccount();
     if (moveFocus) {
@@ -4565,6 +4956,15 @@
     if (action) {
       const a = action.dataset.action;
       if (a === "home-menu") return toggleHomeMenu(action);
+      if (a === "keep-exploring") return navigate(action.dataset.to || "/");
+      if (a === "signup-google") {
+        markRenterIntent();
+        return signIn(action.dataset.next || "");
+      }
+      if (a === "ob-pick") return pickObChip(action);
+      if (a === "ob-change-area") return changeObArea();
+      if (a === "ob-later") return finishLater(action);
+      if (a === "ob-back") return obBack(action);
       if (a === "sign-in") signIn(action.dataset.next || (location.pathname === "/" ? "" : location.pathname));
       else if (a === "sign-out") signOut();
       else if (a === "choose-type") chooseType(action.dataset.type, action);
@@ -4710,6 +5110,12 @@
     } else if (e.target.id === "pref-form") {
       e.preventDefault();
       savePref(false);
+    } else if (e.target.id === "ob-basics-form") {
+      e.preventDefault();
+      submitBasics(e.target);
+    } else if (e.target.id === "ob-life-form") {
+      e.preventDefault();
+      submitLifestyle(e.target);
     } else if (e.target.id === "signin-form") {
       e.preventDefault();
       submitSignIn(e.target);
