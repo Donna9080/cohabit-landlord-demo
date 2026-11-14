@@ -745,57 +745,142 @@
     inputEl.focus();
   }
 
+  // The home page's photo: free under the Unsplash License, loaded from Unsplash's image servers (like demo photos).
+  const HOME_PHOTO = {
+    src: "https://images.unsplash.com/photo-1772724317856-156cf12b366f",
+    page: "https://unsplash.com/photos/three-friends-making-dough-together-in-a-kitchen-2O2tcQaU7Yc",
+    by: "Apartment Life",
+    profile: "https://unsplash.com/@apartmentlife",
+    alt: "Three housemates laughing while they make dough together in their kitchen",
+  };
+  const homePhotoUrl = (w) => `${HOME_PHOTO.src}?auto=format&fit=crop&w=${w}&q=70`;
+
+  // The home page's own header and menu (the shared top bar is hidden there). Same destinations as everywhere else,
+  // named for what people look for: Assistant, Matches, Listings, Messages, Profile, Sign out.
+  function homeNavItems() {
+    const u = me.user;
+    const role = u && u.accountType;
+    const items = [];
+    if (role === "renter") items.push(["/assistant", "Assistant"], ["/renter", "Matches"], ["/listings", "Listings"], ["/renter#requests-heading", "Messages"], ["/account", "Profile"]);
+    else if (role === "landlord") items.push(["/landlord", "Dashboard"], ["/listings", "Listings"], ["/landlord", "Requests"], ["/account", "Profile"]);
+    else if (u) items.push(["/welcome", "Get started"], ["/listings", "Listings"], ["/account", "Profile"]);
+    else items.push(["/listings", "Listings"], ["/sample", "Sample dashboard"]);
+    if (u && u.isAdmin) items.push(["/admin", "Admin"]);
+    return items;
+  }
+  function homeHeader() {
+    const u = me.user;
+    const links = homeNavItems()
+      .map(([href, label]) => `<a class="h-link" href="${href}">${label}</a>`)
+      .join("");
+    const feedback = `<button class="h-icon-btn" type="button" data-action="survey-open" aria-haspopup="dialog" aria-label="Quick check-in: share feedback" title="Quick check-in"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><use href="#i-feedback" /></svg></button>`;
+    const account = u
+      ? `<a class="h-who" href="/account" title="Your account: ${esc(u.email)}"><span class="h-avatar" aria-hidden="true">${esc(initials(u.name || u.email))}</span><span class="sr-only">Your profile</span></a><button class="h-out" type="button" data-action="sign-out">Sign out</button>`
+      : `<a class="h-in" href="/signin">Sign in</a>`;
+    return `
+      <header class="h-top">
+        <a class="h-logo" href="/" aria-label="coHabit, home">co<span class="h-logo-h" aria-hidden="true">H</span><span class="sr-only">H</span>abit</a>
+        <nav class="h-nav" aria-label="Main">${links}</nav>
+        <div class="h-actions">${feedback}${account}</div>
+        <button class="h-menu-btn" type="button" data-action="home-menu" aria-expanded="false" aria-controls="h-menu" aria-label="Menu">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 9h14M5 15h14"/></svg>
+        </button>
+      </header>
+      <div class="h-menu" id="h-menu" hidden>
+        <nav aria-label="Menu">${links}</nav>
+        <div class="h-menu-foot">
+          <button class="h-menu-item" type="button" data-action="survey-open" aria-haspopup="dialog">Quick check-in</button>
+          ${u ? `<button class="h-menu-item h-menu-out" type="button" data-action="sign-out">Sign out</button>` : `<a class="h-menu-item" href="/signin">Sign in</a>`}
+        </div>
+      </div>`;
+  }
+
   // ── Public pages ─────────────────────────────────────────────────────────────
+  // Home: the design from the Figma home screen. Styles live under .h-page in styles.css, so no other page changes.
   function home() {
     const u = me.user;
     const role = u && u.accountType;
-    const landlordCard = `
-          <a class="choice" href="/landlord">
-            <span class="choice-top"><span class="choice-icon">${icon("building", 24)}</span></span>
-            <span class="choice-text">
-              <span class="choice-title">${role === "landlord" ? "Your dashboard" : "I have rooms to rent"}</span>
-              <span class="choice-desc">List your units, keep rent and move-in dates current, and hear from interested renters.</span>
-            </span>
-            <span class="choice-cta">${role === "landlord" ? "Open your dashboard" : "Go to the landlord dashboard"} ${icon("right", 16)}</span>
-          </a>`;
-    const renterCard = `
-          <a class="choice" href="/assistant">
-            <span class="choice-top"><span class="choice-icon">${icon("user", 24)}</span></span>
-            <span class="choice-text">
-              <span class="choice-title">${role === "renter" ? "Your housing assistant" : "I'm looking for a room"}</span>
-              <span class="choice-desc">Chat about your budget, timing and how you like to live. See rooms and roommates that fit, and why.</span>
-            </span>
-            <span class="choice-cta">${role === "renter" ? "Continue the chat" : "Start a chat"} ${icon("right", 16)}</span>
-          </a>`;
-    // Visitors pick a path ("Find a room or roommate" or "List your space"), remembered for next time.
-    // Signed-in people only see the card for their own side.
+    const first = u ? esc((u.name || "").split(" ")[0] || "there") : "";
     const last = rememberedPath();
-    const pathCard = (as) => `
-          <a class="choice${last === as ? " is-last" : ""}" href="/signup?as=${as}" data-path="${as}">
-            <span class="choice-top"><span class="choice-icon">${icon(as === "renter" ? "user" : "building", 24)}</span>${last === as ? `<span class="choice-badge">Your last choice</span>` : ""}</span>
-            <span class="choice-text">
-              <span class="choice-title">${as === "renter" ? "Find a room or roommate" : "List your space"}</span>
-              <span class="choice-desc">${as === "renter" ? "Chat about your budget, timing and how you like to live. See rooms and roommates that fit, and why." : "List rooms or units, keep rent and move-in dates current, and hear from interested renters."}</span>
-            </span>
-            <span class="choice-cta">${last === as ? "Continue" : "Get started"} ${icon("right", 16)}</span>
+    // The main button goes where each person finds their match.
+    const cta =
+      role === "renter"
+        ? { href: "/renter", label: "Find my match" }
+        : role === "landlord"
+          ? { href: "/landlord", label: "Open my dashboard" }
+          : u
+            ? { href: "/welcome", label: "Get started" }
+            : { href: "/signup?as=renter", label: "Find my match", path: "renter" };
+    const second =
+      role === "renter" ? `<a class="h-ghost" href="/assistant">Chat with the assistant</a>` : `<a class="h-ghost" href="/listings">Browse listings</a>`;
+    const arrow = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`;
+    const step = (n, title, text) => `<li class="h-step"><span class="h-step-num" aria-hidden="true">${n}</span><h3>${title}</h3><p>${text}</p></li>`;
+    // Visitors pick a path (remembered in this browser for next time); signed-in people see their own side.
+    const pathCard = (as, signedIn) => {
+      const renter = as === "renter";
+      const href = signedIn ? (renter ? "/assistant" : "/landlord") : `/signup?as=${as}`;
+      const title = signedIn ? (renter ? "Your housing assistant" : "Your dashboard") : renter ? "Find a room or roommate" : "List your space";
+      const text = renter
+        ? "Chat about your budget, move-in month and how you like to live. See rooms and roommates that fit, and why."
+        : "List rooms in Waltham, Newton and nearby, keep rent and move-in dates current, and hear from interested renters.";
+      const action = signedIn ? (renter ? "Continue the chat" : "Open your dashboard") : !signedIn && last === as ? "Continue" : "Get started";
+      return `
+          <a class="h-path h-path-${as}${last === as && !signedIn ? " is-last" : ""}" href="${href}"${signedIn ? "" : ` data-path="${as}"`}>
+            ${last === as && !signedIn ? `<span class="h-path-badge">Your last choice</span>` : ""}
+            <span class="h-path-title">${title}</span>
+            <span class="h-path-text">${text}</span>
+            <span class="h-path-go">${action} ${arrow}</span>
           </a>`;
-    const cards = role === "landlord" ? landlordCard : role === "renter" ? renterCard : u ? landlordCard + renterCard : pathCard("renter") + pathCard("landlord");
+    };
+    const paths = role === "landlord" ? pathCard("landlord", true) : role === "renter" ? pathCard("renter", true) : u ? pathCard("renter", true) + pathCard("landlord", true) : pathCard("renter") + pathCard("landlord");
+    const words = ["Rooms", "Roommates", "Your vibe", "Near Brandeis", "Waltham", "Newton"];
+    const band = words.map((w) => `<span>${w}</span><span class="h-star">✦</span>`).join("");
     return {
       title: "Welcome",
+      page: "home",
       html: `
-      <div class="home">
-        <div class="hero">
-          <p class="eyebrow">Shared student housing near Brandeis</p>
-          <h1 tabindex="-1">${u ? `Welcome back, ${esc((u.name || "").split(" ")[0] || "there")}` : "Welcome to coHabit"}</h1>
-          <p class="lead">Landlords list rooms. Students chat with an assistant to find rooms and roommates that fit.</p>
-        </div>
-        <div class="choices${role ? " choices-one" : ""}">${cards}
-        </div>
-        <div class="actions home-actions">
-          <a class="btn btn-quiet" href="/listings">Browse listings</a>
-          ${u ? "" : `<a class="btn btn-quiet" href="/signin">Sign in</a>`}
-          ${role === "renter" ? `<a class="btn btn-quiet" href="/renter">My matches</a>` : `<a class="btn btn-quiet" href="/sample">View a sample dashboard</a>`}
-        </div>
+      <div class="h-page">
+        ${homeHeader()}
+        <section class="h-hero" aria-labelledby="h-title">
+          <div class="h-hero-text">
+            <p class="h-eyebrow"><span class="h-num" aria-hidden="true">01</span>${u ? `Welcome back, ${first}` : "Made for student life near Brandeis"}</p>
+            <h1 class="h-title" id="h-title" tabindex="-1">Your people.<br />Your <em>place.</em></h1>
+            <p class="h-lead">Find rooms and roommates who match how you actually want to live, in Waltham, Newton and around campus.</p>
+          </div>
+          <figure class="h-photo">
+            <div class="h-photo-frame">
+              <img src="${homePhotoUrl(900)}" srcset="${homePhotoUrl(600)} 600w, ${homePhotoUrl(900)} 900w, ${homePhotoUrl(1300)} 1300w" sizes="(max-width: 860px) 92vw, 46vw" alt="${esc(HOME_PHOTO.alt)}" width="900" height="675" decoding="async" fetchpriority="high" data-home-photo="1" />
+            </div>
+            <span class="h-sticker-good" aria-hidden="true"><strong>Good</strong><small>vibes only</small></span>
+            <span class="h-sticker-pill" aria-hidden="true">Roomies, but make it right →</span>
+            <figcaption class="h-credit">Photo: <a href="${HOME_PHOTO.profile}" target="_blank" rel="noopener noreferrer">${HOME_PHOTO.by}</a> on <a href="${HOME_PHOTO.page}" target="_blank" rel="noopener noreferrer">Unsplash</a></figcaption>
+          </figure>
+          <div class="h-cta-row">
+            <a class="h-cta" href="${cta.href}"${cta.path ? ` data-path="${cta.path}"` : ""}><span>${cta.label}</span><span class="h-cta-arrow">${arrow}</span></a>
+            ${second}
+          </div>
+        </section>
+        <div class="h-band" aria-hidden="true"><div class="h-band-track">${band}${band}</div></div>
+        <section class="h-section" aria-labelledby="h-how">
+          <p class="h-eyebrow"><span class="h-num" aria-hidden="true">02</span>How it works</p>
+          <h2 class="h-h2" id="h-how">Less scrolling. <em>Better fits.</em></h2>
+          <ol class="h-steps">
+            ${step("1", "Say what you want", "Budget in dollars a month, move-in month, the area and how you like to live: sleep, tidiness, guests, pets.")}
+            ${step("2", "See what fits, and why", "Rooms and roommates that match, with the reasons up front, like “within your $1,200 budget” or “both early birds”.")}
+            ${step("3", "Connect when it feels right", "Send an introduction or tell a landlord you're interested. Nothing is shared or sent until you choose.")}
+          </ol>
+        </section>
+        <section class="h-section" aria-labelledby="h-paths">
+          <p class="h-eyebrow"><span class="h-num" aria-hidden="true">03</span>${u ? "Pick up where you left off" : "Pick your path"}</p>
+          <h2 class="h-h2" id="h-paths">${u ? `Ready when you are, ${first}.` : `Looking or <em>listing?</em>`}</h2>
+          <div class="h-paths${role ? " is-one" : ""}">${paths}
+          </div>
+          <p class="h-more">
+            <a href="/listings">Browse all listings</a>
+            ${role === "renter" ? `<a href="/renter">My matches</a>` : `<a href="/sample">View a sample dashboard</a>`}
+            ${u ? "" : `<a href="/signin">Sign in</a>`}
+          </p>
+        </section>
       </div>`,
     };
   }
@@ -4442,12 +4527,20 @@
       }
     }
     document.title = `${view.title} · coHabit`;
+    if (view.page) document.body.dataset.page = view.page;
+    else delete document.body.dataset.page;
     app.setAttribute("aria-busy", "false");
     renderAccount();
     if (moveFocus) {
       window.scrollTo(0, 0);
       const h1 = app.querySelector("h1");
       if (h1) h1.focus({ preventScroll: true });
+    }
+    const target = location.hash.length > 1 && document.getElementById(safeDecode(location.hash.slice(1)));
+    if (target) {
+      target.scrollIntoView({ block: "start" });
+      if (target.tabIndex < 0 && !target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+      target.focus({ preventScroll: true });
     }
     pendingFocus = false;
   }
@@ -4478,7 +4571,7 @@
   }
 
   function navigate(path, replace) {
-    if (path !== location.pathname + location.search) history[replace ? "replaceState" : "pushState"](null, "", path);
+    if (path !== location.pathname + location.search + location.hash) history[replace ? "replaceState" : "pushState"](null, "", path);
     render(true);
   }
 
@@ -4487,6 +4580,7 @@
     const action = e.target.closest("[data-action]");
     if (action) {
       const a = action.dataset.action;
+      if (a === "home-menu") return toggleHomeMenu(action);
       if (a === "sign-in") signIn(action.dataset.next || (location.pathname === "/" ? "" : location.pathname));
       else if (a === "sign-out") signOut();
       else if (a === "choose-type") chooseType(action.dataset.type, action);
@@ -4604,7 +4698,7 @@
     const url = new URL(link.href, location.href);
     if (url.origin !== location.origin || link.target || url.pathname.startsWith("/api/")) return;
     e.preventDefault();
-    navigate(url.pathname + url.search);
+    navigate(url.pathname + url.search + url.hash);
   });
 
   document.addEventListener("click", (e) => {
@@ -4704,6 +4798,21 @@
     }
   });
 
+  function toggleHomeMenu(button, open = button.getAttribute("aria-expanded") !== "true") {
+    const menu = document.getElementById("h-menu");
+    if (!menu) return;
+    button.setAttribute("aria-expanded", String(open));
+    menu.hidden = !open;
+    if (open) menu.querySelector("a, button")?.focus();
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const button = document.querySelector('[data-action="home-menu"][aria-expanded="true"]');
+    if (!button) return;
+    toggleHomeMenu(button, false);
+    button.focus();
+  });
+
   // Chat box: Enter sends, Shift+Enter adds a line; the box grows with the text.
   document.addEventListener("keydown", (e) => {
     if (e.target.id !== "chat-input" || e.key !== "Enter" || e.shiftKey || e.isComposing) return;
@@ -4723,6 +4832,10 @@
     "error",
     (e) => {
       const img = e.target;
+      if (img instanceof HTMLImageElement && img.dataset.homePhoto) {
+        img.closest(".h-photo")?.classList.add("is-missing");
+        return img.remove();
+      }
       if (!(img instanceof HTMLImageElement) || !img.dataset.fallback) return;
       const pic = img.closest(".card-pic");
       if (!pic) return;
