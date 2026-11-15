@@ -112,7 +112,7 @@ src/password.js     password hashing for email and password accounts (PBKDF2, We
 src/email.js        account emails; a local test inbox in development (no email provider yet)
 src/imports.js      checks CSV files of external listings before an admin imports them
 src/assistant/      the renter's chat assistant: routes, memory checks, search, basic mode, Claude (AI) calls,
-                    demo-data.js + demo-base.js + demo-generated.js (Demo mode: 100 fictional listings, 200 profiles)
+                    demo-data.js + demo-base.js + demo-generated.js (Demo mode: 100 fictional listings, 148 profiles)
 public/import-template.csv  column template for listing imports
 migrations/         database tables (D1)
 tests/run-local.mjs automated local tests (npm test)

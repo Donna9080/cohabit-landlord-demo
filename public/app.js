@@ -2890,7 +2890,7 @@
   }
 
   // A photo-led card. Real renters have no profile photos on coHabit, so they get their initials; the made-up
-  // profiles have illustrated avatars. Only what's known is shown: area, budget and move-in when shared, a few
+  // profiles have an AI-generated photo (labeled). Only what's known is shown: area, budget and move-in when shared, a few
   // lifestyle tags (or what you have in common), and the score where matching worked one out. The rest is in the
   // profile (Details), opened from the picture or the name.
   function rmCard(c, key) {
@@ -2898,9 +2898,8 @@
     const name = esc(c.firstName);
     const id = `rmn-${key.replace(/[^a-z0-9-]/gi, "")}`;
     const d = c.details;
-    const pic = c.avatar
-      ? `<span class="rm-art">${avatarSvg(c.avatar).replace("<svg ", '<svg preserveAspectRatio="xMidYMid slice" ')}</span>`
-      : `<span class="rm-initials ${rmTint(c.firstName)}">${esc(initials(c.firstName))}</span>`;
+    const photo = personPhoto(c, `rm-initials ${rmTint(c.firstName)}`);
+    const pic = photo ? `<span class="rm-art has-photo">${photo}</span>` : `<span class="rm-initials ${rmTint(c.firstName)}">${esc(initials(c.firstName))}</span>`;
     const score = c.score != null ? `<span class="rm-score">${c.score}% match</span>` : c.compatible === false ? `<span class="rm-score is-off">Not a match</span>` : "";
     const terms = d ? [d.budget && d.budget.replace(/ a month$/, "/mo"), d.moveIn && `Move-in ${d.moveIn}`].filter(Boolean) : [];
     const tags = (d && d.lifestyle && d.lifestyle.length ? d.lifestyle : c.highlights || []).slice(0, 3);
@@ -2910,7 +2909,7 @@
           <div class="rm-pic">
             <button class="rm-pic-btn" type="button" data-action="person-details" data-key="${esc(key)}" tabindex="-1" aria-hidden="true">${pic}</button>
             ${score}
-            ${c.demo ? `<span class="rm-chip rm-chip-dark" title="${c.avatar ? "A made-up profile with an illustrated avatar" : "A made-up profile"}">Demo</span>` : c.sample ? `<span class="rm-chip" title="A fictional sample renter">Sample</span>` : ""}
+            ${c.demo ? `<span class="rm-chip rm-chip-dark" title="${c.photo ? "A made-up profile. The photo is AI-generated: this person doesn't exist." : "A made-up profile"}">Demo${c.photo ? " · AI-generated photo" : ""}</span>` : c.sample ? `<span class="rm-chip" title="A fictional sample renter">Sample</span>` : ""}
           </div>
           <div class="rm-body">
             <h3 class="rm-name" id="${id}"><button class="rm-name-btn" type="button" data-action="person-details" data-key="${esc(key)}" aria-label="${name}: view profile">${name}</button></h3>
@@ -3088,10 +3087,7 @@
     const showsList = !rmEmpty();
     const vibeOn = !(me.user && !renter); // renters, and visitors (who are asked to sign in)
     const self = tab === "explore" ? "/roommates/explore" : "/roommates/for-you";
-    const demoText =
-      tab === "explore"
-        ? "These are made-up people with illustrated avatars, not real students. Say hey is a preview: nothing is sent."
-        : "For you shows made-up profiles matched to your real preferences with the usual rules. Say hey is a preview: nothing is sent.";
+    const demoText = "Explore sample profiles with illustrative photos. Messages and requests are previews.";
     return rmPage({
       title: "Roommates",
       active: "roommates",
@@ -3677,10 +3673,10 @@
       return `<li class="mini-card is-gone"><p class="small muted">${s.kind === "room" ? "This room is no longer listed." : "This person is no longer looking for roommates."}</p>${unsaveButton(s.savedId)}</li>`;
     }
     if (s.kind === "person") {
-      // A demo person keeps their illustrated avatar and opens the same Details as everywhere else.
+      // A demo person keeps their AI-generated photo and opens the same Details as everywhere else.
       return `
         <li class="mini-card${s.demo ? " is-demo" : ""}">
-          <div class="mini-top">${s.demo ? personAvatar(s).replace("avatar-pic", "avatar-pic avatar-sm") : `<span class="avatar-pic avatar-sm" aria-hidden="true">${esc(initials(s.firstName))}</span>`}<span class="name">${esc(s.firstName)}</span>${s.demo ? demoTag : ""}${s.sample ? `<span class="tag">Sample</span>` : ""}</div>
+          <div class="mini-top">${s.demo ? personAvatar(s, { small: true }) : `<span class="avatar-pic avatar-sm" aria-hidden="true">${esc(initials(s.firstName))}</span>`}<span class="name">${esc(s.firstName)}</span>${s.demo ? demoTag : ""}${s.sample ? `<span class="tag">Sample</span>` : ""}</div>
           <div class="mini-actions">${s.demo ? `<button class="btn btn-small btn-quiet" type="button" data-action="person-details" data-key="${esc(key)}">Details</button>` : ""}${unsaveButton(s.savedId)}</div>
         </li>`;
     }
@@ -3705,45 +3701,23 @@
     studio: '<path d="M3 21V8l9-5 9 5v13"/><rect x="8" y="12" width="8" height="9"/>',
   };
   const ART_FOR = { Studio: "studio", "Private room": "bed", "Shared room": "people", "Whole apartment": "building", Sublet: "calendar", "Lease takeover": "key", "Replacing a roommate": "people" };
-  // Illustrated avatars for the fictional demo profiles, drawn from a few settings in demo-data.js. Not photos of anyone.
-  const SWEEP = "M20.5 28C20 17 25.5 13.5 32 13.5C38.5 13.5 44 17 43.5 28C41 21 36 19.5 33 19C30 21.5 25 23 20.5 28Z";
-  const SHORT = "M20.6 27C20 17 25 13.5 32 13.5C39 13.5 44.5 17.5 43.4 27C42 22 38 19.5 32 19.5C26 19.5 22 22 20.6 27Z";
-  const HAIR = {
-    short: { front: SHORT },
-    side: { front: "M20.6 27C19.5 16.5 26 13 33 13.5C40 14 45 18.5 43.4 27C42 21 37 18.8 30 20.5C27 21.3 23 23.5 20.6 27Z" },
-    buzz: { front: "M21.2 25.5C21.5 17.5 26 14.8 32 14.8C38 14.8 42.5 17.5 42.8 25.5C41 21 37 19 32 19C27 19 23 21 21.2 25.5Z", opacity: 0.8 },
-    wavy: { front: "M20.5 28C19 18 24.5 13 32 13C40 13 45.5 18 43.5 28C42.5 24 41 22 38.5 21C36 23 33 22 31 20.5C28.5 22.5 25 23 22.5 22.5C21.5 24 21 26 20.5 28Z" },
-    long: { back: "M19 28C18 15 25 11.5 32 11.5C39 11.5 46 15 45 28L46.5 47C42 49.5 22 49.5 17.5 47Z", front: SWEEP },
-    bob: { back: "M19.5 28C19 16 25 12.5 32 12.5C39 12.5 45 16 44.5 28L45 38.5C43 40.5 21 40.5 19 38.5Z", front: SWEEP },
-    bun: { bun: true, front: SHORT },
-    curly: { curls: [[21.5, 23, 5], [25.5, 17, 5.5], [32, 14.5, 6], [38.5, 17, 5.5], [42.5, 23, 5], [20.8, 28.5, 3.2], [43.2, 28.5, 3.2]] },
-    scarf: { scarf: true },
-  };
-  function avatarSvg(a) {
-    const h = HAIR[a.hair] || HAIR.short;
-    const brow = h.scarf ? "#2b1d16" : a.hairColor;
-    return `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-      <rect width="64" height="64" fill="${a.bg}"/>
-      <path d="M10 64C11 52 20 46.5 32 46.5C44 46.5 53 52 54 64Z" fill="${a.shirt}"/>
-      ${h.back ? `<path d="${h.back}" fill="${a.hairColor}"/>` : ""}
-      ${h.bun ? `<circle cx="32" cy="10.5" r="4.8" fill="${a.hairColor}"/>` : ""}
-      ${h.scarf ? `<path d="M18.5 30C17.5 15 24.5 11 32 11C39.5 11 46.5 15 45.5 30C45.5 39 41 45 32 48C23 45 18.5 39 18.5 30Z" fill="${a.hairColor}"/>` : `<rect x="27" y="36" width="10" height="11" rx="3" fill="${a.skin}"/><rect x="27" y="36" width="10" height="11" rx="3" fill="#000" opacity=".08"/><circle cx="21.2" cy="28" r="2.4" fill="${a.skin}"/><circle cx="42.8" cy="28" r="2.4" fill="${a.skin}"/>`}
-      <ellipse cx="32" cy="${h.scarf ? 28 : 27}" rx="${h.scarf ? 9.8 : 11}" ry="${h.scarf ? 11.2 : 12.5}" fill="${a.skin}"/>
-      ${a.beard ? `<path d="M21.6 29C22 37.5 26.8 41.3 32 41.3C37.2 41.3 42 37.5 42.4 29C41 34 37.5 36.6 32 36.6C26.5 36.6 23 34 21.6 29Z" fill="${a.hairColor}" opacity=".9"/>` : ""}
-      ${h.front ? `<path d="${h.front}" fill="${a.hairColor}"${h.opacity ? ` opacity="${h.opacity}"` : ""}/>` : ""}
-      ${h.curls ? h.curls.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${a.hairColor}"/>`).join("") : ""}
-      ${h.scarf ? `<path d="M21.6 25.5C22.4 18 26.8 15.4 32 15.4C37.2 15.4 41.6 18 42.4 25.5C40 20.8 36.4 19.2 32 19.2C27.6 19.2 24 20.8 21.6 25.5Z" fill="#000" opacity=".15"/>` : ""}
-      <circle cx="25" cy="31.5" r="1.8" fill="#e06666" opacity=".14"/><circle cx="39" cy="31.5" r="1.8" fill="#e06666" opacity=".14"/>
-      <circle cx="27.8" cy="28" r="1.15" fill="#1f2430"/><circle cx="36.2" cy="28" r="1.15" fill="#1f2430"/>
-      <path d="M25.6 24.6Q27.8 23.6 30 24.5M34 24.5Q36.2 23.6 38.4 24.6" stroke="${brow}" stroke-width="1.1" stroke-linecap="round" fill="none"/>
-      <path d="M29 33.2Q32 35.6 35 33.2" stroke="#8a3b2e" stroke-width="1.15" stroke-linecap="round" fill="none"/>
-      ${a.glasses ? `<g fill="none" stroke="#2d3748" stroke-width=".9"><rect x="24.2" y="25.4" width="7" height="5.2" rx="2"/><rect x="32.8" y="25.4" width="7" height="5.2" rx="2"/><path d="M31.2 27.6h1.6"/></g>` : ""}
-    </svg>`;
+  // Pictures of people. A made-up profile has an AI-generated photo of a person who doesn't exist (one fixed file per
+  // profile in /demo-faces, made with FLUX.1 [schnell] on Cloudflare Workers AI), cropped the same way everywhere
+  // (faces in the upper part of the frame) and labeled "AI-generated photo". Real renters have no profile photos on
+  // coHabit, so they always get their initials and never a generated or stock photo. If a photo can't load, its box
+  // turns into the initials (the error listener at the end).
+  function personPhoto(c, fallbackClass) {
+    const p = c.photo;
+    if (!p || !p.src) return "";
+    return `<img class="person-photo" src="${esc(p.src)}" alt="${esc(p.alt)}" loading="lazy" decoding="async" data-initials="${esc(initials(c.firstName))}" data-pic-fallback="${esc(fallbackClass)}" />`;
   }
-  const personAvatar = (c) =>
-    c.avatar
-      ? `<span class="avatar-pic has-art" role="img" aria-label="Illustrated avatar of ${esc(c.firstName)}, a fictional person" title="Illustrated avatar: a fictional person">${avatarSvg(c.avatar)}</span>`
-      : `<span class="avatar-pic${c.demo ? " is-demo" : ""}" aria-hidden="true">${esc(initials(c.firstName))}</span>`;
+  const personAvatar = (c, { small = false } = {}) => {
+    const size = small ? " avatar-sm" : "";
+    const photo = personPhoto(c, `avatar-pic${size}${c.demo ? " is-demo" : ""}`);
+    return photo
+      ? `<span class="avatar-pic has-photo${size}" title="AI-generated photo: this person doesn't exist">${photo}</span>`
+      : `<span class="avatar-pic${size}${c.demo ? " is-demo" : ""}" aria-hidden="true">${esc(initials(c.firstName))}</span>`;
+  };
 
   // Demo listings: an illustrative stock photo (never the place itself), labeled on the picture. If it can't load,
   // the drawing below shows instead.
@@ -4028,7 +4002,8 @@
     const key = `vibe:${c.ref}`;
     chatCards.set(key, c);
     const name = esc(c.firstName);
-    const pic = c.avatar ? `<span class="vibe-pic has-art">${avatarSvg(c.avatar)}</span>` : `<span class="vibe-pic ${rmTint(c.firstName)}">${esc(initials(c.firstName))}</span>`;
+    const photo = personPhoto(c, `vibe-pic ${rmTint(c.firstName)}`);
+    const pic = photo ? `<span class="vibe-pic has-photo">${photo}</span>` : `<span class="vibe-pic ${rmTint(c.firstName)}">${esc(initials(c.firstName))}</span>`;
     const why = (c.highlights && c.highlights.length ? c.highlights : c.fits || []).slice(0, 2);
     const meta = [c.score != null ? `${c.score}% match` : "", c.details && c.details.area ? c.details.area : ""].filter(Boolean);
     const save = c.demo ? vibeDemoSave("person", c.id, c.firstName) : realSave(c, `data-kind="person" data-ref="${esc(c.ref)}" data-first="${name}"`, c.firstName);
@@ -4095,7 +4070,7 @@
     const people = kind === "person";
     const items = vibeMore ? set.items : set.items.slice(0, VIBE_PICKS);
     const found = people ? plural(set.total, "person fits", "people fit") : `${set.total === 1 ? "1 room fits" : `${set.total} rooms fit`} your must-haves`;
-    const source = chat.demo ? `Made-up demo ${people ? "profiles" : "listings"}` : people ? "Real renters who chose to be found" : "Real listings";
+    const source = chat.demo ? (people ? "Made-up demo profiles with AI-generated photos" : "Made-up demo listings") : people ? "Real renters who chose to be found" : "Real listings";
     const more =
       set.items.length > VIBE_PICKS
         ? `<button class="vibe-more" type="button" data-action="vibe-more" aria-expanded="${vibeMore}">${vibeMore ? "Show fewer" : `Show all ${set.items.length}`}</button>`
@@ -4592,7 +4567,7 @@
       ${c.email ? `<p class="small">Email they chose to share: <a href="mailto:${esc(c.email)}">${esc(c.email)}</a></p>` : ""}
       <p class="hint">${
         c.demo
-          ? `Demo profile ${esc(c.id || "")}: a fictional person${c.avatar ? " with an illustrated avatar" : ""}, not a real student, with no contact details. Connecting is a preview only; nothing is sent and nobody is notified.`
+          ? `Demo profile ${esc(c.id || "")}: a fictional person, not a real student, with no contact details.${c.photo ? ` The photo is AI-generated and this person doesn't exist: made with <a href="${esc(c.photo.creditUrl)}" target="_blank" rel="noopener">${esc(c.photo.credit)}</a> (<a href="${esc(c.photo.licenseUrl)}" target="_blank" rel="noopener">${esc(c.photo.license)}</a>) on <a href="${esc(c.photo.sourceUrl)}" target="_blank" rel="noopener">${esc(c.photo.source)}</a>.` : ""} Connecting is a preview only; nothing is sent and nobody is notified.`
           : r && r.status === "pending" && r.direction === "in"
             ? `${esc(c.firstName)} sent you a request. Accepting lets you message each other here; your email stays private.`
             : r && r.status === "accepted"
@@ -5643,6 +5618,17 @@
     "error",
     (e) => {
       const img = e.target;
+      if (img instanceof HTMLImageElement && img.dataset.picFallback != null) {
+        const box = img.parentElement;
+        if (!box) return;
+        box.className = img.dataset.picFallback;
+        box.removeAttribute("title");
+        box.setAttribute("aria-hidden", "true");
+        box.textContent = img.dataset.initials || "";
+        const chip = box.closest(".rm-pic")?.querySelector(".rm-chip-dark");
+        if (chip) chip.textContent = "Demo"; // no photo shown any more
+        return;
+      }
       if (img instanceof HTMLImageElement && img.dataset.homePhoto) {
         img.closest(".h-photo")?.classList.add("is-missing");
         return img.remove();

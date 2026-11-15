@@ -2,10 +2,10 @@
 // searches run through coHabit's own matching code, and every listing, photo and profile.
 //
 //   node scripts/demo-report.mjs   (npm run demo:report)
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PHOTOS } from "../src/assistant/demo-base.js";
-import { DEMO_LISTINGS, DEMO_PEOPLE } from "../src/assistant/demo-data.js";
+import { DEMO_LISTINGS, DEMO_PEOPLE, REMOVED_PEOPLE } from "../src/assistant/demo-data.js";
 import { BRANDEIS, exclusionCounts, kmBetween, searchRoommates, searchRooms } from "../src/assistant/search.js";
 import { rankUnits } from "../src/match.js";
 import { BLOCKER_TEXT, roommateBlockers } from "../src/roommates.js";
@@ -20,7 +20,10 @@ const hood = (area) => area.replace(/^Waltham, MA \((.*)\)$/, "$1");
 const km = (u) => Math.round(kmBetween(u.location, BRANDEIS) * 10) / 10;
 const cell = (s) => String(s ?? "").replace(/\|/g, "/");
 const shown = DEMO_PEOPLE.filter((p) => p.discoverable);
-const cov = coverage(DEMO_LISTINGS, DEMO_PEOPLE);
+// The live set is checked at 2+ since 52 profiles without a photo were taken out (2026-11-15); the generated data meets 3+.
+const LIVE_TARGET = 2;
+const cov = coverage(DEMO_LISTINGS, DEMO_PEOPLE, LIVE_TARGET);
+const FACE_PROMPTS = JSON.parse(readFileSync(new URL("./demo-face-prompts.json", import.meta.url), "utf8"));
 const sum = summary(cov, DEMO_LISTINGS, DEMO_PEOPLE);
 const CONDITION = { rooms: "rooms", budget: "budget", month: "move-in month", area: "area", distance: "distance" };
 
@@ -129,9 +132,11 @@ Demo mode lets anyone try coHabit with made-up listings and roommates. This file
 \`npm run demo:report\` (scripts/demo-report.mjs) from the data itself, so the numbers below are the data's.
 
 - **What:** ${DEMO_LISTINGS.length} fictional room listings and ${DEMO_PEOPLE.length} fictional roommate profiles, all in Waltham
-  (${shown.length} profiles shown; ${DEMO_PEOPLE.length - shown.length} chose not to be found, which shows that rule working).
+  (${shown.length} profiles shown; ${DEMO_PEOPLE.length - shown.length} chose not to be found, which shows that rule working). ${REMOVED_PEOPLE.size} more
+  profiles were written but taken out on 2026-11-15 because their AI photos were never made (\`REMOVED_PEOPLE\` in
+  [\`src/assistant/demo-data.js\`](../src/assistant/demo-data.js)); their records stay in the files below.
 - **Where it lives:** in code, never in the database: the first 15 listings and 20 profiles are written by hand in
-  [\`src/assistant/demo-base.js\`](../src/assistant/demo-base.js); the other ${DEMO_LISTINGS.length - 15} listings and ${DEMO_PEOPLE.length - 20} profiles are written to
+  [\`src/assistant/demo-base.js\`](../src/assistant/demo-base.js); the other ${DEMO_LISTINGS.length - 15} listings and ${DEMO_PEOPLE.length - 20 + REMOVED_PEOPLE.size} profiles are written to
   [\`src/assistant/demo-generated.js\`](../src/assistant/demo-generated.js) by [\`scripts/demo-build.mjs\`](../scripts/demo-build.mjs). Every id starts with \`demo-\`.
 - **Where it shows:** only while Demo mode is on, always labeled Demo: Listings (all demo listings with filters, map, Details
   and Save), My matches (demo rooms and roommates that fit your saved preferences, plus "Browse all demo profiles"), the
@@ -175,9 +180,9 @@ Definitions (in [\`scripts/demo-coverage.mjs\`](../scripts/demo-coverage.mjs)):
 
 | Target | Result (min / median / max) |
 | --- | --- |
-| Each profile has 3+ suitable rooms | ${sum.roomsPerProfile.min} / ${sum.roomsPerProfile.median} / ${sum.roomsPerProfile.max} rooms per profile (plus ${sum.partialRoomsPerProfile.median} partial matches at the median) |
-| Each profile has 3+ mutually compatible roommates | ${sum.matesPerProfile.min} / ${sum.matesPerProfile.median} / ${sum.matesPerProfile.max} (the matching code alone allows ${sum.engineMatesPerProfile.min} / ${sum.engineMatesPerProfile.median} / ${sum.engineMatesPerProfile.max}) |
-| Each room suits 3+ demo renters | ${sum.rentersPerRoom.min} / ${sum.rentersPerRoom.median} / ${sum.rentersPerRoom.max} visible profiles per room |
+| Each profile has 2+ suitable rooms (3+ before the removals) | ${sum.roomsPerProfile.min} / ${sum.roomsPerProfile.median} / ${sum.roomsPerProfile.max} rooms per profile (plus ${sum.partialRoomsPerProfile.median} partial matches at the median) |
+| Each profile has 2+ mutually compatible roommates (3+ before the removals) | ${sum.matesPerProfile.min} / ${sum.matesPerProfile.median} / ${sum.matesPerProfile.max} (the matching code alone allows ${sum.engineMatesPerProfile.min} / ${sum.engineMatesPerProfile.median} / ${sum.engineMatesPerProfile.max}) |
+| Each room suits 2+ demo renters (3+ before the removals) | ${sum.rentersPerRoom.min} / ${sum.rentersPerRoom.median} / ${sum.rentersPerRoom.max} visible profiles per room |
 | Targets missed | ${sum.failures.length} |
 
 Not everyone matches everyone. Of the ${Object.values(sum.pairReasons).reduce((a, b) => a + b, 0).toLocaleString("en-US")} reasons counted across pairs of visible profiles
@@ -247,13 +252,42 @@ ${photoRows.join("\n")}
 
 ## Roommate profiles
 
-Fictional seniors and graduate students. Avatars are illustrations drawn by coHabit's own code from a few settings, not
-photos or likenesses of anyone. No contact details, references, verification or testimonials. "Rooms" counts rooms that
+Fictional seniors and graduate students. Each shown profile has an AI-generated photo of a person who doesn't exist (see
+"Profile photos" below). No contact details, references, verification or testimonials. "Rooms" counts rooms that
 match everything for them; "Roommates" counts visible profiles mutually compatible with them.
 
 | Id | Name | Program | Looking in | Move-in | Budget | Wants | Lifestyle | Rooms | Roommates | Shown |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${peopleRows.join("\n")}
+
+## Profile photos (AI-generated)
+
+Each of the ${shown.length} shown profiles has one realistic AI-generated portrait of a person who doesn't exist,
+\`public/demo-faces/<id>.webp\` (640 x 640), the same on every screen: cards, profile details, Vibe and Saved. They are
+served from coHabit's own site; if one can't load, the profile's initials show instead. Every card says "Demo ·
+AI-generated photo", and the profile says the photo is AI-generated and the person doesn't exist, with links to the
+model and its license.
+
+- **How they were made (2026-11-14).** With FLUX.1 [schnell] by Black Forest Labs (\`@cf/black-forest-labs/flux-1-schnell\`)
+  on Cloudflare Workers AI, through a throwaway local Worker run with \`wrangler dev\` (never deployed), inside the free
+  daily allowance (10,000 neurons a day; the account is on the Workers Free plan, which refuses extra use rather than
+  billing it), so they cost nothing. The 1024 px results were cropped by 2.4% on each side (FLUX sometimes draws a
+  thin edge) and saved as WebP.
+- **License.** FLUX.1 [schnell] is released under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0),
+  which allows using its outputs freely, including commercially; its out-of-scope uses (illegal use, harming minors,
+  false information meant to harm, harassment) don't apply. Cloudflare's [terms](https://www.cloudflare.com/policies/terms/)
+  cover the service. Stock portraits (Pexels, Unsplash) weren't used: the people in them never agreed to appear as
+  roommate profiles, and Unsplash's Terms exclude recognizable people.
+- **Casting.** The prompts ask for a natural, casual photo of an adult in their twenties (early twenties for seniors,
+  mid for master's students, late for PhD students), from a mixed cast assigned in turn, not from the names. Women or
+  men follow how each first name is commonly used; names used either way alternate. Matching never sees names, photos
+  or anything about gender.
+- **Real accounts** never get a generated or stock photo. coHabit has no profile photo upload, so real renters show
+  their initials.
+
+| Profile | Name | Prompt |
+| --- | --- | --- |
+${shown.map((p) => `| ${p.id} | ${p.firstName} | ${cell(FACE_PROMPTS[p.id] || "")} |`).join("\n")}
 `;
 writeFileSync(OUT, doc);
 console.log(`Wrote ${OUT} (${doc.length} characters).`);

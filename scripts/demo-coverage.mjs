@@ -53,7 +53,9 @@ export const MUTUAL_TEXT = {
 };
 
 // Everything at once: per profile, the rooms that suit them and their compatible candidates; per room, who it suits.
-export function coverage(listings, people) {
+// target: how many rooms and roommates each profile needs, and renters each room needs (TARGET for the generated
+// data; the live set after the 2026-11-15 removals is checked at 2, see tests/run-local.mjs).
+export function coverage(listings, people, target = TARGET) {
   const shown = people.filter((p) => p.discoverable);
   const perPerson = new Map();
   const perRoom = new Map(listings.map((u) => [u.id, { all: [], shown: [] }]));
@@ -86,10 +88,10 @@ export function coverage(listings, people) {
   const failures = [];
   for (const p of people) {
     const c = perPerson.get(p.id);
-    if (c.rooms.length < TARGET) failures.push(`${p.id} ${p.firstName}: ${c.rooms.length} suitable rooms`);
-    if (c.mates.length < TARGET) failures.push(`${p.id} ${p.firstName}: ${c.mates.length} compatible roommates`);
+    if (c.rooms.length < target) failures.push(`${p.id} ${p.firstName}: ${c.rooms.length} suitable rooms`);
+    if (c.mates.length < target) failures.push(`${p.id} ${p.firstName}: ${c.mates.length} compatible roommates`);
   }
-  for (const u of listings) if (perRoom.get(u.id).shown.length < TARGET) failures.push(`${u.id}: suits ${perRoom.get(u.id).shown.length} demo renters`);
+  for (const u of listings) if (perRoom.get(u.id).shown.length < target) failures.push(`${u.id}: suits ${perRoom.get(u.id).shown.length} demo renters`);
   return { perPerson, perRoom, pairReasons, failures, shownCount: shown.length };
 }
 

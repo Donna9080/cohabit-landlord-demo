@@ -315,7 +315,8 @@ export const HAND_LISTINGS = [
 // fields: looking_in (neighborhoods), rooms_needed, lease_months, furnished (true = wants a furnished place, null =
 // no preference), must_haves (beyond the budget, which is always one) and max_distance_km (a must-have when set).
 // discoverable: false means this person did not choose to be found, so they are never shown (the demo shows the
-// rule working). avatar: settings for the illustrated picture only; matching never reads it.
+// rule working). avatar: settings for the old illustrated picture (no longer shown; shown profiles have an
+// AI-generated photo in public/demo-faces); matching never reads either.
 const look = (skin, hair, hairColor, shirt, bg, extras = {}) => ({ skin, hair, hairColor, shirt, bg, glasses: !!extras.glasses, beard: !!extras.beard });
 const person = (n, firstName, program, intro, interests, lookingIn, month, [min, max], search, [sleep, clean, noise, guests, pets, smoking, chores], avatar, discoverable = true) => ({
   id: `demo-p${n}`,

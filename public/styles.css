@@ -790,7 +790,7 @@ p.interest { display: block; }
   .bar { width: 72px; }
 }
 
-/* ── Demo listings and profiles: illustrative photos, illustrated avatars, fact list ── */
+/* ── Demo listings and profiles: illustrative photos, fact list ── */
 .card-pic.has-photo { background: var(--tint); }
 .res-card .card-pic.has-photo { height: 132px; }
 .card-pic { flex: none; overflow: hidden; }
@@ -800,8 +800,9 @@ p.interest { display: block; }
 .details-body .card-pic.has-photo { height: 240px; }
 .pic-credit { margin-top: -6px; }
 .pic-credit a { color: inherit; }
-.avatar-pic.has-art { background: var(--tint); overflow: hidden; }
-.avatar-pic.has-art svg { display: block; width: 100%; height: 100%; }
+/* People's photos (made-up profiles' illustrative stock photos): the same crop everywhere, faces in the upper part. */
+.person-photo { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
+.avatar-pic.has-photo { background: var(--tint); overflow: hidden; }
 .facts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin: 0; font-size: 14px; }
 .facts-grid dt { font-size: 12px; color: var(--sub); }
 .facts-grid dd { margin: 0; }
@@ -1424,7 +1425,8 @@ body[data-page="people"] #app > .notice { width: min(100% - 32px, 1200px); margi
   display: block; width: 100%; aspect-ratio: 4 / 3; padding: 0; border: 0; border-radius: 18px; overflow: hidden;
   background: var(--rm-cream); cursor: pointer;
 }
-.rm-art, .rm-art svg { display: block; width: 100%; height: 100%; }
+.rm-art { display: block; width: 100%; height: 100%; }
+.rm-art.has-photo { background: var(--rm-cream); }
 .rm-initials {
   display: grid; place-items: center; width: 100%; height: 100%; font-family: var(--rm-display); font-size: 64px;
   letter-spacing: -0.04em; color: var(--rm-ink);
@@ -1604,7 +1606,7 @@ body.vibe-open .toast { bottom: 104px; }
   display: grid; place-items: center; flex: none; width: 52px; height: 52px; border-radius: 16px; border: 1.5px solid var(--rm-ink); overflow: hidden;
   font-family: var(--rm-display); font-size: 20px; letter-spacing: -0.03em; color: var(--rm-ink); background: #fff;
 }
-.vibe-pic.has-art svg { display: block; width: 100%; height: 100%; }
+.vibe-pic.has-photo { background: var(--rm-cream); }
 .vibe-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .vibe-card-name { font-family: var(--rm-display); font-weight: 900; font-size: 18px; line-height: 1.1; letter-spacing: -0.02em; overflow-wrap: anywhere; }
 .vibe-card-meta { font-size: 13.5px; overflow-wrap: anywhere; }

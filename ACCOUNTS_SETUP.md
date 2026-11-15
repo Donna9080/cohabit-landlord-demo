@@ -479,7 +479,8 @@ sees daily totals and an estimated cost, never chats (Admin page, "AI assistant"
 ### Demo mode (fictional listings and people)
 
 One **Demo mode** switch (on Listings, My matches, the assistant and `/demo/people`) swaps real results for 100
-made-up listings and 200 made-up roommate profiles in Waltham (197 shown; 3 chose not to be found). They let anyone
+made-up listings and 148 made-up roommate profiles in Waltham (145 shown; 3 chose not to be found; 52 more were taken
+out on 2026-11-15 because their AI photos were never made). They let anyone
 try coHabit, given how few real listings there are. Coverage, 20 example searches, every record, and each photo's
 source and license are in [docs/DEMO_DATA.md](docs/DEMO_DATA.md) (written from the data by `npm run demo:report`).
 
@@ -491,9 +492,9 @@ source and license are in [docs/DEMO_DATA.md](docs/DEMO_DATA.md) (written from t
     lease, furnishing, rooms free), "Showing X of 100 demo listings", dashed map pins, Details, Save and a preview
     request.
   - **My matches:** demo rooms ("N of 100 demo listings match", same rules as for real units) and demo roommates
-    ("N of 197 demo profiles are compatible", same roommate rules) for the renter's saved preferences, plus
+    ("N of 145 demo profiles are compatible", same roommate rules) for the renter's saved preferences, plus
     **Browse all demo profiles**.
-  - **`/demo/people`:** all 197 visible demo profiles with filters and counts; for a renter with saved preferences,
+  - **`/demo/people`:** all 145 visible demo profiles with filters and counts; for a renter with saved preferences,
     each says how compatible they are or why they aren't a match.
   - **The assistant:** its results come from the same demo data.
 - **The data lives in code,** never in the database: 15 listings and 20 profiles written by hand
@@ -529,8 +530,9 @@ source and license are in [docs/DEMO_DATA.md](docs/DEMO_DATA.md) (written from t
   - Fictional seniors and grad students, each with a first name, program and year, a short introduction, three
     interests, a budget, a move-in month, a preferred Waltham area and lifestyle answers. Never a location, contact
     details, references or testimonials.
-  - Pictures are illustrated avatars drawn by the page from a few settings (colors, hair style, glasses), labeled as
-    fictional; no photos of people. There is no gender field, so gender can't affect a score.
+  - Pictures are AI-generated portraits of people who don't exist (FLUX.1 [schnell], Apache 2.0, made with Cloudflare
+    Workers AI's free allowance; one fixed file per profile in public/demo-faces, labeled "Demo · AI-generated photo";
+    see docs/DEMO_DATA.md). There is no gender field, so gender can't affect a score.
   - Three chose not to be found and are never shown.
   - Scores and shared traits come from the normal matching code. Seeing demo profiles doesn't need the student's own
     opt-in, because nobody real is involved; their lifestyle answers are still needed.
