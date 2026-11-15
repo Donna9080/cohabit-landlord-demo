@@ -3087,7 +3087,7 @@
     const showsList = !rmEmpty();
     const vibeOn = !(me.user && !renter); // renters, and visitors (who are asked to sign in)
     const self = tab === "explore" ? "/roommates/explore" : "/roommates/for-you";
-    const demoText = "Explore sample profiles with illustrative photos. Messages and requests are previews.";
+    const demoText = "Explore sample profiles with AI-generated photos. Messages and requests are previews.";
     return rmPage({
       title: "Roommates",
       active: "roommates",

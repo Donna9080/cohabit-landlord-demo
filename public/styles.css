@@ -1462,7 +1462,7 @@ body[data-page="people"] #app > .notice { width: min(100% - 32px, 1200px); margi
 .rm-hey {
   display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 4px 4px 18px; border-radius: 999px;
   border: 1.5px solid var(--rm-ink); background: var(--rm-lime); color: var(--rm-ink); font: inherit; font-size: 15px; font-weight: 800;
-  cursor: pointer; box-shadow: 0 3px 0 var(--rm-ink); transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer; text-decoration: none; box-shadow: 0 3px 0 var(--rm-ink); transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .rm-hey:hover { transform: translateY(-1px); box-shadow: 0 4px 0 var(--rm-ink); }
 .rm-hey-plain { padding: 0 18px; }
