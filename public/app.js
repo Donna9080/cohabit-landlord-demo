@@ -2756,6 +2756,15 @@
       </div>`;
   }
 
+  // The header's two pills: renters and visitors browse Roommates and Rooms; landlords get their dashboard and
+  // Listings; someone who hasn't picked an account type gets Get started and Listings (as the old top bar did).
+  function rmSwitchLinks() {
+    const role = me.user && me.user.accountType;
+    if (role === "landlord") return [["/landlord", "Dashboard", "landlord"], ["/listings", "Listings", "rooms"]];
+    if (me.user && !role) return [["/welcome", "Get started", "welcome"], ["/listings", "Listings", "rooms"]];
+    return [["/roommates", "Roommates", "roommates"], [isRenter() ? "/rooms" : "/listings", "Rooms", "rooms"]];
+  }
+
   function rmHeader(active) {
     const u = me.user;
     const renter = isRenter();
@@ -2767,8 +2776,7 @@
       <header class="rm-top">
         <a class="rm-logo" href="/" aria-label="coHabit, home">co<span class="rm-logo-h" aria-hidden="true">H</span><span class="sr-only">H</span>abit</a>
         <nav class="rm-switch" aria-label="Browse">
-          <a class="rm-switch-link" href="/roommates"${rmCurrent(active === "roommates")}>Roommates</a>
-          <a class="rm-switch-link" href="${renter ? "/rooms" : "/listings"}"${rmCurrent(active === "rooms")}>Rooms</a>
+          ${rmSwitchLinks().map(([href, label, key]) => `<a class="rm-switch-link" href="${href}"${rmCurrent(active === key)}>${label}</a>`).join("")}
         </nav>
         <div class="rm-actions">
           ${flag}${messages}
@@ -2777,6 +2785,24 @@
         </div>
       </header>`;
   }
+
+  // ── Gen Z frame for the remaining pages (2026-11-15) ──
+  // Listings, landlord pages, account, welcome, admin, legal pages, sample pages and every message or error view get
+  // the same header and a footer with the old footer's links. Their own markup stays; styles under .gz-main
+  // (styles.css) restyle the shared pieces (headings, panels, cards, tables, forms, buttons) only inside this frame.
+  function gzActive() {
+    const p = location.pathname;
+    if (p === "/listings") return "rooms";
+    if (p.startsWith("/landlord")) return "landlord";
+    if (p === "/welcome") return "welcome";
+    return "";
+  }
+  const gzFooter = () => `
+      <footer class="rm-foot">
+        <span>coHabit · Rooms. Roommates. Your vibe.</span>
+        <nav aria-label="Footer"><a href="/listings">Listings</a><a href="/sample">Sample dashboard</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+      </footer>`;
+  const gzFrame = (html) => `<div class="rm-page gz-page">${rmHeader(gzActive())}<div class="rm-main gz-main">${html}</div>${gzFooter()}</div>`;
 
   const rmFooter = () => `
       <footer class="rm-foot">
@@ -5255,6 +5281,11 @@
       ? `<div class="notice notice-success" role="status"><span>${esc(flash)}</span><button class="notice-close" type="button" data-action="dismiss-notice" aria-label="Dismiss message">×</button></div>`
       : "";
     flash = null;
+    if (!view.page) {
+      if (/^\s*<div class="auth-card"/.test(view.html))
+        view = { ...view, page: "auth", html: `<div class="ob-page">${obHeader()}${view.html.replace('class="auth-card"', 'class="ob-card gz-auth"')}</div>` };
+      else view = { ...view, page: "genz", html: gzFrame(view.html), framed: true };
+    }
     if (!view.vibe) {
       vibeOpen = false; // Vibe lives on the Roommates pages; it's closed when you come back to them
       document.body.classList.remove("vibe-open");
@@ -5285,6 +5316,7 @@
       target.focus({ preventScroll: true });
     }
     pendingFocus = false;
+    if (view.framed && isRenter()) api("/api/roommates/requests").then((d) => setRmBadge(d.incoming.length)).catch(() => {});
     if (view.after) view.after();
   }
 

@@ -1721,3 +1721,196 @@ body.vibe-open .toast { bottom: 104px; }
 @media (prefers-reduced-motion: reduce) {
   .vibe .dots span { animation: none; }
 }
+
+/* ── Gen Z mode for the remaining pages (2026-11-15) ────────────────────────────────────────────────────
+   Listings, landlord pages, account, welcome, admin, legal and sample pages, and every message or error view are
+   wrapped in the Roommates frame (header, .gz-main, footer; app.js gzFrame). Their markup is unchanged: the old shared
+   pieces (headings, panels, cards, tiles, tables, forms, buttons, pills) are restyled here, only inside .gz-main, the
+   old auth card (.gz-auth, in the sign-in frame) and the dialogs. The old palette variables are redefined to the Gen
+   Z palette in those scopes, so every old component follows without its own copy of the styles. */
+body[data-page="genz"] { background: #f3efe6; }
+body[data-page="genz"] .topbar, body[data-page="genz"] .site-footer { display: none; }
+body[data-page="genz"] #app.container { max-width: none; padding: 0; gap: 0; }
+body[data-page="genz"] #app > .notice { width: min(100% - 32px, 1200px); margin: 14px auto 0; }
+
+.gz-main, .gz-auth, .dialog, .drawer {
+  --rm-cream: #f3efe6; --rm-ink: #141414; --rm-soft: #3d3d3d; --rm-mute: #595959; --rm-pink: #e5348b; --rm-pink-dark: #c21f6f;
+  --rm-purple: #5b3ff2; --rm-lime: #c8f23a; --rm-line: rgba(20, 20, 20, 0.12);
+  --rm-display: "Arial Black", "Arial Bold", "Inter", system-ui, sans-serif;
+  --text: #141414; --sub: #3d3d3d; --muted: #595959; --border: rgba(20, 20, 20, 0.16); --border-strong: #141414;
+  --subtle: #f3efe6; --white: #ffffff; --navy: #141414; --navy-dark: #5b3ff2; --blue: #5b3ff2; --blue-bg: #ece8ff;
+  --tint: #f3efe6; --green: #3d5a00; --green-bg: #eefbc4; --amber: #7a4a00; --amber-bg: #fff1d6; --amber-dot: #e09a00;
+  --radius: 12px; --radius-card: 22px; --section: 28px; --focus: 0 0 0 3px rgba(91, 63, 242, 0.25);
+  --shadow: 4px 4px 0 #141414;
+}
+
+/* Page layout: the old pages stacked their sections with the page container's gap. */
+.gz-main { display: flex; flex-direction: column; gap: var(--section); color: var(--rm-ink); }
+.gz-main :focus-visible { outline: 3px solid var(--rm-purple); outline-offset: 3px; }
+.gz-main h1 {
+  font-family: var(--rm-display); font-weight: 900; font-size: clamp(32px, 6.4vw, 48px); line-height: 1.04; letter-spacing: -0.035em;
+  overflow-wrap: break-word;
+}
+.gz-main h2 { font-size: 21px; font-weight: 800; letter-spacing: -0.01em; }
+.gz-main h3 { font-weight: 800; }
+.gz-main .eyebrow { color: var(--rm-pink-dark); }
+.gz-main .muted, .gz-main .hint, .gz-main .footnote { color: var(--rm-mute); }
+.gz-main a { color: var(--rm-ink); text-underline-offset: 3px; }
+.gz-main a:hover { color: var(--rm-purple); }
+.gz-main .back { color: var(--rm-ink); font-weight: 700; border-radius: 999px; }
+.gz-main .back:hover { background: #fff; color: var(--rm-ink); }
+.gz-main .links { color: var(--rm-soft); }
+
+/* Buttons: pills, ink for the main action (with a lime edge), white for the rest. */
+.gz-main .btn, .gz-auth .btn, .dialog .btn {
+  min-height: 44px; padding: 0 20px; border: 1.5px solid var(--rm-ink); border-radius: 999px; background: var(--rm-ink); color: #fff;
+  font-weight: 800; box-shadow: 0 3px 0 var(--rm-lime); transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+.gz-main .btn:hover, .gz-auth .btn:hover, .dialog .btn:hover { background: var(--rm-purple); border-color: var(--rm-purple); color: #fff; }
+.gz-main .btn-small, .dialog .btn-small { min-height: 38px; padding: 0 15px; font-size: 14px; }
+.gz-main .btn-quiet, .gz-auth .btn-quiet, .dialog .btn-quiet { background: #fff; color: var(--rm-ink); box-shadow: none; }
+.gz-main .btn-quiet:hover, .gz-auth .btn-quiet:hover, .dialog .btn-quiet:hover { background: var(--rm-cream); border-color: var(--rm-ink); color: var(--rm-ink); }
+.gz-main .btn-danger, .dialog .btn-danger { background: #fff; color: var(--red); border-color: var(--red); box-shadow: none; }
+.gz-main .btn-danger:hover, .dialog .btn-danger:hover { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+.gz-main .btn-danger-solid, .dialog .btn-danger-solid { background: var(--red); border-color: var(--red); color: #fff; box-shadow: none; }
+.gz-main .btn-danger-solid:hover, .dialog .btn-danger-solid:hover { background: #912018; border-color: #912018; }
+.gz-main .btn:disabled, .dialog .btn:disabled { transform: none; }
+.gz-main .link-button, .dialog .link-button { color: var(--rm-purple); }
+
+/* Surfaces: white, an ink line, generous corners; panels and forms carry a colored offset. */
+.gz-main .panel, .gz-main .form fieldset, .gz-main .request {
+  background: #fff; border: 1.5px solid var(--rm-ink); border-radius: 22px; box-shadow: 4px 4px 0 var(--rm-purple);
+}
+.gz-main .form fieldset { box-shadow: 4px 4px 0 var(--rm-lime); }
+.gz-main .card { border: 1.5px solid var(--rm-ink); border-radius: 22px; box-shadow: 4px 4px 0 var(--rm-pink); }
+.gz-main .grid > li:nth-child(3n + 2) .card, .gz-main .grid > .card:nth-child(3n + 2) { box-shadow: 4px 4px 0 var(--rm-purple); }
+.gz-main .grid > li:nth-child(3n) .card, .gz-main .grid > .card:nth-child(3n) { box-shadow: 4px 4px 0 var(--rm-lime); }
+.gz-main a.card:hover { border-color: var(--rm-ink); transform: translateY(-2px); }
+.gz-main .card-title { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+.gz-main .card-link { color: var(--rm-purple); font-weight: 800; }
+.gz-main .card hr { border-top-color: var(--rm-line); }
+.gz-main .card-pic, .dialog .card-pic { border-radius: 16px; }
+.gz-main .rows li, .gz-main .contacted li { background: #fff; border: 1.5px solid var(--rm-ink); border-radius: 18px; }
+.gz-main .tile { background: #fff; border: 1.5px solid var(--rm-ink); border-radius: 18px; }
+.gz-main .tile dd { font-family: var(--rm-display); font-weight: 900; letter-spacing: -0.02em; }
+.gz-main .icon-tile { background: var(--rm-lime); color: var(--rm-ink); border: 1.5px solid var(--rm-ink); border-radius: 14px; }
+.gz-main .avatar { background: var(--rm-purple); color: #fff; }
+.gz-main .notice, .gz-main .demo-banner {
+  background: #fff; border: 1.5px dashed var(--rm-ink); border-radius: 16px; color: var(--rm-ink);
+}
+.gz-main .notice-success { border-style: solid; box-shadow: inset 6px 0 0 var(--rm-lime); }
+.gz-main .loading .spinner, .dialog .spinner { border-top-color: var(--rm-purple); }
+
+/* Pills, tags and statuses. */
+.gz-main .pill, .dialog .pill { font-weight: 700; border: 1px solid transparent; }
+.gz-main .pill-ok, .dialog .pill-ok { background: #eefbc4; color: var(--rm-ink); border-color: rgba(20, 20, 20, 0.2); }
+.gz-main .pill-ok .dot, .dialog .pill-ok .dot { background: #5d8a00; }
+.gz-main .pill-off, .dialog .pill-off { background: #fff; color: var(--rm-mute); border-color: var(--rm-line); }
+.gz-main .tag, .dialog .tag { color: var(--rm-ink); border-color: var(--rm-ink); }
+.gz-main .badge, .dialog .badge { border-radius: 999px; background: var(--rm-cream); color: var(--rm-ink); }
+.gz-main .badge-status, .dialog .badge-status { background: var(--rm-ink); color: var(--rm-lime); }
+.gz-main .reasons li, .dialog .reasons li { border-radius: 999px; background: var(--rm-cream); color: var(--rm-ink); border: 1px solid var(--rm-line); }
+.gz-main .seg, .dialog .seg { border: 1.5px solid var(--rm-ink); }
+.gz-main .seg button, .dialog .seg button { color: var(--rm-ink); font-weight: 700; }
+.gz-main .seg button[aria-pressed="true"], .dialog .seg button[aria-pressed="true"] { background: var(--rm-purple); color: #fff; }
+.gz-main .seg-link { border: 1.5px solid var(--rm-ink); color: var(--rm-ink); background: #fff; }
+.gz-main .seg-link[aria-current="true"] { background: var(--rm-ink); border-color: var(--rm-ink); color: #fff; }
+
+/* Tables. */
+.gz-main .tenants { background: #fff; border: 1.5px solid var(--rm-ink); border-radius: 18px; }
+.gz-main .tenants th { background: var(--rm-cream); color: var(--rm-soft); font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 1.5px solid var(--rm-ink); }
+.gz-main .tenants td { border-bottom-color: var(--rm-line); }
+.gz-main .tenants tbody tr:hover td { background: #fbf9f4; }
+
+/* Forms and filters. */
+.gz-main .field label, .gz-main .interest-form label, .dialog .field label { font-weight: 700; color: var(--rm-ink); }
+.gz-main .field input, .gz-main .field select, .gz-main .field textarea, .gz-main .interest-form textarea, .gz-main .sort select,
+.gz-main .filter input, .gz-main .filter select, .gz-main .place-field input,
+.dialog .field input, .dialog .field select, .dialog .field textarea, .dialog textarea, .dialog #pref-control input, .dialog #pref-control select {
+  min-height: 44px; border: 1.5px solid var(--rm-ink); border-radius: 12px; background: #fff; color: var(--rm-ink);
+}
+.gz-main .field textarea, .dialog textarea { min-height: 96px; }
+.gz-main .field input:focus, .gz-main .field select:focus, .gz-main .field textarea:focus, .gz-main .interest-form textarea:focus,
+.gz-main .sort select:focus, .gz-main .filter input:focus, .gz-main .filter select:focus,
+.dialog .field input:focus, .dialog .field textarea:focus, .dialog textarea:focus, .dialog #pref-control input:focus, .dialog #pref-control select:focus {
+  outline: none; border-color: var(--rm-purple); box-shadow: 0 0 0 3px rgba(91, 63, 242, 0.22);
+}
+.gz-main .check input, .dialog .check input { accent-color: var(--rm-purple); }
+.gz-main .filters {
+  padding: 16px; background: #fff; border: 1.5px solid var(--rm-ink); border-radius: 22px; box-shadow: 4px 4px 0 var(--rm-lime);
+}
+.gz-main .filter { color: var(--rm-ink); font-weight: 700; }
+.gz-main .sort { color: var(--rm-ink); }
+
+/* Long text (Privacy, Terms): a readable column on a white sheet. */
+.gz-main .prose { max-width: 760px; }
+
+/* Dialogs: the same card language as the pages. */
+.dialog {
+  border: 1.5px solid var(--rm-ink); border-radius: 26px; background: #fff; color: var(--rm-ink); box-shadow: 6px 6px 0 var(--rm-purple);
+}
+.dialog::backdrop { background: rgba(20, 20, 20, 0.5); }
+.dialog h2, .dialog .card-title { font-family: var(--rm-display); font-weight: 900; letter-spacing: -0.025em; line-height: 1.1; }
+.dialog p { color: var(--rm-soft); }
+.dialog .details-h { color: var(--rm-ink); font-weight: 800; }
+.dialog a { color: var(--rm-ink); text-underline-offset: 3px; }
+.dialog a:hover { color: var(--rm-purple); }
+.dialog .fit-list li::before { color: #4d7a00; }
+.dialog .pdetails > div, .dialog .facts-grid > div { border-radius: 14px; }
+
+/* The old auth card (landlord sign-up, password reset, "check your email") inside the sign-in frame. */
+.gz-auth { color: var(--rm-ink); }
+.gz-auth h1 { margin: 0; font-family: var(--rm-display); font-weight: 900; font-size: clamp(30px, 7.4vw, 40px); line-height: 1.03; letter-spacing: -0.035em; }
+.gz-auth > .muted, .gz-auth > p { font-size: 16px; line-height: 1.5; color: var(--rm-soft); }
+.gz-auth .btn { width: 100%; min-height: 52px; font-size: 16px; }
+.gz-auth .btn-google { background: #fff; color: var(--rm-ink); box-shadow: none; }
+.gz-auth .btn-google:hover { background: var(--rm-cream); color: var(--rm-ink); border-color: var(--rm-ink); }
+.gz-auth .seg { display: flex; width: 100%; border: 1.5px solid var(--rm-ink); padding: 4px; }
+.gz-auth .seg button { flex: 1; min-height: 38px; color: var(--rm-ink); font-weight: 700; }
+.gz-auth .seg button[aria-pressed="true"] { background: var(--rm-purple); color: #fff; }
+.gz-auth a { color: var(--rm-ink); font-weight: 700; text-underline-offset: 3px; }
+.gz-auth .hint, .gz-auth .auth-switch-line { color: #5a5a5a; }
+.gz-auth .or-line span { background: #fff; }
+.gz-main .fact { background: #fff; border: 1.5px solid var(--rm-ink); border-radius: 18px; }
+.gz-main .fact dd { font-weight: 800; }
+.gz-main .danger-zone fieldset { border-color: var(--rm-ink); box-shadow: 4px 4px 0 var(--rm-pink); }
+.gz-main .danger-zone legend { color: var(--red); }
+.gz-main .map-panel { border: 1.5px solid var(--rm-ink); border-radius: 22px; overflow: hidden; box-shadow: 4px 4px 0 var(--rm-purple); }
+.gz-main .demo-switch { border: 1.5px solid var(--rm-ink); color: var(--rm-ink); font-weight: 700; }
+.gz-main .demo-switch[aria-checked="true"] { border-color: var(--rm-ink); color: var(--rm-ink); }
+.gz-main .demo-switch[aria-checked="true"] .demo-knob { background: var(--rm-purple); }
+.gz-main input[type="file"]::file-selector-button {
+  margin-right: 10px; padding: 6px 14px; border: 1.5px solid var(--rm-ink); border-radius: 999px; background: #fff; color: var(--rm-ink);
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+
+/* The Quick check-in drawer. */
+.drawer { border-left: 1.5px solid var(--rm-ink); color: var(--rm-ink); box-shadow: -6px 0 0 rgba(91, 63, 242, 0.18); }
+.drawer::backdrop { background: rgba(20, 20, 20, 0.45); }
+.drawer-head, .drawer-foot { border-color: var(--rm-line); }
+.drawer-head h2 { font-family: var(--rm-display); font-weight: 900; letter-spacing: -0.02em; }
+.drawer .btn {
+  min-height: 44px; padding: 0 20px; border: 1.5px solid var(--rm-ink); border-radius: 999px; background: var(--rm-ink); color: #fff;
+  font-weight: 800; box-shadow: 0 3px 0 var(--rm-lime);
+}
+.drawer .btn:hover { background: var(--rm-purple); border-color: var(--rm-purple); }
+.drawer .btn-quiet { background: #fff; color: var(--rm-ink); box-shadow: none; }
+.drawer .btn-quiet:hover { background: var(--rm-cream); border-color: var(--rm-ink); }
+.drawer .survey-points { border: 1.5px solid var(--rm-ink); border-radius: 14px; background: #eefbc4; color: var(--rm-ink); }
+.drawer .sq-n { color: var(--rm-pink-dark); }
+.drawer .sq-chip { border: 1.5px solid var(--rm-purple); color: var(--rm-purple); font-weight: 700; }
+.drawer .sq-chip:hover { background: var(--rm-purple); border-color: var(--rm-purple); color: #fff; }
+.drawer .sq-chip[aria-pressed="true"] { background: var(--rm-purple); border-color: var(--rm-purple); color: #fff; }
+.drawer .sq textarea { border: 1.5px solid var(--rm-ink); border-radius: 12px; }
+.drawer .done-mark { background: var(--rm-lime); color: var(--rm-ink); border: 1.5px solid var(--rm-ink); }
+.drawer :focus-visible { outline: 3px solid var(--rm-purple); outline-offset: 2px; box-shadow: none; }
+.gz-main .summary { background: #fff; border: 1.5px solid var(--rm-ink); border-radius: 22px; box-shadow: 4px 4px 0 var(--rm-purple); }
+.gz-main .fold { border: 1.5px solid var(--rm-ink); border-radius: 18px; }
+
+/* The one-time notice after an action ("Changes saved."), above the frame on these pages. */
+body[data-page="people"] #app > .notice, body[data-page="genz"] #app > .notice {
+  background: #fff; border: 1.5px solid #141414; border-radius: 16px; color: #141414; box-shadow: inset 6px 0 0 #c8f23a; font-weight: 600;
+}
+body[data-page="people"] #app > .notice .notice-close, body[data-page="genz"] #app > .notice .notice-close { color: #141414; border-radius: 50%; }
+/* Short confirmations ("Saved", "Request sent") everywhere: ink, rounded. */
+.toast { background: #141414; border-radius: 16px; font-weight: 600; }
