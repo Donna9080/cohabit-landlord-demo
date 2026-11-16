@@ -2,13 +2,13 @@
 // searches run through coHabit's own matching code, and every listing, photo and profile.
 //
 //   node scripts/demo-report.mjs   (npm run demo:report)
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PHOTOS } from "../src/assistant/demo-base.js";
-import { DEMO_LISTINGS, DEMO_PEOPLE, REMOVED_PEOPLE } from "../src/assistant/demo-data.js";
+import { ARCHIVED_LISTINGS, ARCHIVED_PEOPLE, DEMO_LISTINGS, DEMO_PEOPLE, REMOVED_PEOPLE, WRITTEN_LISTINGS, WRITTEN_PEOPLE } from "../src/assistant/demo-data.js";
 import { BRANDEIS, exclusionCounts, kmBetween, searchRoommates, searchRooms } from "../src/assistant/search.js";
 import { rankUnits } from "../src/match.js";
-import { BLOCKER_TEXT, roommateBlockers } from "../src/roommates.js";
+import { BLOCKER_TEXT, roommateBlockers, scoreRoommate } from "../src/roommates.js";
 import { MUTUAL_TEXT, coverage, summary } from "./demo-coverage.mjs";
 
 const OUT = fileURLToPath(new URL("../docs/DEMO_DATA.md", import.meta.url));
@@ -20,11 +20,17 @@ const hood = (area) => area.replace(/^Waltham, MA \((.*)\)$/, "$1");
 const km = (u) => Math.round(kmBetween(u.location, BRANDEIS) * 10) / 10;
 const cell = (s) => String(s ?? "").replace(/\|/g, "/");
 const shown = DEMO_PEOPLE.filter((p) => p.discoverable);
-// The live set is checked at 2+ since 52 profiles without a photo were taken out (2026-11-15); the generated data meets 3+.
-const LIVE_TARGET = 2;
-const cov = coverage(DEMO_LISTINGS, DEMO_PEOPLE, LIVE_TARGET);
-const FACE_PROMPTS = JSON.parse(readFileSync(new URL("./demo-face-prompts.json", import.meta.url), "utf8"));
-const sum = summary(cov, DEMO_LISTINGS, DEMO_PEOPLE);
+// The 50 kept profiles each need 3+ rooms and 3+ roommates, and every kept room 1+ visible renter (2026-11-16).
+const cov = coverage(DEMO_LISTINGS, DEMO_PEOPLE, 3, { roomTarget: 1, shownOnly: true });
+// Statistics over the shown profiles only (the 3 hidden ones are never shown or compared).
+const sum = summary({ ...cov, perPerson: new Map(shown.map((p) => [p.id, cov.perPerson.get(p.id)])) }, DEMO_LISTINGS, DEMO_PEOPLE);
+const byId = new Map(DEMO_PEOPLE.map((p) => [p.id, p]));
+const strongOf = (p) => cov.perPerson.get(p.id).mates.filter((q) => scoreRoommate(p, byId.get(q)).score >= 90).length;
+const strong3 = shown.filter((p) => strongOf(p) >= 3).length;
+const strong1 = shown.filter((p) => strongOf(p) >= 1).length;
+const offPairs = shown.flatMap((a, i) => shown.slice(i + 1).map((b) => scoreRoommate(a, b))).filter((x) => !x.eligible);
+const maxOff = Math.max(...offPairs.map((x) => x.score ?? 0));
+const reasonCounts = (map) => Object.entries([...map.values()].reduce((m, r) => ((m[r] = (m[r] || 0) + 1), m), {})).sort((a, b) => b[1] - a[1]);
 const CONDITION = { rooms: "rooms", budget: "budget", month: "move-in month", area: "area", distance: "distance" };
 
 // ── The 20 searches ──────────────────────────────────────────────────────────
@@ -100,9 +106,11 @@ function roommateSearchRow(i, [kind, what, me]) {
 const perRoom = (u) => cov.perRoom.get(u.id).shown.length;
 const listingRows = DEMO_LISTINGS.map(
   (u) =>
-    `| ${u.id} | ${cell(u.name)} | ${u.kind} | ${hood(u.area)} | ${km(u)} km | ${money(u.monthly_rent)} ${u.rent_basis === "unit" ? "whole place" : u.kind === "Shared room" ? "per bed" : "per room"} | ${u.rooms_available} of ${u.bedrooms} | ${date(u.move_in_date)} | ${cell(u.lease.label)} | ${u.furnished ? "Furnished" : "Unfurnished"} | ${u.photoKey} | ${perRoom(u)} |`
+    `| ${u.id} | ${cell(u.name)} | ${u.kind} | ${hood(u.area)} | ${km(u)} km | ${money(u.monthly_rent)} ${u.rent_basis === "unit" ? "whole place" : u.kind === "Shared room" ? "per bed" : "per room"} | ${u.rooms_available} of ${u.bedrooms} | ${date(u.move_in_date)} | ${cell(u.lease.label)} | ${u.furnished ? "Furnished" : "Unfurnished"} | ${u.photo ? u.photoKey : `drawing (${u.photoKey} is on an earlier listing)`} | ${perRoom(u)} |`
 );
-const uses = DEMO_LISTINGS.reduce((acc, u) => ((acc[u.photoKey] = (acc[u.photoKey] || []).concat(u.id)), acc), {});
+const uses = DEMO_LISTINGS.filter((u) => u.photo).reduce((acc, u) => ((acc[u.photoKey] = (acc[u.photoKey] || []).concat(u.id)), acc), {});
+const writtenName = new Map([...WRITTEN_LISTINGS.map((u) => [u.id, u.name]), ...WRITTEN_PEOPLE.map((p) => [p.id, p.firstName])]);
+const archivedRows = [...ARCHIVED_LISTINGS, ...ARCHIVED_PEOPLE].map(([id, why]) => `| ${id} | ${cell(writtenName.get(id))} | ${why} |`);
 const ref = "utm_source=cohabit&utm_medium=referral";
 const photoRows = Object.entries(PHOTOS).map(
   ([k, p]) => `| ${k} | ${p.kind} | ${cell(p.alt)} | [${cell(p.by)}](https://unsplash.com/@${p.username}?${ref}) | [Photo page](https://unsplash.com/photos/${p.id}?${ref}) | ${(uses[k] || []).join(", ")} |`
@@ -131,14 +139,18 @@ const doc = `# Demo data (Demo mode)
 Demo mode lets anyone try coHabit with made-up listings and roommates. This file is written by
 \`npm run demo:report\` (scripts/demo-report.mjs) from the data itself, so the numbers below are the data's.
 
-- **What:** ${DEMO_LISTINGS.length} fictional room listings and ${DEMO_PEOPLE.length} fictional roommate profiles, all in Waltham
-  (${shown.length} profiles shown; ${DEMO_PEOPLE.length - shown.length} chose not to be found, which shows that rule working). ${REMOVED_PEOPLE.size} more
-  profiles were written but taken out on 2026-11-15 because their AI photos were never made (\`REMOVED_PEOPLE\` in
-  [\`src/assistant/demo-data.js\`](../src/assistant/demo-data.js)); their records stay in the files below.
+- **What:** ${DEMO_LISTINGS.length} fictional room listings and ${shown.length} fictional roommate profiles, all in Waltham, plus
+  ${DEMO_PEOPLE.length - shown.length} profiles that chose not to be found (never shown; they show that rule working). Of the ${WRITTEN_LISTINGS.length} listings and
+  ${WRITTEN_PEOPLE.length} profiles written, ${REMOVED_PEOPLE.size} profiles were taken out on 2026-11-15 (\`REMOVED_PEOPLE\`) and ${ARCHIVED_LISTINGS.size} listings and
+  ${ARCHIVED_PEOPLE.size} profiles archived on 2026-11-16 (\`ARCHIVED_LISTINGS\`, \`ARCHIVED_PEOPLE\`, both in
+  [\`src/assistant/demo-data.js\`](../src/assistant/demo-data.js); see "Archived records" below). Their records stay in the
+  files below, so any of them can be restored.
 - **Where it lives:** in code, never in the database: the first 15 listings and 20 profiles are written by hand in
-  [\`src/assistant/demo-base.js\`](../src/assistant/demo-base.js); the other ${DEMO_LISTINGS.length - 15} listings and ${DEMO_PEOPLE.length - 20 + REMOVED_PEOPLE.size} profiles are written to
+  [\`src/assistant/demo-base.js\`](../src/assistant/demo-base.js); the other ${WRITTEN_LISTINGS.length - 15} listings and ${WRITTEN_PEOPLE.length - 20} profiles are written to
   [\`src/assistant/demo-generated.js\`](../src/assistant/demo-generated.js) by [\`scripts/demo-build.mjs\`](../scripts/demo-build.mjs). Every id starts with \`demo-\`.
-- **Where it shows:** only while Demo mode is on, always labeled Demo: Listings (all demo listings with filters, map, Details
+- **Labels:** every demo profile says "Demo profile • Fictional details." and every demo listing "Demo listing • Not
+  currently available." Profiles have no photo (initials); listings have an illustrative photo or coHabit's drawing.
+- **Where it shows:** only while Demo mode is on, always labeled: Listings (all demo listings with filters, map, Details
   and Save), My matches (demo rooms and roommates that fit your saved preferences, plus "Browse all demo profiles"), the
   demo profile page (\`/demo/people\`) and the assistant. Never in real listings, real matches, requests, the admin user
   list or any count.
@@ -158,6 +170,7 @@ Demo mode lets anyone try coHabit with made-up listings and roommates. This file
 | Rebuild the generated part | \`npm run demo:build\` (the same output every time: fixed seeds, no clock) |
 | Check it (repeatable, targets met) | \`npm run demo:check\`: fails if the file differs from what the script builds or a target is missed; \`npm test\` runs the same checks |
 | Rewrite this file | \`npm run demo:report\` |
+| Archive or restore a record | Add or delete its line in \`ARCHIVED_LISTINGS\` / \`ARCHIVED_PEOPLE\` (\`src/assistant/demo-data.js\`); \`npm test\` then says whether every shown profile still has 3+ rooms and roommates and every room a renter |
 | Turn Demo mode off everywhere | Set the Worker variable \`DEMO_DATA=off\` (the switch disappears, \`/api/demo/*\` answers 404, nothing else changes) |
 | Remove demo records from the database | The only ones are renters' saved demo cards (bookmarks to demo ids). Admin page, "Remove saved demo cards", or \`POST /api/admin/demo/cleanup\` with \`{"confirm":"REMOVE"}\`. Real saved options are never touched; the action is recorded in \`admin_audit\`. |
 | Remove the demo data itself | Delete it from the two files above and deploy; nothing in the database depends on it |
@@ -180,9 +193,11 @@ Definitions (in [\`scripts/demo-coverage.mjs\`](../scripts/demo-coverage.mjs)):
 
 | Target | Result (min / median / max) |
 | --- | --- |
-| Each profile has 2+ suitable rooms (3+ before the removals) | ${sum.roomsPerProfile.min} / ${sum.roomsPerProfile.median} / ${sum.roomsPerProfile.max} rooms per profile (plus ${sum.partialRoomsPerProfile.median} partial matches at the median) |
-| Each profile has 2+ mutually compatible roommates (3+ before the removals) | ${sum.matesPerProfile.min} / ${sum.matesPerProfile.median} / ${sum.matesPerProfile.max} (the matching code alone allows ${sum.engineMatesPerProfile.min} / ${sum.engineMatesPerProfile.median} / ${sum.engineMatesPerProfile.max}) |
-| Each room suits 2+ demo renters (3+ before the removals) | ${sum.rentersPerRoom.min} / ${sum.rentersPerRoom.median} / ${sum.rentersPerRoom.max} visible profiles per room |
+| Each shown profile has 3+ suitable rooms | ${sum.roomsPerProfile.min} / ${sum.roomsPerProfile.median} / ${sum.roomsPerProfile.max} rooms per profile (plus ${sum.partialRoomsPerProfile.median} partial matches at the median) |
+| Each shown profile has 3+ mutually compatible roommates | ${sum.matesPerProfile.min} / ${sum.matesPerProfile.median} / ${sum.matesPerProfile.max} (the matching code alone allows ${sum.engineMatesPerProfile.min} / ${sum.engineMatesPerProfile.median} / ${sum.engineMatesPerProfile.max}) |
+| Strong matches (score 90+, the "Strong match" label) | ${strong3} of ${shown.length} profiles have 3+, ${strong1} have at least one (not a target; owner's decision 2026-11-16) |
+| Each room suits 1+ shown profile | ${sum.rentersPerRoom.min} / ${sum.rentersPerRoom.median} / ${sum.rentersPerRoom.max} visible profiles per room |
+| An incompatible pair never scores 60+ | highest ${maxOff} across ${offPairs.length.toLocaleString("en-US")} incompatible pairs |
 | Targets missed | ${sum.failures.length} |
 
 Not everyone matches everyone. Of the ${Object.values(sum.pairReasons).reduce((a, b) => a + b, 0).toLocaleString("en-US")} reasons counted across pairs of visible profiles
@@ -199,6 +214,25 @@ How coverage is reached without bending rules: the data is built in groups of pe
 lease, neighborhoods, furnishing, rooms), with rooms made for each group; rents are set so each room is within budget for
 at least three of them and each person can afford at least three rooms. Lifestyles are drawn at random per group and
 redrawn for anyone left with fewer than three compatible people. Groups overlap where answers line up.
+
+## How the 50 listings and 50 profiles were chosen (2026-11-16)
+
+With the owner's approval, Demo mode keeps the strongest 50 of each; the rest are archived, not deleted.
+
+- **Rules every kept record meets:** every shown profile has 3+ mutually compatible kept roommates and 3+ kept rooms
+  that match everything it asked for; every kept listing suits at least one kept profile; no listing repeats another's
+  description word for word, has a move-in date already passed or costs over $1,700 per person; no profile budgets over
+  $1,800; all in Waltham.
+- **Then the best balance** (a computer search over many selections): more strong matches, roommates and rooms per
+  profile and renters per room; a mix of programs, move-in months, sleep, tidiness, noise, guests and pets; a mix of room
+  kinds (private and shared rooms, sublets, studios, whole apartments, lease takeovers, joining a group house); as few
+  repeated photos as possible.
+- **Kept together on purpose:** the one-semester exchange students (January to May) with their spring sublets, and the
+  one shared room with the September renters on small budgets it suits.
+- **Not checked, because the data has no such fields:** gender, age, background, nationality, international or local.
+  Nothing was guessed from names.
+- **Archived listings:** ${reasonCounts(ARCHIVED_LISTINGS).map(([r, n]) => `${r} ${n}`).join(", ")}.
+- **Archived profiles:** ${reasonCounts(ARCHIVED_PEOPLE).map(([r, n]) => `${r} ${n}`).join(", ")}.
 
 ## Bugs found and fixed
 
@@ -241,10 +275,12 @@ ${listingRows.join("\n")}
 Illustrative stock photos of ordinary rooms; none shows the listing it's on or any real Waltham property, and each is
 labeled "Illustrative demo photo" with a credit in Details. All are free photos under the
 [Unsplash License](https://unsplash.com/license) (not Unsplash+), each checked on its photo page (the first 15 on
-2026-10-14, the other 26 on 2026-10-17). They load from Unsplash's image server, resized for the card or dialog; nothing
-is downloaded into this project, and if a photo can't load the card shows coHabit's drawing instead. Furnished rooms use
-bedroom photos, unfurnished places empty rooms, kitchens or living rooms, studios studio photos and shared rooms photos
-with two beds. No photo is used for more than three listings.
+2026-10-14, the other 26 on 2026-10-17; the ${Object.keys(uses).length} shown on kept listings re-checked on 2026-11-16, all still "Free Photo on
+Unsplash"). They load from Unsplash's image server, resized for the card or dialog; nothing is downloaded into this
+project, and if a photo can't load the card shows coHabit's drawing instead. Furnished rooms use bedroom photos,
+unfurnished places empty rooms, kitchens or living rooms, studios studio photos and shared rooms photos with two beds.
+No photo is on two kept listings: the ${DEMO_LISTINGS.filter((u) => !u.photo).length} kept listings whose photo is already on an earlier kept listing show
+coHabit's drawing instead. Each listing has one illustrative photo, not a set.
 
 | Key | Kind | What it shows | Photographer | Source | Used by |
 | --- | --- | --- | --- | --- | --- |
@@ -252,42 +288,32 @@ ${photoRows.join("\n")}
 
 ## Roommate profiles
 
-Fictional seniors and graduate students. Each shown profile has an AI-generated photo of a person who doesn't exist (see
-"Profile photos" below). No contact details, references, verification or testimonials. "Rooms" counts rooms that
-match everything for them; "Roommates" counts visible profiles mutually compatible with them.
+Fictional seniors and graduate students, labeled "Demo profile • Fictional details." No photos (initials, see "Profile
+photos" below), contact details, references, verification or testimonials. "Rooms" counts rooms that match everything
+for them; "Roommates" counts visible profiles mutually compatible with them.
 
 | Id | Name | Program | Looking in | Move-in | Budget | Wants | Lifestyle | Rooms | Roommates | Shown |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${peopleRows.join("\n")}
 
-## Profile photos (AI-generated)
+## Profile photos
 
-Each of the ${shown.length} shown profiles has one realistic AI-generated portrait of a person who doesn't exist,
-\`public/demo-faces/<id>.webp\` (640 x 640), the same on every screen: cards, profile details, Vibe and Saved. They are
-served from coHabit's own site; if one can't load, the profile's initials show instead. Every card says "Demo ·
-AI-generated photo", and the profile says the photo is AI-generated and the person doesn't exist, with links to the
-model and its license.
+None. Demo profiles show their initials, like real renters (coHabit has no profile photo upload, and real accounts never
+get a generated or stock photo). There are no AI-generated images of people and no stock photos of people.
 
-- **How they were made (2026-11-14).** With FLUX.1 [schnell] by Black Forest Labs (\`@cf/black-forest-labs/flux-1-schnell\`)
-  on Cloudflare Workers AI, through a throwaway local Worker run with \`wrangler dev\` (never deployed), inside the free
-  daily allowance (10,000 neurons a day; the account is on the Workers Free plan, which refuses extra use rather than
-  billing it), so they cost nothing. The 1024 px results were cropped by 2.4% on each side (FLUX sometimes draws a
-  thin edge) and saved as WebP.
-- **License.** FLUX.1 [schnell] is released under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0),
-  which allows using its outputs freely, including commercially; its out-of-scope uses (illegal use, harming minors,
-  false information meant to harm, harassment) don't apply. Cloudflare's [terms](https://www.cloudflare.com/policies/terms/)
-  cover the service. Stock portraits (Pexels, Unsplash) weren't used: the people in them never agreed to appear as
-  roommate profiles, and Unsplash's Terms exclude recognizable people.
-- **Casting.** The prompts ask for a natural, casual photo of an adult in their twenties (early twenties for seniors,
-  mid for master's students, late for PhD students), from a mixed cast assigned in turn, not from the names. Women or
-  men follow how each first name is commonly used; names used either way alternate. Matching never sees names, photos
-  or anything about gender.
-- **Real accounts** never get a generated or stock photo. coHabit has no profile photo upload, so real renters show
-  their initials.
+From 2026-11-15 to 2026-11-16 the shown profiles had AI-generated portraits (FLUX.1 [schnell] on Cloudflare Workers AI,
+Apache License 2.0). They were taken off with the owner's approval; the files are kept, not served, in
+\`archive/demo-faces/\` (see \`archive/README.md\`).
 
-| Profile | Name | Prompt |
+## Archived records
+
+Archived on 2026-11-16: left out of Demo mode everywhere (Listings, Roommates, My matches, Vibe, the assistant, Details,
+counts) but kept in the data files. A bookmark to one shows "no longer available"; the database row isn't touched. To
+restore one, delete its line from \`ARCHIVED_LISTINGS\` or \`ARCHIVED_PEOPLE\` in \`src/assistant/demo-data.js\`.
+
+| Id | Name | Why archived |
 | --- | --- | --- |
-${shown.map((p) => `| ${p.id} | ${p.firstName} | ${cell(FACE_PROMPTS[p.id] || "")} |`).join("\n")}
+${archivedRows.join("\n")}
 `;
 writeFileSync(OUT, doc);
 console.log(`Wrote ${OUT} (${doc.length} characters).`);

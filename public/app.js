@@ -1937,7 +1937,7 @@
       const pinLabel = `${u.name}, ${u.monthly_rent != null ? money(u.monthly_rent) + " a month" : "rent not listed"}${u.demo ? ", demo listing, made up" : u.sample ? ", sample listing" : u.external ? ", external listing" : ""}. Show details.`;
       const where = u.location.precision === "exact" ? esc(u.location.address || "Exact location") : u.demo ? "Made-up spot, approximate area" : "Approximate area";
       const popup = new maplibregl.Popup({ offset: 14, maxWidth: "260px" }).setHTML(
-        `<div class="map-popup">${u.demo ? demoTag : u.sample ? `<span class="tag">Sample</span>` : u.external ? `<span class="tag tag-external">External · ${esc(u.source.name)}</span>` : ""}<strong>${esc(u.name)}</strong><span>${u.monthly_rent != null ? `${u.demo ? shareLine(u) : `${money(u.monthly_rent)}/mo`}${u.external ? " " + rentBasisLabel(u.rent_basis) : ""}` : "Rent not listed"} · ${esc(u.area)}</span><span class="muted small">${where}</span><button class="btn btn-small" type="button" data-action="jump-listing" data-id="${esc(u.id)}">View listing</button></div>`
+        `<div class="map-popup">${u.demo ? demoListingTag : u.sample ? `<span class="tag">Sample</span>` : u.external ? `<span class="tag tag-external">External · ${esc(u.source.name)}</span>` : ""}<strong>${esc(u.name)}</strong><span>${u.monthly_rent != null ? `${u.demo ? shareLine(u) : `${money(u.monthly_rent)}/mo`}${u.external ? " " + rentBasisLabel(u.rent_basis) : ""}` : "Rent not listed"} · ${esc(u.area)}</span><span class="muted small">${where}</span><button class="btn btn-small" type="button" data-action="jump-listing" data-id="${esc(u.id)}">View listing</button></div>`
       );
       const marker = new maplibregl.Marker({ element: pin }).setLngLat([u.location.lng, u.location.lat]).setPopup(popup).addTo(listingMap);
       pin.setAttribute("aria-label", pinLabel); // the map library overwrites it
@@ -2915,8 +2915,8 @@
     return `<span class="rm-status">${r.status === "pending" ? "Request sent" : "Declined"}</span>`;
   }
 
-  // A photo-led card. Real renters have no profile photos on coHabit, so they get their initials; the made-up
-  // profiles have an AI-generated photo (labeled). Only what's known is shown: area, budget and move-in when shared, a few
+  // A card led by the person's initials: nobody on coHabit has a profile photo, real or made-up (made-up profiles are
+  // labeled "Demo profile • Fictional details."). Only what's known is shown: area, budget and move-in when shared, a few
   // lifestyle tags (or what you have in common), and the score where matching worked one out. The rest is in the
   // profile (Details), opened from the picture or the name.
   function rmCard(c, key) {
@@ -2935,7 +2935,7 @@
           <div class="rm-pic">
             <button class="rm-pic-btn" type="button" data-action="person-details" data-key="${esc(key)}" tabindex="-1" aria-hidden="true">${pic}</button>
             ${score}
-            ${c.demo ? `<span class="rm-chip rm-chip-dark" title="${c.photo ? "A made-up profile. The photo is AI-generated: this person doesn't exist." : "A made-up profile"}">Demo${c.photo ? " · AI-generated photo" : ""}</span>` : c.sample ? `<span class="rm-chip" title="A fictional sample renter">Sample</span>` : ""}
+            ${c.demo ? `<span class="rm-chip rm-chip-dark" title="A made-up profile, not a real student">${DEMO_PERSON_LABEL}</span>` : c.sample ? `<span class="rm-chip" title="A fictional sample renter">Sample</span>` : ""}
           </div>
           <div class="rm-body">
             <h3 class="rm-name" id="${id}"><button class="rm-name-btn" type="button" data-action="person-details" data-key="${esc(key)}" aria-label="${name}: view profile">${name}</button></h3>
@@ -3113,7 +3113,7 @@
     const showsList = !rmEmpty();
     const vibeOn = !(me.user && !renter); // renters, and visitors (who are asked to sign in)
     const self = tab === "explore" ? "/roommates/explore" : "/roommates/for-you";
-    const demoText = "Explore sample profiles with AI-generated photos. Messages and requests are previews.";
+    const demoText = "Explore sample profiles with fictional details. Messages and requests are previews.";
     return rmPage({
       title: "Roommates",
       active: "roommates",
@@ -3336,7 +3336,7 @@
         <article class="res-card is-demo" id="listing-${esc(u.id)}" tabindex="-1" aria-label="${esc(u.name)}, demo listing">
           ${roomPicture(u)}
           <div class="res-body">
-            <div class="res-card-top">${pill}${demoTag}</div>
+            <div class="res-card-top">${pill}${demoListingTag}</div>
             <h3 class="mini-title">${esc(u.name)}</h3>
             <p class="small muted">${esc(u.area)} · about ${u.km} km from Brandeis</p>
             <p class="mini-stats">${shareLine(u)} · from ${fmtDate(u.move_in_date)}</p>
@@ -3699,17 +3699,17 @@
       return `<li class="mini-card is-gone"><p class="small muted">${s.kind === "room" ? "This room is no longer listed." : "This person is no longer looking for roommates."}</p>${unsaveButton(s.savedId)}</li>`;
     }
     if (s.kind === "person") {
-      // A demo person keeps their AI-generated photo and opens the same Details as everywhere else.
+      // A demo person shows their initials and opens the same Details as everywhere else.
       return `
         <li class="mini-card${s.demo ? " is-demo" : ""}">
-          <div class="mini-top">${s.demo ? personAvatar(s, { small: true }) : `<span class="avatar-pic avatar-sm" aria-hidden="true">${esc(initials(s.firstName))}</span>`}<span class="name">${esc(s.firstName)}</span>${s.demo ? demoTag : ""}${s.sample ? `<span class="tag">Sample</span>` : ""}</div>
+          <div class="mini-top">${s.demo ? personAvatar(s, { small: true }) : `<span class="avatar-pic avatar-sm" aria-hidden="true">${esc(initials(s.firstName))}</span>`}<span class="name">${esc(s.firstName)}</span>${s.demo ? demoPersonTag : ""}${s.sample ? `<span class="tag">Sample</span>` : ""}</div>
           <div class="mini-actions">${s.demo ? `<button class="btn btn-small btn-quiet" type="button" data-action="person-details" data-key="${esc(key)}">Details</button>` : ""}${unsaveButton(s.savedId)}</div>
         </li>`;
     }
     const u = s.unit;
     return `
       <li class="mini-card${u.demo ? " is-demo" : ""}">
-        <div class="mini-top"><h3 class="mini-title">${esc(u.name)}</h3>${u.demo ? demoTag : ""}${u.sample ? `<span class="tag">Sample</span>` : ""}${myInterests.has(u.id) ? `<span class="badge-status">Request sent</span>` : ""}</div>
+        <div class="mini-top"><h3 class="mini-title">${esc(u.name)}</h3>${u.demo ? demoListingTag : ""}${u.sample ? `<span class="tag">Sample</span>` : ""}${myInterests.has(u.id) ? `<span class="badge-status">Request sent</span>` : ""}</div>
         <p class="small muted">${u.demo ? shareLine(u) : `${money(u.monthly_rent)}/mo`} · ${esc(u.area)}</p>
         <div class="mini-actions"><button class="btn btn-small btn-quiet" type="button" data-action="chat-details" data-key="${esc(key)}">Details</button>${unsaveButton(s.savedId)}</div>
       </li>`;
@@ -3727,11 +3727,10 @@
     studio: '<path d="M3 21V8l9-5 9 5v13"/><rect x="8" y="12" width="8" height="9"/>',
   };
   const ART_FOR = { Studio: "studio", "Private room": "bed", "Shared room": "people", "Whole apartment": "building", Sublet: "calendar", "Lease takeover": "key", "Replacing a roommate": "people" };
-  // Pictures of people. A made-up profile has an AI-generated photo of a person who doesn't exist (one fixed file per
-  // profile in /demo-faces, made with FLUX.1 [schnell] on Cloudflare Workers AI), cropped the same way everywhere
-  // (faces in the upper part of the frame) and labeled "AI-generated photo". Real renters have no profile photos on
-  // coHabit, so they always get their initials and never a generated or stock photo. If a photo can't load, its box
-  // turns into the initials (the error listener at the end).
+  // Pictures of people. Nobody on coHabit has a profile photo: real renters and the made-up demo profiles both get
+  // their initials, never an AI-generated or stock photo of a person (the demo portraits were taken off on 2026-11-16).
+  // personPhoto only draws a photo that has a src, which no record has today; if one couldn't load, its box would turn
+  // into the initials (the error listener at the end).
   function personPhoto(c, fallbackClass) {
     const p = c.photo;
     if (!p || !p.src) return "";
@@ -3741,7 +3740,7 @@
     const size = small ? " avatar-sm" : "";
     const photo = personPhoto(c, `avatar-pic${size}${c.demo ? " is-demo" : ""}`);
     return photo
-      ? `<span class="avatar-pic has-photo${size}" title="AI-generated photo: this person doesn't exist">${photo}</span>`
+      ? `<span class="avatar-pic has-photo${size}" title="Profile photo">${photo}</span>`
       : `<span class="avatar-pic${size}${c.demo ? " is-demo" : ""}" aria-hidden="true">${esc(initials(c.firstName))}</span>`;
   };
 
@@ -3757,7 +3756,11 @@
       return `<div class="card-pic"><img src="${esc(u.photo.url)}" alt="Photo of ${esc(u.name)}" loading="lazy" /><span class="pic-label">${esc(u.photo.license)}</span></div>`;
     return `<div class="card-pic is-art${u.demo ? " is-demo" : ""}"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ART[ART_FOR[u.kind] || "house"]}</svg><span class="pic-label">${u.demo ? `${esc(u.kind || "Room")} · demo picture` : "No photo yet"}</span></div>`;
   }
-  const demoTag = `<span class="tag tag-demo" title="Made up for Demo mode">Demo</span>`;
+  // Demo labels, in the owner's wording (2026-11-16).
+  const DEMO_PERSON_LABEL = "Demo profile • Fictional details.";
+  const DEMO_LISTING_LABEL = "Demo listing • Not currently available.";
+  const demoPersonTag = `<span class="tag tag-demo" title="Made up for Demo mode">${DEMO_PERSON_LABEL}</span>`;
+  const demoListingTag = `<span class="tag tag-demo" title="Made up for Demo mode">${DEMO_LISTING_LABEL}</span>`;
   const sampleTagSmall = `<span class="tag" title="Fictional listing for demonstration">Sample</span>`;
   const priceLine = (u) => `${money(u.monthly_rent)}/mo${u.rent_basis === "unit" ? " whole place" : ""}`;
   const rentLine = (u) => (u.rent_basis === "unit" ? `${money(u.monthly_rent)}/mo for the whole place · ${plural(u.bedrooms || u.rooms_available, "bedroom", "bedrooms")}` : `${money(u.monthly_rent)}/mo${u.demo ? " per room" : ""} · ${plural(u.rooms_available, "room", "rooms")}`);
@@ -4040,7 +4043,7 @@
             ${pic}
             <span class="vibe-card-text"><span class="vibe-card-name">${name}</span>${meta.length ? `<span class="vibe-card-meta">${meta.map(esc).join(" · ")}</span>` : ""}</span>
           </button>
-          <p class="vibe-card-tags"><span class="vibe-ref" title="Vibe calls this pick ${esc(c.ref)}">${esc(c.ref)}</span>${c.demo ? `<span class="vibe-tag vibe-tag-dark">Demo</span>` : c.sample ? `<span class="vibe-tag">Sample</span>` : ""}${c.match === "exact" ? `<span class="vibe-tag">Strong match</span>` : c.match ? `<span class="vibe-tag">Partial match</span>` : ""}</p>
+          <p class="vibe-card-tags"><span class="vibe-ref" title="Vibe calls this pick ${esc(c.ref)}">${esc(c.ref)}</span>${c.demo ? `<span class="vibe-tag vibe-tag-dark">${DEMO_PERSON_LABEL}</span>` : c.sample ? `<span class="vibe-tag">Sample</span>` : ""}${c.match === "exact" ? `<span class="vibe-tag">Strong match</span>` : c.match ? `<span class="vibe-tag">Partial match</span>` : ""}</p>
           ${why.length ? `<ul class="vibe-why" aria-label="What you have in common">${why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
           <div class="vibe-card-act">${rmPrimary(c, key)}${isRenter() ? save : ""}</div>
         </article>
@@ -4065,7 +4068,7 @@
               <span class="vibe-card-meta">${u.demo ? shareLine(u) : priceLine(u)} · from ${fmtDate(u.move_in_date)}</span>
             </span>
           </button>
-          <p class="vibe-card-tags"><span class="vibe-ref" title="Vibe calls this pick ${esc(c.ref)}">${esc(c.ref)}</span>${u.demo ? `<span class="vibe-tag vibe-tag-dark">Demo</span>` : u.sample ? `<span class="vibe-tag">Sample</span>` : ""}<span class="vibe-tag">${c.match === "exact" ? "Matches everything" : "Partial match"}</span>${!u.demo && myInterests.has(u.id) ? `<span class="vibe-tag">Request sent</span>` : ""}</p>
+          <p class="vibe-card-tags"><span class="vibe-ref" title="Vibe calls this pick ${esc(c.ref)}">${esc(c.ref)}</span>${u.demo ? `<span class="vibe-tag vibe-tag-dark">${DEMO_LISTING_LABEL}</span>` : u.sample ? `<span class="vibe-tag">Sample</span>` : ""}<span class="vibe-tag">${c.match === "exact" ? "Matches everything" : "Partial match"}</span>${!u.demo && myInterests.has(u.id) ? `<span class="vibe-tag">Request sent</span>` : ""}</p>
           ${why}
           <div class="vibe-card-act"><button class="rm-hey rm-hey-plain" type="button" data-action="chat-details" data-key="${esc(key)}" aria-label="Details: ${esc(u.name)}">Details</button>${isRenter() ? save : ""}</div>
         </article>
@@ -4096,7 +4099,7 @@
     const people = kind === "person";
     const items = vibeMore ? set.items : set.items.slice(0, VIBE_PICKS);
     const found = people ? plural(set.total, "person fits", "people fit") : `${set.total === 1 ? "1 room fits" : `${set.total} rooms fit`} your must-haves`;
-    const source = chat.demo ? (people ? "Made-up demo profiles with AI-generated photos" : "Made-up demo listings") : people ? "Real renters who chose to be found" : "Real listings";
+    const source = chat.demo ? (people ? "Made-up demo profiles" : "Made-up demo listings") : people ? "Real renters who chose to be found" : "Real listings";
     const more =
       set.items.length > VIBE_PICKS
         ? `<button class="vibe-more" type="button" data-action="vibe-more" aria-expanded="${vibeMore}">${vibeMore ? "Show fewer" : `Show all ${set.items.length}`}</button>`
@@ -4524,14 +4527,14 @@
     dialog.querySelector(".details-body").innerHTML = `
       ${roomPicture(u, { large: true })}
       ${photoCredit(u)}
-      <div class="card-top"><h2 id="details-title" class="card-title">${esc(u.name)}</h2><span class="card-tags">${c.match ? matchPill(c.match) : ""}${u.demo ? demoTag : u.sample ? `<span class="tag">Sample (fictional)</span>` : ""}</span></div>
+      <div class="card-top"><h2 id="details-title" class="card-title">${esc(u.name)}</h2><span class="card-tags">${c.match ? matchPill(c.match) : ""}${u.demo ? demoListingTag : u.sample ? `<span class="tag">Sample (fictional)</span>` : ""}</span></div>
       <p class="muted small">${esc(u.area)}${c.km != null ? ` · about ${c.km} km from Brandeis in a straight line` : ""}</p>
       ${where}
       <p class="mini-stats">${rentLine(u)} · from ${fmtDate(u.move_in_date)}</p>
       ${u.description ? `<p class="desc">${esc(u.description)}</p>` : `<p class="small muted">No description.</p>`}
       ${demoFacts(u)}
       ${c.fits && (c.fits.length || c.misses.length) ? `<h3 class="details-h">How it fits</h3>${fitLists(c)}` : ""}
-      ${u.demo ? `<p class="hint">Demo listing ${esc(u.id)}: made up so you can try coHabit. It isn't available.</p>` : `<p class="hint">Listings don't record lease length, utilities, furnishing or fees unless the description says so. Ask the landlord.</p>`}
+      ${u.demo ? `<p class="hint">${DEMO_LISTING_LABEL} Made up so you can try coHabit (${esc(u.id)}).</p>` : `<p class="hint">Listings don't record lease length, utilities, furnishing or fees unless the description says so. Ask the landlord.</p>`}
       ${u.demo && isRenter() ? `<div class="mini-actions">${demoSaveButton("room", u.id)}</div>` : ""}
       ${interestFooter(u)}`;
     if (!document.querySelector("dialog[open]")) rememberReturn();
@@ -4576,7 +4579,7 @@
         <div class="person-name"><h2 id="details-title" class="card-title">${esc(c.firstName)}</h2>${c.about ? `<p class="small muted">${esc(c.about)}</p>` : ""}</div>
         ${c.score != null ? `<span class="pill pill-ok">${c.score}% compatible</span>` : c.compatible === false ? `<span class="pill pill-off">Not a match</span>` : ""}
       </div>
-      <div class="res-card-top">${c.score != null ? matchPill(c.match || (c.mainMiss ? "partial" : "exact"), true) : ""}${c.demo ? demoTag : ""}${c.sample ? sampleTagSmall : ""}${requestBadge(r)}</div>
+      <div class="res-card-top">${c.score != null ? matchPill(c.match || (c.mainMiss ? "partial" : "exact"), true) : ""}${c.demo ? demoPersonTag : ""}${c.sample ? sampleTagSmall : ""}${requestBadge(r)}</div>
       ${c.intro ? `<p class="desc">${esc(c.intro)}</p>` : ""}
       ${profile}
       ${c.interests && c.interests.length ? `<h3 class="details-h">Interests</h3><ul class="reasons" aria-label="Interests">${c.interests.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
@@ -4593,7 +4596,7 @@
       ${c.email ? `<p class="small">Email they chose to share: <a href="mailto:${esc(c.email)}">${esc(c.email)}</a></p>` : ""}
       <p class="hint">${
         c.demo
-          ? `Demo profile ${esc(c.id || "")}: a fictional person, not a real student, with no contact details.${c.photo ? ` The photo is AI-generated and this person doesn't exist: made with <a href="${esc(c.photo.creditUrl)}" target="_blank" rel="noopener">${esc(c.photo.credit)}</a> (<a href="${esc(c.photo.licenseUrl)}" target="_blank" rel="noopener">${esc(c.photo.license)}</a>) on <a href="${esc(c.photo.sourceUrl)}" target="_blank" rel="noopener">${esc(c.photo.source)}</a>.` : ""} Connecting is a preview only; nothing is sent and nobody is notified.`
+          ? `${DEMO_PERSON_LABEL} Not a real student, with no contact details (${esc(c.id || "")}). Connecting is a preview only; nothing is sent and nobody is notified.`
           : r && r.status === "pending" && r.direction === "in"
             ? `${esc(c.firstName)} sent you a request. Accepting lets you message each other here; your email stays private.`
             : r && r.status === "accepted"
@@ -5658,7 +5661,7 @@
         box.setAttribute("aria-hidden", "true");
         box.textContent = img.dataset.initials || "";
         const chip = box.closest(".rm-pic")?.querySelector(".rm-chip-dark");
-        if (chip) chip.textContent = "Demo"; // no photo shown any more
+        if (chip) chip.textContent = DEMO_PERSON_LABEL;
         return;
       }
       if (img instanceof HTMLImageElement && img.dataset.homePhoto) {

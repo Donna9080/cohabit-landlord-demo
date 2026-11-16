@@ -1439,7 +1439,8 @@ body[data-page="people"] #app > .notice { width: min(100% - 32px, 1200px); margi
 .rm-score { top: 10px; left: 10px; background: var(--rm-lime); border: 1.5px solid var(--rm-ink); }
 .rm-score.is-off { background: #fff; }
 .rm-chip { bottom: 10px; left: 10px; background: #fff; border: 1.5px solid var(--rm-ink); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
-.rm-chip-dark { background: var(--rm-ink); color: var(--rm-lime); border-color: var(--rm-ink); }
+/* The demo label is shown exactly as worded ("Demo profile • Fictional details."), not in capitals. */
+.rm-chip-dark { background: var(--rm-ink); color: var(--rm-lime); border-color: var(--rm-ink); font-size: 12px; letter-spacing: 0.01em; text-transform: none; }
 /* The bookmark sits over the picture but comes after "Say hey" in reading and tab order. */
 .rm-save {
   position: absolute; top: 19px; right: 19px; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
@@ -1614,7 +1615,7 @@ body.vibe-open .toast { bottom: 104px; }
 .vibe-ref, .vibe-tag { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 800; line-height: 1.2; }
 .vibe-ref { background: var(--rm-ink); color: var(--rm-lime); }
 .vibe-tag { background: #fff; border: 1px solid var(--rm-ink); }
-.vibe-tag-dark { background: var(--rm-purple); color: #fff; border-color: var(--rm-purple); letter-spacing: 0.06em; text-transform: uppercase; }
+.vibe-tag-dark { background: var(--rm-purple); color: #fff; border-color: var(--rm-purple); }
 .vibe-why { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; line-height: 1.4; }
 .vibe-why li { position: relative; padding-left: 16px; }
 .vibe-why li::before { content: ""; position: absolute; left: 2px; top: 0.45em; width: 7px; height: 7px; border-radius: 50%; background: var(--rm-pink-dark); }

@@ -120,7 +120,7 @@ export function demoPersonView(mine, p) {
     demo: true,
     firstName: p.firstName,
     about: p.about || null,
-    // Fictional, so the whole profile is shown: a short introduction, interests and an AI-generated photo.
+    // Fictional, so the whole profile is shown: a short introduction and interests (no photo: initials everywhere).
     intro: p.prefs.intro || null,
     interests: p.prefs.interests || [],
     photo: p.prefs.photo || null,

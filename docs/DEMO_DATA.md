@@ -3,14 +3,18 @@
 Demo mode lets anyone try coHabit with made-up listings and roommates. This file is written by
 `npm run demo:report` (scripts/demo-report.mjs) from the data itself, so the numbers below are the data's.
 
-- **What:** 100 fictional room listings and 148 fictional roommate profiles, all in Waltham
-  (145 profiles shown; 3 chose not to be found, which shows that rule working). 52 more
-  profiles were written but taken out on 2026-11-15 because their AI photos were never made (`REMOVED_PEOPLE` in
-  [`src/assistant/demo-data.js`](../src/assistant/demo-data.js)); their records stay in the files below.
+- **What:** 50 fictional room listings and 50 fictional roommate profiles, all in Waltham, plus
+  3 profiles that chose not to be found (never shown; they show that rule working). Of the 100 listings and
+  200 profiles written, 52 profiles were taken out on 2026-11-15 (`REMOVED_PEOPLE`) and 50 listings and
+  95 profiles archived on 2026-11-16 (`ARCHIVED_LISTINGS`, `ARCHIVED_PEOPLE`, both in
+  [`src/assistant/demo-data.js`](../src/assistant/demo-data.js); see "Archived records" below). Their records stay in the
+  files below, so any of them can be restored.
 - **Where it lives:** in code, never in the database: the first 15 listings and 20 profiles are written by hand in
   [`src/assistant/demo-base.js`](../src/assistant/demo-base.js); the other 85 listings and 180 profiles are written to
   [`src/assistant/demo-generated.js`](../src/assistant/demo-generated.js) by [`scripts/demo-build.mjs`](../scripts/demo-build.mjs). Every id starts with `demo-`.
-- **Where it shows:** only while Demo mode is on, always labeled Demo: Listings (all demo listings with filters, map, Details
+- **Labels:** every demo profile says "Demo profile • Fictional details." and every demo listing "Demo listing • Not
+  currently available." Profiles have no photo (initials); listings have an illustrative photo or coHabit's drawing.
+- **Where it shows:** only while Demo mode is on, always labeled: Listings (all demo listings with filters, map, Details
   and Save), My matches (demo rooms and roommates that fit your saved preferences, plus "Browse all demo profiles"), the
   demo profile page (`/demo/people`) and the assistant. Never in real listings, real matches, requests, the admin user
   list or any count.
@@ -30,6 +34,7 @@ Demo mode lets anyone try coHabit with made-up listings and roommates. This file
 | Rebuild the generated part | `npm run demo:build` (the same output every time: fixed seeds, no clock) |
 | Check it (repeatable, targets met) | `npm run demo:check`: fails if the file differs from what the script builds or a target is missed; `npm test` runs the same checks |
 | Rewrite this file | `npm run demo:report` |
+| Archive or restore a record | Add or delete its line in `ARCHIVED_LISTINGS` / `ARCHIVED_PEOPLE` (`src/assistant/demo-data.js`); `npm test` then says whether every shown profile still has 3+ rooms and roommates and every room a renter |
 | Turn Demo mode off everywhere | Set the Worker variable `DEMO_DATA=off` (the switch disappears, `/api/demo/*` answers 404, nothing else changes) |
 | Remove demo records from the database | The only ones are renters' saved demo cards (bookmarks to demo ids). Admin page, "Remove saved demo cards", or `POST /api/admin/demo/cleanup` with `{"confirm":"REMOVE"}`. Real saved options are never touched; the action is recorded in `admin_audit`. |
 | Remove the demo data itself | Delete it from the two files above and deploy; nothing in the database depends on it |
@@ -52,21 +57,42 @@ Definitions (in [`scripts/demo-coverage.mjs`](../scripts/demo-coverage.mjs)):
 
 | Target | Result (min / median / max) |
 | --- | --- |
-| Each profile has 2+ suitable rooms (3+ before the removals) | 3 / 5 / 21 rooms per profile (plus 18 partial matches at the median) |
-| Each profile has 2+ mutually compatible roommates (3+ before the removals) | 2 / 14 / 41 (the matching code alone allows 6 / 46 / 81) |
-| Each room suits 2+ demo renters (3+ before the removals) | 2 / 7 / 26 visible profiles per room |
+| Each shown profile has 3+ suitable rooms | 3 / 5 / 16 rooms per profile (plus 15 partial matches at the median) |
+| Each shown profile has 3+ mutually compatible roommates | 3 / 11 / 22 (the matching code alone allows 5 / 19 / 29) |
+| Strong matches (score 90+, the "Strong match" label) | 23 of 50 profiles have 3+, 46 have at least one (not a target; owner's decision 2026-11-16) |
+| Each room suits 1+ shown profile | 1 / 5 / 14 visible profiles per room |
+| An incompatible pair never scores 60+ | highest 59 across 793 incompatible pairs |
 | Targets missed | 0 |
 
-Not everyone matches everyone. Of the 21,997 reasons counted across pairs of visible profiles
-(a pair can have several), 1,149 pairs are compatible; the rest fail on:
-move-in months more than a month apart (6,220), lease lengths more than a month apart (4,825), a must-have move-in month that differs (4,212), a must-have area the other isn't looking in (2,984), budgets don't overlap (1,075), lifestyle answers too far apart (score under 60) (854), one smokes and the other wants no smoking (366), one has a pet and the other wants no pets (312).
+Not everyone matches everyone. Of the 2,189 reasons counted across pairs of visible profiles
+(a pair can have several), 271 pairs are compatible; the rest fail on:
+move-in months more than a month apart (710), lease lengths more than a month apart (521), a must-have move-in month that differs (354), a must-have area the other isn't looking in (222), lifestyle answers too far apart (score under 60) (75), budgets don't overlap (21), one has a pet and the other wants no pets (15).
 
-Listings by kind: Private room 51, Studio 5, Sublet 13, Lease takeover 6, Whole apartment 13, Replacing a roommate 8, Shared room 4. By neighborhood: Moody Street 14, South Side 9, Downtown 17, The Highlands 8, Warrendale 17, near Brandeis 21, Prospect Hill 9, Lakeview 5.
+Listings by kind: Private room 26, Studio 4, Sublet 6, Shared room 1, Whole apartment 6, Replacing a roommate 5, Lease takeover 2. By neighborhood: Moody Street 9, Downtown 9, The Highlands 4, near Brandeis 10, Prospect Hill 7, South Side 2, Warrendale 9.
 
 How coverage is reached without bending rules: the data is built in groups of people who want the same thing (month,
 lease, neighborhoods, furnishing, rooms), with rooms made for each group; rents are set so each room is within budget for
 at least three of them and each person can afford at least three rooms. Lifestyles are drawn at random per group and
 redrawn for anyone left with fewer than three compatible people. Groups overlap where answers line up.
+
+## How the 50 listings and 50 profiles were chosen (2026-11-16)
+
+With the owner's approval, Demo mode keeps the strongest 50 of each; the rest are archived, not deleted.
+
+- **Rules every kept record meets:** every shown profile has 3+ mutually compatible kept roommates and 3+ kept rooms
+  that match everything it asked for; every kept listing suits at least one kept profile; no listing repeats another's
+  description word for word, has a move-in date already passed or costs over $1,700 per person; no profile budgets over
+  $1,800; all in Waltham.
+- **Then the best balance** (a computer search over many selections): more strong matches, roommates and rooms per
+  profile and renters per room; a mix of programs, move-in months, sleep, tidiness, noise, guests and pets; a mix of room
+  kinds (private and shared rooms, sublets, studios, whole apartments, lease takeovers, joining a group house); as few
+  repeated photos as possible.
+- **Kept together on purpose:** the one-semester exchange students (January to May) with their spring sublets, and the
+  one shared room with the September renters on small budgets it suits.
+- **Not checked, because the data has no such fields:** gender, age, background, nationality, international or local.
+  Nothing was guessed from names.
+- **Archived listings:** not chosen 40, duplicate of demo-08 3, over $1,700 per person 2, move-in date passed 2, duplicate of demo-73 1, duplicate of demo-87 1, duplicate of demo-75 1.
+- **Archived profiles:** not chosen 70, fewer than 3 suitable rooms 15, fewer than 3 compatible roommates 5, budget over $1,800 5.
 
 ## Bugs found and fixed
 
@@ -83,7 +109,7 @@ redrawn for anyone left with fewer than three compatible people. Groups overlap 
 
 - **My matches lets a listing through without the right month when it's in your area.** Its rule shows a room scoring 70+,
   and within budget (40) + in your area (25) + enough rooms (15) = 80, so the move-in month doesn't matter then. With the
-  area "Waltham", every Waltham listing is "in your area": for a June renter with a $1,300 budget, 29 of 100 demo
+  area "Waltham", every Waltham listing is "in your area": for a June renter with a $1,300 budget, 16 of 50 demo
   listings match, 0 of them more than a month from June (all at 80%). The assistant doesn't do this (it needs the month
   within a month, or within three months when the month is flexible). This is the documented rule in `src/match.js` and
   affects real matches too, so it's left as is; requiring the month within a month would fix it.
@@ -92,162 +118,162 @@ redrawn for anyone left with fewer than three compatible people. Groups overlap 
 
 Room searches use the assistant's search with the answers shown (budget a must-have unless flexible; a distance is a
 must-have when given; area and month flexible unless marked). "Partly" means the room meets every must-have but misses
-something flexible, and the card says what. Roommate searches compare the answers with the 145 visible profiles.
+something flexible, and the card says what. Roommate searches compare the answers with the 50 visible profiles.
 
 ### 1. Strong: A room in Waltham from June 2027, up to $1,300, a 12-month lease
 
 - **Must-haves:** budget_max; rooms needed always.
-- **Result:** 65 of 100 rooms fit the must-haves: 22 match everything, 43 partly.
-- **Hidden by must-haves:** 35 (budget 19, move-in month 16; a room can fail more than one).
+- **Result:** 32 of 50 rooms fit the must-haves: 16 match everything, 16 partly.
+- **Hidden by must-haves:** 18 (budget 10, move-in month 8; a room can fail more than one).
 - **First three:** demo-64 Group house near Waltham Common needs a fifth (matches everything); demo-75 Bright furnished room on the South Side (matches everything); demo-27 Furnished room with a desk near Waltham Common (matches everything).
-- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,430) (+1); Consider a move-in month more than 3 months away (+16).
+- **Offered, never applied without the renter:** Consider a move-in month more than 3 months away (+8).
 
 ### 2. Strong: Furnished, near Brandeis or Warrendale, from August 2027, up to $1,300, 12 months
 
 - **Must-haves:** budget_max; rooms needed always.
-- **Result:** 65 of 100 rooms fit the must-haves: 7 match everything, 58 partly.
-- **Hidden by must-haves:** 35 (budget 19, move-in month 16; a room can fail more than one).
-- **First three:** demo-40 Bed in a shared room near campus (matches everything); demo-62 Furnished room in Warrendale (matches everything); demo-81 Bright furnished room in Warrendale (matches everything).
-- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,430) (+1); Consider a move-in month more than 3 months away (+16).
+- **Result:** 32 of 50 rooms fit the must-haves: 4 match everything, 28 partly.
+- **Hidden by must-haves:** 18 (budget 10, move-in month 8; a room can fail more than one).
+- **First three:** demo-62 Furnished room in Warrendale (matches everything); demo-81 Bright furnished room in Warrendale (matches everything); demo-84 Furnished corner room near the Brandeis stop (matches everything).
+- **Offered, never applied without the renter:** Consider a move-in month more than 3 months away (+8).
 
 ### 3. Strong: Academic year from September 2027, Downtown or Moody Street, up to $1,000
 
 - **Must-haves:** budget_max; rooms needed always.
-- **Result:** 24 of 100 rooms fit the must-haves: 4 match everything, 20 partly.
-- **Hidden by must-haves:** 76 (budget 64, move-in month 24; a room can fail more than one).
-- **First three:** demo-08 Shared bedroom for budget savers (matches everything); demo-28 Bed in a shared room off Moody Street (matches everything); demo-17 Join a friendly house near Moody Street (matches everything).
-- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,100) (+13); Consider a move-in month more than 3 months away (+12).
+- **Result:** 8 of 50 rooms fit the must-haves: 2 match everything, 6 partly.
+- **Hidden by must-haves:** 42 (budget 34, move-in month 13; a room can fail more than one).
+- **First three:** demo-08 Shared bedroom for budget savers (matches everything); demo-17 Join a friendly house near Moody Street (matches everything); demo-64 Group house near Waltham Common needs a fifth (partial: Available from Jun 1, 2027, 3 months before you want to move in (ask whether the start can be later)).
+- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,100) (+10); Consider a move-in month more than 3 months away (+8).
 
 ### 4. Strong: Two friends: 2 rooms from June 2027, up to $1,400 each, South Side or Moody Street
 
 - **Must-haves:** budget_max; rooms needed always.
-- **Result:** 13 of 100 rooms fit the must-haves: 4 match everything, 9 partly.
-- **Hidden by must-haves:** 87 (rooms 84, budget 10, move-in month 16; a room can fail more than one).
-- **First three:** demo-36 Two open rooms near Moody Street (matches everything); demo-51 Whole two-bedroom near Moody Street (matches everything); demo-06 Whole two-bedroom for two friends (matches everything).
-- **Offered, never applied without the renter:** Look for fewer than 2 rooms in one place (+61).
+- **Result:** 7 of 50 rooms fit the must-haves: 3 match everything, 4 partly.
+- **Hidden by must-haves:** 43 (rooms 41, budget 6, move-in month 8; a room can fail more than one).
+- **First three:** demo-36 Two open rooms near Moody Street (matches everything); demo-51 Whole two-bedroom near Moody Street (matches everything); demo-43 Two-bedroom apartment on the South Side (matches everything).
+- **Offered, never applied without the renter:** Look for fewer than 2 rooms in one place (+29).
 
 ### 5. Strong: Three friends: 3 rooms from June 2027, up to $1,200 each, Downtown
 
 - **Must-haves:** budget_max; rooms needed always.
-- **Result:** 4 of 100 rooms fit the must-haves: 3 match everything, 1 partly.
-- **Hidden by must-haves:** 96 (rooms 96, budget 22, move-in month 16; a room can fail more than one).
-- **First three:** demo-35 Three rooms in a five-bedroom near the commuter rail (matches everything); demo-10 Whole three-bedroom near Waltham Common (matches everything); demo-16 Three-bedroom apartment near Waltham Common (matches everything).
-- **Offered, never applied without the renter:** Look for fewer than 3 rooms in one place (+58).
+- **Result:** 3 of 50 rooms fit the must-haves: 2 match everything, 1 partly.
+- **Hidden by must-haves:** 47 (rooms 47, budget 10, move-in month 8; a room can fail more than one).
+- **First three:** demo-35 Three rooms in a five-bedroom near the commuter rail (matches everything); demo-10 Whole three-bedroom near Waltham Common (matches everything); demo-94 Whole three-bedroom by the Riverwalk (partial: In Waltham, MA (Moody Street), not one of your areas (Downtown)).
+- **Offered, never applied without the renter:** Look for fewer than 3 rooms in one place (+29).
 
 ### 6. Strong: Furnished spring sublet from January 2027, about 5 months, up to $1,100, Prospect Hill or the Highlands
 
 - **Must-haves:** budget_max; rooms needed always.
-- **Result:** 13 of 100 rooms fit the must-haves: 4 match everything, 9 partly.
-- **Hidden by must-haves:** 87 (budget 44, move-in month 84; a room can fail more than one).
+- **Result:** 8 of 50 rooms fit the must-haves: 4 match everything, 4 partly.
+- **Hidden by must-haves:** 42 (budget 20, move-in month 42; a room can fail more than one).
 - **First three:** demo-18 Spring sublet on Prospect Hill (matches everything); demo-04 Spring sublet in a four-bedroom (matches everything); demo-53 Furnished corner room in the Highlands (matches everything).
-- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,210) (+3); Consider a move-in month more than 3 months away (+43).
+- **Offered, never applied without the renter:** Consider a move-in month more than 3 months away (+22).
 
 ### 7. Partial: From July 2027 in the Highlands (flexible area), up to $1,200, 12 months
 
 - **Must-haves:** budget_max; rooms needed always.
-- **Result:** 58 of 100 rooms fit the must-haves: 2 match everything, 56 partly.
-- **Hidden by must-haves:** 42 (budget 26, move-in month 16; a room can fail more than one).
-- **First three:** demo-52 Furnished room with a desk in the Highlands (matches everything); demo-74 Bright private room in the Highlands (matches everything); demo-22 Furnished room in the Highlands (partial: Available Aug 1, 2027, 1 month after you want to move in).
-- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,320) (+7); Consider a move-in month more than 3 months away (+16).
+- **Result:** 29 of 50 rooms fit the must-haves: 0 match everything, 29 partly.
+- **Hidden by must-haves:** 21 (budget 13, move-in month 8; a room can fail more than one).
+- **First three:** demo-22 Furnished room in the Highlands (partial: Available Aug 1, 2027, 1 month after you want to move in); demo-50 Second-floor room near Prospect Hill Park (partial: In Waltham, MA (Prospect Hill), not one of your areas (The Highlands)); demo-90 Furnished room near the commuter rail (partial: In Waltham, MA (Downtown), not one of your areas (The Highlands)).
+- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,320) (+3); Consider a move-in month more than 3 months away (+8).
 
 ### 8. Partial: Near Brandeis from May 2027 (flexible month), up to $1,250
 
 - **Must-haves:** budget_max; rooms needed always.
-- **Result:** 53 of 100 rooms fit the must-haves: 1 match everything, 52 partly.
-- **Hidden by must-haves:** 47 (budget 21, move-in month 30; a room can fail more than one).
-- **First three:** demo-19 Sunny room near the Brandeis stop (matches everything); demo-25 Bright furnished room near campus (partial: Available Jun 1, 2027, 1 month after you want to move in); demo-40 Bed in a shared room near campus (partial: Available Aug 15, 2027, 3 months after you want to move in).
-- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,375) (+3); Consider a move-in month more than 3 months away (+26).
+- **Result:** 25 of 50 rooms fit the must-haves: 1 match everything, 24 partly.
+- **Hidden by must-haves:** 25 (budget 12, move-in month 13; a room can fail more than one).
+- **First three:** demo-19 Sunny room near the Brandeis stop (matches everything); demo-25 Bright furnished room near campus (partial: Available Jun 1, 2027, 1 month after you want to move in); demo-46 Group house a short walk from campus needs a fifth (partial: Available Aug 1, 2027, 3 months after you want to move in).
+- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,375) (+2); Consider a move-in month more than 3 months away (+13).
 
 ### 9. Partial: Moody Street from June 2027, up to $1,300, wants furnished
 
 - **Must-haves:** budget_max; rooms needed always.
-- **Result:** 65 of 100 rooms fit the must-haves: 0 match everything, 65 partly.
-- **Hidden by must-haves:** 35 (budget 19, move-in month 16; a room can fail more than one).
+- **Result:** 32 of 50 rooms fit the must-haves: 0 match everything, 32 partly.
+- **Hidden by must-haves:** 18 (budget 10, move-in month 8; a room can fail more than one).
 - **First three:** demo-01 Private room in a four-bedroom house (partial: Not furnished); demo-92 Top-floor room off Moody Street (partial: Not furnished); demo-36 Two open rooms near Moody Street (partial: Not furnished).
-- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,430) (+1); Consider a move-in month more than 3 months away (+16).
+- **Offered, never applied without the renter:** Consider a move-in month more than 3 months away (+8).
 
 ### 10. Partial: South Side from June 2027, budget $1,000 but flexible
 
 - **Must-haves:** none (budget flexible); rooms needed always.
-- **Result:** 43 of 100 rooms fit the must-haves: 1 match everything, 42 partly.
-- **Hidden by must-haves:** 57 (budget 44, move-in month 16; a room can fail more than one).
-- **First three:** demo-75 Bright furnished room on the South Side (matches everything); demo-96 Summer sublet on the South Side (partial: Summer sublet, June to July 2027, not the 12 months you want); demo-23 Furnished summer sublet on the South Side (partial: Summer sublet, June to August 2027, not the 12 months you want).
-- **Offered, never applied without the renter:** Raise your budget above $1,100 (+41); Consider a move-in month more than 3 months away (+13).
+- **Result:** 22 of 50 rooms fit the must-haves: 1 match everything, 21 partly.
+- **Hidden by must-haves:** 28 (budget 20, move-in month 8; a room can fail more than one).
+- **First three:** demo-75 Bright furnished room on the South Side (matches everything); demo-64 Group house near Waltham Common needs a fifth (partial: In Waltham, MA (Downtown), not one of your areas (South Side)); demo-27 Furnished room with a desk near Waltham Common (partial: In Waltham, MA (Downtown), not one of your areas (South Side)).
+- **Offered, never applied without the renter:** Raise your budget above $1,100 (+20); Consider a move-in month more than 3 months away (+8).
 
 ### 11. Partial: Summer only (3 months) from June 2027, up to $1,050, Waltham
 
 - **Must-haves:** budget_max; rooms needed always.
-- **Result:** 35 of 100 rooms fit the must-haves: 7 match everything, 28 partly.
-- **Hidden by must-haves:** 65 (budget 54, move-in month 16; a room can fail more than one).
-- **First three:** demo-96 Summer sublet on the South Side (matches everything); demo-12 Furnished summer sublet off Moody Street (matches everything); demo-72 Summer sublet in Warrendale (matches everything).
-- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,155) (+16); Consider a move-in month more than 3 months away (+11).
+- **Result:** 17 of 50 rooms fit the must-haves: 0 match everything, 17 partly.
+- **Hidden by must-haves:** 33 (budget 26, move-in month 8; a room can fail more than one).
+- **First three:** demo-64 Group house near Waltham Common needs a fifth (partial: Join the group's lease, June 2027 to May 2028, not the 3 months you want); demo-75 Bright furnished room on the South Side (partial: 12-month lease from June, not the 3 months you want); demo-27 Furnished room with a desk near Waltham Common (partial: 12-month lease from June, not the 3 months you want).
+- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,155) (+9); Consider a move-in month more than 3 months away (+7).
 
 ### 12. Strict: Within 1 km of Brandeis (must-have), from August 2027, up to $1,000
 
 - **Must-haves:** budget_max, max_distance_km; rooms needed always.
-- **Result:** 14 of 100 rooms fit the must-haves: 7 match everything, 7 partly.
-- **Hidden by must-haves:** 86 (budget 64, move-in month 16, distance 57; a room can fail more than one).
-- **First three:** demo-40 Bed in a shared room near campus (matches everything); demo-68 Bed in a shared room a short walk from campus (matches everything); demo-14 Room in a five-bedroom near campus (matches everything).
-- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,100) (+5); Consider a move-in month more than 3 months away (+5); Look farther than 1 km from Brandeis (+14).
+- **Result:** 3 of 50 rooms fit the must-haves: 2 match everything, 1 partly.
+- **Hidden by must-haves:** 47 (budget 34, move-in month 8, distance 30; a room can fail more than one).
+- **First three:** demo-46 Group house a short walk from campus needs a fifth (matches everything); demo-62 Furnished room in Warrendale (matches everything); demo-83 Housemates in Warrendale need a fourth (partial: Available from May 15, 2027, 3 months before you want to move in (ask whether the start can be later)).
+- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,100) (+4); Consider a move-in month more than 3 months away (+3); Look farther than 1 km from Brandeis (+7).
 
 ### 13. Strict: Lakeview only (must-have area), from June 2027, up to $1,100
 
 - **Must-haves:** budget_max, areas; rooms needed always.
-- **Result:** 2 of 100 rooms fit the must-haves: 2 match everything, 0 partly.
-- **Hidden by must-haves:** 98 (budget 44, move-in month 16, area 95; a room can fail more than one).
-- **First three:** demo-55 Bright furnished room near Hardy Pond (matches everything); demo-26 Group house in Lakeview needs a fourth (matches everything).
-- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,210) (+1); Look outside Lakeview (+41).
+- **Result:** 0 of 50 rooms fit the must-haves: 0 match everything, 0 partly.
+- **Hidden by must-haves:** 50 (budget 20, move-in month 8, area 50; a room can fail more than one).
+- **First three:** none.
+- **Offered, never applied without the renter:** Look outside Lakeview (+22).
 
 ### 14. Strict: February 2027 only (must-have month), up to $1,100, about 7 months
 
 - **Must-haves:** budget_max, move_in_month; rooms needed always.
-- **Result:** 8 of 100 rooms fit the must-haves: 3 match everything, 5 partly.
-- **Hidden by must-haves:** 92 (budget 44, move-in month 91; a room can fail more than one).
-- **First three:** demo-70 Lease takeover a short walk from campus (matches everything); demo-05 Lease takeover in Warrendale (matches everything); demo-89 Take over a lease in Warrendale (matches everything).
-- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $1,210) (+1); Be flexible on the move-in month (up to 3 months either way) (+11).
+- **Result:** 5 of 50 rooms fit the must-haves: 0 match everything, 5 partly.
+- **Hidden by must-haves:** 45 (budget 20, move-in month 45; a room can fail more than one).
+- **First three:** demo-18 Spring sublet on Prospect Hill (partial: Spring sublet, January to May 2027, not the 7 months you want); demo-04 Spring sublet in a four-bedroom (partial: Spring sublet, mid-January to May 2027, not the 7 months you want); demo-69 Spring semester sublet in Warrendale (partial: Spring sublet, mid-January to mid-May 2027, not the 7 months you want).
+- **Offered, never applied without the renter:** Be flexible on the move-in month (up to 3 months either way) (+7).
 
 ### 15. Strict: Just for me, Downtown only (must-have), from July 2027, up to $1,700, furnished
 
 - **Must-haves:** budget_max, areas; rooms needed always.
-- **Result:** 12 of 100 rooms fit the must-haves: 3 match everything, 9 partly.
-- **Hidden by must-haves:** 88 (budget 13, move-in month 16, area 83; a room can fail more than one).
+- **Result:** 8 of 50 rooms fit the must-haves: 3 match everything, 5 partly.
+- **Hidden by must-haves:** 42 (budget 6, move-in month 8, area 41; a room can fail more than one).
 - **First three:** demo-90 Furnished room near the commuter rail (matches everything); demo-03 Furnished studio downtown (matches everything); demo-27 Furnished room with a desk near Waltham Common (matches everything).
-- **Offered, never applied without the renter:** Consider a move-in month more than 3 months away (+2); Look outside Downtown (+59).
+- **Offered, never applied without the renter:** Look outside Downtown (+28).
 
 ### 16. No match: Up to $600 in Waltham from June 2027
 
 - **Must-haves:** budget_max; rooms needed always.
-- **Result:** 0 of 100 rooms fit the must-haves: 0 match everything, 0 partly.
-- **Hidden by must-haves:** 100 (budget 100, move-in month 16; a room can fail more than one).
+- **Result:** 0 of 50 rooms fit the must-haves: 0 match everything, 0 partly.
+- **Hidden by must-haves:** 50 (budget 50, move-in month 8; a room can fail more than one).
 - **First three:** none.
 - **Offered changes:** none needed or none would help.
 
 ### 17. No match: Within 1 km of Brandeis (must-have), from June 2027 (must-have), up to $800
 
 - **Must-haves:** budget_max, max_distance_km, move_in_month; rooms needed always.
-- **Result:** 0 of 100 rooms fit the must-haves: 0 match everything, 0 partly.
-- **Hidden by must-haves:** 100 (budget 96, move-in month 65, distance 57; a room can fail more than one).
+- **Result:** 0 of 50 rooms fit the must-haves: 0 match everything, 0 partly.
+- **Hidden by must-haves:** 50 (budget 49, move-in month 30, distance 30; a room can fail more than one).
 - **First three:** none.
-- **Offered, never applied without the renter:** Allow up to 10% over budget (up to $880) (+1); Be flexible on the move-in month (up to 3 months either way) (+2).
+- **Offered changes:** none needed or none would help.
 
 ### 18. No match: Four rooms in one place from June 2027, up to $1,200 each
 
 - **Must-haves:** budget_max; rooms needed always.
-- **Result:** 0 of 100 rooms fit the must-haves: 0 match everything, 0 partly.
-- **Hidden by must-haves:** 100 (rooms 100, budget 22, move-in month 16; a room can fail more than one).
+- **Result:** 0 of 50 rooms fit the must-haves: 0 match everything, 0 partly.
+- **Hidden by must-haves:** 50 (rooms 50, budget 10, move-in month 8; a room can fail more than one).
 - **First three:** none.
-- **Offered, never applied without the renter:** Look for fewer than 4 rooms in one place (+62).
+- **Offered, never applied without the renter:** Look for fewer than 4 rooms in one place (+32).
 
 ### 19. Strong: A roommate for June 2027: early bird, very tidy, quiet, guests sometimes, OK with pets, no smoking, $900–$1,300
 
-- **Result:** 51 of 145 visible profiles are possible roommates: 8 strong (90+), 43 partial. The 3 hidden profiles are never compared.
-- **Not a match (first reason each):** lifestyle answers too far apart (score under 60) 8; move-in months more than a month apart 83; one smokes and the other wants no smoking 3.
+- **Result:** 20 of 50 visible profiles are possible roommates: 5 strong (90+), 15 partial. The 3 hidden profiles are never compared.
+- **Not a match (first reason each):** lifestyle answers too far apart (score under 60) 3; move-in months more than a month apart 27.
 - **First three:** demo-p01 Ari 100%; demo-p141 Hamza 100%; demo-p09 Ira 95%.
 
 ### 20. No match: A roommate moving in November 2027 (nobody in the demo data moves then or a month either side)
 
-- **Result:** 0 of 145 visible profiles are possible roommates: 0 strong (90+), 0 partial. The 3 hidden profiles are never compared.
-- **Not a match (first reason each):** move-in months more than a month apart 145.
+- **Result:** 0 of 50 visible profiles are possible roommates: 0 strong (90+), 0 partial. The 3 hidden profiles are never compared.
+- **Not a match (first reason each):** move-in months more than a month apart 50.
 - **First three:** none.
 
 ## Listings
@@ -256,487 +282,334 @@ something flexible, and the card says what. Roommate searches compare the answer
 
 | Id | Name | Kind | Area | From Brandeis | Rent | Rooms free | Available | Lease | Furnishing | Photo | Suits |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| demo-01 | Private room in a four-bedroom house | Private room | Moody Street | 1.8 km | $1,050 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k01 | 25 |
-| demo-02 | Furnished room on the South Side | Private room | South Side | 1.5 km | $1,200 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Furnished | b02 | 7 |
-| demo-03 | Furnished studio downtown | Studio | Downtown | 2.2 km | $1,650 whole place | 1 of 1 | Jul 1, 2027 | 12-month lease from July | Furnished | s03 | 4 |
+| demo-01 | Private room in a four-bedroom house | Private room | Moody Street | 1.8 km | $1,050 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k01 | 14 |
+| demo-03 | Furnished studio downtown | Studio | Downtown | 2.2 km | $1,650 whole place | 1 of 1 | Jul 1, 2027 | 12-month lease from July | Furnished | s03 | 1 |
 | demo-04 | Spring sublet in a four-bedroom | Sublet | The Highlands | 1.8 km | $950 per room | 1 of 4 | Jan 15, 2027 | Spring sublet, mid-January to May 2027 | Furnished | b04 | 7 |
-| demo-05 | Lease takeover in Warrendale | Lease takeover | Warrendale | 0.9 km | $1,100 per room | 1 of 3 | Feb 1, 2027 | Lease takeover, February to August 2027 | Unfurnished | e05 | 5 |
-| demo-06 | Whole two-bedroom for two friends | Whole apartment | South Side | 1.9 km | $2,700 whole place | 2 of 2 | Jun 1, 2027 | 12-month lease from June | Unfurnished | e06 | 4 |
-| demo-07 | Group house needs a fourth | Replacing a roommate | near Brandeis | 0.8 km | $975 per room | 1 of 4 | Jun 1, 2027 | Join the current lease to August 2027, then renew with the group | Unfurnished | l07 | 3 |
-| demo-08 | Shared bedroom for budget savers | Shared room | Downtown | 2.1 km | $700 per bed | 1 of 3 | Sep 1, 2027 | Academic-year lease, September to May | Furnished | h08 | 9 |
-| demo-09 | Garden-level room near campus | Private room | near Brandeis | 0.5 km | $1,300 per room | 1 of 3 | Aug 15, 2027 | 12-month lease from mid-August | Furnished | b09 | 12 |
-| demo-10 | Whole three-bedroom near Waltham Common | Whole apartment | Downtown | 2 km | $3,450 whole place | 3 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k10 | 5 |
-| demo-11 | Room on Prospect Hill | Private room | Prospect Hill | 2.5 km | $1,150 per room | 1 of 3 | Jul 1, 2027 | 12-month lease from July | Unfurnished | e11 | 12 |
-| demo-12 | Furnished summer sublet off Moody Street | Sublet | Moody Street | 1.9 km | $900 per room | 1 of 3 | Jun 1, 2027 | Summer sublet, June to August 2027 | Furnished | b12 | 5 |
-| demo-13 | Small furnished studio in the Highlands | Studio | The Highlands | 1.9 km | $1,450 whole place | 1 of 1 | Aug 1, 2027 | 12-month lease from August | Furnished | s13 | 9 |
-| demo-14 | Room in a five-bedroom near campus | Private room | near Brandeis | 0.4 km | $890 per room | 2 of 5 | Aug 1, 2027 | 12-month lease from August | Unfurnished | l14 | 15 |
-| demo-15 | Whole one-bedroom by Hardy Pond | Whole apartment | Lakeview | 2.8 km | $1,950 whole place | 1 of 1 | Sep 1, 2027 | 12-month lease from September | Unfurnished | e15 | 2 |
-| demo-16 | Three-bedroom apartment near Waltham Common | Whole apartment | Downtown | 2.4 km | $3,600 whole place | 3 of 3 | May 15, 2027 | 12-month lease from mid-May | Unfurnished | l35 | 3 |
-| demo-17 | Join a friendly house near Moody Street | Replacing a roommate | Moody Street | 2 km | $900 per room | 1 of 5 | Sep 1, 2027 | Join the current lease, September 2027 to May 2028 | Unfurnished | l35 | 9 |
+| demo-08 | Shared bedroom for budget savers | Shared room | Downtown | 2.1 km | $700 per bed | 1 of 3 | Sep 1, 2027 | Academic-year lease, September to May | Furnished | h08 | 5 |
+| demo-09 | Garden-level room near campus | Private room | near Brandeis | 0.5 km | $1,300 per room | 1 of 3 | Aug 15, 2027 | 12-month lease from mid-August | Furnished | b09 | 4 |
+| demo-10 | Whole three-bedroom near Waltham Common | Whole apartment | Downtown | 2 km | $3,450 whole place | 3 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k10 | 2 |
+| demo-13 | Small furnished studio in the Highlands | Studio | The Highlands | 1.9 km | $1,450 whole place | 1 of 1 | Aug 1, 2027 | 12-month lease from August | Furnished | s13 | 3 |
+| demo-17 | Join a friendly house near Moody Street | Replacing a roommate | Moody Street | 2 km | $900 per room | 1 of 5 | Sep 1, 2027 | Join the current lease, September 2027 to May 2028 | Unfurnished | l35 | 5 |
 | demo-18 | Spring sublet on Prospect Hill | Sublet | Prospect Hill | 2.7 km | $900 per room | 1 of 3 | Jan 1, 2027 | Spring sublet, January to May 2027 | Furnished | b27 | 5 |
-| demo-19 | Sunny room near the Brandeis stop | Private room | near Brandeis | 0.4 km | $1,200 per room | 1 of 3 | May 1, 2027 | 12-month lease from May | Unfurnished | l37 | 11 |
-| demo-20 | Bright furnished room on Prospect Hill | Private room | Prospect Hill | 2.7 km | $1,150 per room | 1 of 4 | Sep 1, 2027 | 12-month lease from September | Furnished | b02 | 5 |
-| demo-21 | Top-floor room by the Riverwalk | Private room | Moody Street | 1.7 km | $1,050 per room | 1 of 4 | Sep 1, 2027 | Academic-year lease, September 2027 to May 2028 | Unfurnished | e06 | 7 |
-| demo-22 | Furnished room in the Highlands | Private room | The Highlands | 1.9 km | $1,100 per room | 1 of 3 | Aug 1, 2027 | 12-month lease from August | Furnished | b31 | 12 |
-| demo-23 | Furnished summer sublet on the South Side | Sublet | South Side | 1.9 km | $950 per room | 1 of 3 | Jun 1, 2027 | Summer sublet, June to August 2027 | Furnished | b17 | 5 |
-| demo-24 | Small furnished studio by the Riverwalk | Studio | Moody Street | 2 km | $1,550 whole place | 1 of 1 | Jul 1, 2027 | 12-month lease from July | Furnished | s40 | 4 |
-| demo-25 | Bright furnished room near campus | Private room | near Brandeis | 0.7 km | $1,150 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Furnished | b12 | 8 |
-| demo-26 | Group house in Lakeview needs a fourth | Replacing a roommate | Lakeview | 2.8 km | $950 per room | 1 of 4 | May 15, 2027 | Join the group's lease, mid-May 2027 to mid-May 2028 | Unfurnished | k23 | 5 |
-| demo-27 | Furnished room with a desk near Waltham Common | Private room | Downtown | 2 km | $1,000 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Furnished | b16 | 20 |
-| demo-28 | Bed in a shared room off Moody Street | Shared room | Moody Street | 2 km | $750 per bed | 1 of 3 | Sep 1, 2027 | Academic-year lease, September 2027 to May 2028 | Furnished | h19 | 9 |
-| demo-29 | Summer room near the Brandeis stop | Sublet | near Brandeis | 0.3 km | $1,000 per room | 1 of 4 | Jun 1, 2027 | Summer sublet, June to August 2027 | Furnished | b02 | 3 |
-| demo-30 | Studio in the Highlands | Studio | The Highlands | 1.8 km | $1,600 whole place | 1 of 1 | Sep 1, 2027 | 12-month lease from September | Unfurnished | s40 | 3 |
-| demo-31 | Top-floor room in Warrendale | Private room | Warrendale | 0.8 km | $950 per room | 1 of 3 | Aug 1, 2027 | 10-month lease, August 2027 to May 2028 | Unfurnished | l36 | 3 |
-| demo-32 | Furnished corner room on the South Side | Private room | South Side | 1.6 km | $1,250 per room | 1 of 3 | Jun 1, 2027 | 12-month lease from June | Furnished | b18 | 7 |
-| demo-33 | Furnished corner room near campus | Private room | near Brandeis | 0.4 km | $1,100 per room | 1 of 4 | Sep 1, 2027 | 12-month lease from September | Furnished | b16 | 5 |
-| demo-34 | Two rooms in a four-bedroom on the South Side | Private room | South Side | 1.5 km | $1,200 per room | 2 of 4 | Aug 15, 2027 | 12-month lease from mid-August | Unfurnished | k32 | 7 |
-| demo-35 | Three rooms in a five-bedroom near the commuter rail | Private room | Downtown | 1.9 km | $1,050 per room | 3 of 5 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k01 | 26 |
-| demo-36 | Two open rooms near Moody Street | Private room | Moody Street | 1.8 km | $1,250 per room | 2 of 4 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k23 | 22 |
-| demo-37 | Room with a bay window near Prospect Hill Park | Private room | Prospect Hill | 2.5 km | $1,100 per room | 1 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | l37 | 11 |
-| demo-38 | Take over a lease near Prospect Hill Park | Lease takeover | Prospect Hill | 2.6 km | $1,200 per room | 1 of 3 | Sep 1, 2027 | Lease takeover, September 2027 to August 2028 | Unfurnished | k34 | 5 |
-| demo-39 | Bright furnished room by the Riverwalk | Private room | Moody Street | 2 km | $1,050 per room | 1 of 4 | Dec 1, 2026 | 12-month lease from December | Furnished | b25 | 5 |
-| demo-40 | Bed in a shared room near campus | Shared room | near Brandeis | 0.3 km | $700 per bed | 1 of 3 | Aug 15, 2027 | 12-month lease from mid-August | Furnished | h26 | 20 |
-| demo-41 | Whole two-bedroom in Warrendale | Whole apartment | Warrendale | 0.8 km | $2,600 whole place | 2 of 2 | Jul 15, 2027 | 12-month lease from mid-July | Unfurnished | l37 | 3 |
-| demo-42 | Spring sublet near campus | Sublet | near Brandeis | 0.3 km | $1,000 per room | 1 of 4 | Jan 1, 2027 | Spring sublet, January to May 2027 | Furnished | b17 | 4 |
-| demo-43 | Two-bedroom apartment on the South Side | Whole apartment | South Side | 1.5 km | $2,800 whole place | 2 of 2 | Jun 1, 2027 | 12-month lease from June | Unfurnished | l07 | 4 |
-| demo-44 | Studio near Waltham Common | Studio | Downtown | 1.9 km | $1,700 whole place | 1 of 1 | Jul 1, 2027 | 12-month lease from July | Unfurnished | s39 | 4 |
-| demo-45 | Corner room in Warrendale | Private room | Warrendale | 1 km | $1,000 per room | 1 of 3 | Sep 1, 2027 | 12-month lease from September | Unfurnished | e11 | 5 |
-| demo-46 | Group house a short walk from campus needs a fifth | Replacing a roommate | near Brandeis | 0.6 km | $900 per room | 1 of 5 | Aug 1, 2027 | Join the group's lease, August 2027 to July 2028 | Unfurnished | e30 | 11 |
-| demo-47 | Furnished corner room in Warrendale | Private room | Warrendale | 1.2 km | $1,100 per room | 1 of 4 | May 15, 2027 | 12-month lease from mid-May | Furnished | b28 | 11 |
-| demo-48 | Furnished room with a desk downtown | Private room | Downtown | 2 km | $950 per room | 1 of 4 | Sep 1, 2027 | Academic-year lease, September 2027 to May 2028 | Furnished | b21 | 8 |
-| demo-49 | Furnished room with a desk in Warrendale | Private room | Warrendale | 0.8 km | $1,100 per room | 1 of 3 | Dec 15, 2026 | Six-month lease, mid-December 2026 to mid-June 2027 | Furnished | b20 | 11 |
-| demo-50 | Second-floor room near Prospect Hill Park | Private room | Prospect Hill | 2.7 km | $1,050 per room | 1 of 4 | Jul 15, 2027 | 12-month lease from mid-July | Unfurnished | k33 | 12 |
-| demo-51 | Whole two-bedroom near Moody Street | Whole apartment | Moody Street | 2.1 km | $2,600 whole place | 2 of 2 | Jun 1, 2027 | 12-month lease from June | Unfurnished | e11 | 4 |
-| demo-52 | Furnished room with a desk in the Highlands | Private room | The Highlands | 1.7 km | $1,100 per room | 1 of 3 | Jul 1, 2027 | 12-month lease from July | Furnished | b24 | 12 |
+| demo-19 | Sunny room near the Brandeis stop | Private room | near Brandeis | 0.4 km | $1,200 per room | 1 of 3 | May 1, 2027 | 12-month lease from May | Unfurnished | l37 | 7 |
+| demo-20 | Bright furnished room on Prospect Hill | Private room | Prospect Hill | 2.7 km | $1,150 per room | 1 of 4 | Sep 1, 2027 | 12-month lease from September | Furnished | b02 | 3 |
+| demo-21 | Top-floor room by the Riverwalk | Private room | Moody Street | 1.7 km | $1,050 per room | 1 of 4 | Sep 1, 2027 | Academic-year lease, September 2027 to May 2028 | Unfurnished | e06 | 5 |
+| demo-22 | Furnished room in the Highlands | Private room | The Highlands | 1.9 km | $1,100 per room | 1 of 3 | Aug 1, 2027 | 12-month lease from August | Furnished | b31 | 5 |
+| demo-24 | Small furnished studio by the Riverwalk | Studio | Moody Street | 2 km | $1,550 whole place | 1 of 1 | Jul 1, 2027 | 12-month lease from July | Furnished | s40 | 1 |
+| demo-25 | Bright furnished room near campus | Private room | near Brandeis | 0.7 km | $1,150 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Furnished | b12 | 7 |
+| demo-27 | Furnished room with a desk near Waltham Common | Private room | Downtown | 2 km | $1,000 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Furnished | b16 | 12 |
+| demo-35 | Three rooms in a five-bedroom near the commuter rail | Private room | Downtown | 1.9 km | $1,050 per room | 3 of 5 | Jun 1, 2027 | 12-month lease from June | Unfurnished | drawing (k01 is on an earlier listing) | 14 |
+| demo-36 | Two open rooms near Moody Street | Private room | Moody Street | 1.8 km | $1,250 per room | 2 of 4 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k23 | 10 |
+| demo-38 | Take over a lease near Prospect Hill Park | Lease takeover | Prospect Hill | 2.6 km | $1,200 per room | 1 of 3 | Sep 1, 2027 | Lease takeover, September 2027 to August 2028 | Unfurnished | k34 | 3 |
+| demo-42 | Spring sublet near campus | Sublet | near Brandeis | 0.3 km | $1,000 per room | 1 of 4 | Jan 1, 2027 | Spring sublet, January to May 2027 | Furnished | b17 | 3 |
+| demo-43 | Two-bedroom apartment on the South Side | Whole apartment | South Side | 1.5 km | $2,800 whole place | 2 of 2 | Jun 1, 2027 | 12-month lease from June | Unfurnished | l07 | 1 |
+| demo-44 | Studio near Waltham Common | Studio | Downtown | 1.9 km | $1,700 whole place | 1 of 1 | Jul 1, 2027 | 12-month lease from July | Unfurnished | s39 | 1 |
+| demo-46 | Group house a short walk from campus needs a fifth | Replacing a roommate | near Brandeis | 0.6 km | $900 per room | 1 of 5 | Aug 1, 2027 | Join the group's lease, August 2027 to July 2028 | Unfurnished | e30 | 3 |
+| demo-47 | Furnished corner room in Warrendale | Private room | Warrendale | 1.2 km | $1,100 per room | 1 of 4 | May 15, 2027 | 12-month lease from mid-May | Furnished | b28 | 7 |
+| demo-49 | Furnished room with a desk in Warrendale | Private room | Warrendale | 0.8 km | $1,100 per room | 1 of 3 | Dec 15, 2026 | Six-month lease, mid-December 2026 to mid-June 2027 | Furnished | b20 | 3 |
+| demo-50 | Second-floor room near Prospect Hill Park | Private room | Prospect Hill | 2.7 km | $1,050 per room | 1 of 4 | Jul 15, 2027 | 12-month lease from mid-July | Unfurnished | k33 | 4 |
+| demo-51 | Whole two-bedroom near Moody Street | Whole apartment | Moody Street | 2.1 km | $2,600 whole place | 2 of 2 | Jun 1, 2027 | 12-month lease from June | Unfurnished | e11 | 1 |
 | demo-53 | Furnished corner room in the Highlands | Private room | The Highlands | 2 km | $1,000 per room | 1 of 4 | Jan 15, 2027 | Five-month lease, mid-January to mid-June 2027 | Furnished | b21 | 7 |
-| demo-54 | Group house in Warrendale needs a fourth | Replacing a roommate | Warrendale | 0.8 km | $1,050 per room | 1 of 4 | May 1, 2027 | Join the group's lease, May 2027 to April 2028 | Unfurnished | l35 | 11 |
-| demo-55 | Bright furnished room near Hardy Pond | Private room | Lakeview | 2.5 km | $1,000 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Furnished | b25 | 7 |
-| demo-56 | Whole one-bedroom in Lakeview | Whole apartment | Lakeview | 2.6 km | $1,850 whole place | 1 of 1 | Aug 15, 2027 | 12-month lease from mid-August | Unfurnished | k10 | 3 |
-| demo-57 | Summer room by the Riverwalk | Sublet | Moody Street | 2 km | $1,000 per room | 1 of 4 | May 15, 2027 | Summer sublet, mid-May to mid-August 2027 | Furnished | b20 | 5 |
-| demo-58 | Room in a four-bedroom on Prospect Hill | Private room | Prospect Hill | 2.7 km | $1,050 per room | 1 of 4 | Aug 15, 2027 | 12-month lease from mid-August | Unfurnished | e05 | 12 |
-| demo-59 | Sublet in Warrendale | Sublet | Warrendale | 0.9 km | $950 per room | 1 of 4 | Nov 15, 2026 | Sublet, mid-November 2026 to mid-May 2027 | Furnished | b41 | 7 |
-| demo-60 | Room in a four-bedroom near the commuter rail | Private room | Downtown | 2.2 km | $1,000 per room | 1 of 4 | Jun 15, 2027 | 12-month lease from mid-June | Unfurnished | k32 | 20 |
-| demo-61 | Room to take over near Waltham Common | Lease takeover | Downtown | 2 km | $1,200 per room | 1 of 3 | Nov 15, 2026 | Lease takeover, mid-November 2026 to mid-November 2027 | Unfurnished | k34 | 5 |
-| demo-62 | Furnished room in Warrendale | Private room | Warrendale | 0.7 km | $950 per room | 1 of 4 | Aug 1, 2027 | 12-month lease from August | Furnished | b04 | 21 |
-| demo-63 | Large room near the commuter rail | Private room | Downtown | 2.4 km | $1,250 per room | 1 of 3 | Sep 1, 2027 | 12-month lease from September | Unfurnished | l14 | 6 |
-| demo-64 | Group house near Waltham Common needs a fifth | Replacing a roommate | Downtown | 2 km | $950 per room | 1 of 5 | Jun 1, 2027 | Join the group's lease, June 2027 to May 2028 | Unfurnished | k10 | 20 |
-| demo-65 | Second-floor room in Warrendale | Private room | Warrendale | 0.7 km | $1,050 per room | 1 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | l36 | 8 |
-| demo-66 | Two-bedroom apartment in Warrendale | Whole apartment | Warrendale | 0.8 km | $2,400 whole place | 2 of 2 | Aug 15, 2027 | 12-month lease from mid-August | Unfurnished | l36 | 4 |
-| demo-67 | Two-bedroom apartment near the Brandeis stop | Whole apartment | near Brandeis | 0.6 km | $2,500 whole place | 2 of 2 | Aug 1, 2027 | 12-month lease from August | Unfurnished | l14 | 4 |
-| demo-68 | Bed in a shared room a short walk from campus | Shared room | near Brandeis | 0.7 km | $750 per bed | 1 of 3 | Aug 15, 2027 | Academic-year lease, mid-August 2027 to mid-May 2028 | Furnished | h26 | 3 |
-| demo-69 | Spring semester sublet in Warrendale | Sublet | Warrendale | 1.1 km | $950 per room | 1 of 3 | Jan 15, 2027 | Spring sublet, mid-January to mid-May 2027 | Furnished | b18 | 4 |
-| demo-70 | Lease takeover a short walk from campus | Lease takeover | near Brandeis | 0.7 km | $1,050 per room | 1 of 3 | Feb 1, 2027 | Lease takeover, February to August 2027 | Furnished | b38 | 5 |
-| demo-71 | Join a friendly house in Warrendale | Replacing a roommate | Warrendale | 1.2 km | $950 per room | 1 of 4 | Sep 1, 2027 | Join the group's lease, September 2027 to August 2028 | Unfurnished | e29 | 5 |
-| demo-72 | Summer sublet in Warrendale | Sublet | Warrendale | 0.7 km | $900 per room | 1 of 3 | Jun 1, 2027 | Summer sublet, June to September 2027 | Unfurnished | k32 | 3 |
+| demo-54 | Group house in Warrendale needs a fourth | Replacing a roommate | Warrendale | 0.8 km | $1,050 per room | 1 of 4 | May 1, 2027 | Join the group's lease, May 2027 to April 2028 | Unfurnished | drawing (l35 is on an earlier listing) | 7 |
+| demo-58 | Room in a four-bedroom on Prospect Hill | Private room | Prospect Hill | 2.7 km | $1,050 per room | 1 of 4 | Aug 15, 2027 | 12-month lease from mid-August | Unfurnished | e05 | 7 |
+| demo-60 | Room in a four-bedroom near the commuter rail | Private room | Downtown | 2.2 km | $1,000 per room | 1 of 4 | Jun 15, 2027 | 12-month lease from mid-June | Unfurnished | k32 | 12 |
+| demo-62 | Furnished room in Warrendale | Private room | Warrendale | 0.7 km | $950 per room | 1 of 4 | Aug 1, 2027 | 12-month lease from August | Furnished | drawing (b04 is on an earlier listing) | 7 |
+| demo-64 | Group house near Waltham Common needs a fifth | Replacing a roommate | Downtown | 2 km | $950 per room | 1 of 5 | Jun 1, 2027 | Join the group's lease, June 2027 to May 2028 | Unfurnished | drawing (k10 is on an earlier listing) | 12 |
+| demo-65 | Second-floor room in Warrendale | Private room | Warrendale | 0.7 km | $1,050 per room | 1 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | l36 | 7 |
+| demo-66 | Two-bedroom apartment in Warrendale | Whole apartment | Warrendale | 0.8 km | $2,400 whole place | 2 of 2 | Aug 15, 2027 | 12-month lease from mid-August | Unfurnished | drawing (l36 is on an earlier listing) | 1 |
+| demo-67 | Two-bedroom apartment near the Brandeis stop | Whole apartment | near Brandeis | 0.6 km | $2,500 whole place | 2 of 2 | Aug 1, 2027 | 12-month lease from August | Unfurnished | l14 | 1 |
+| demo-69 | Spring semester sublet in Warrendale | Sublet | Warrendale | 1.1 km | $950 per room | 1 of 3 | Jan 15, 2027 | Spring sublet, mid-January to mid-May 2027 | Furnished | b18 | 3 |
 | demo-73 | Furnished corner room a short walk from campus | Private room | near Brandeis | 0.4 km | $1,300 per room | 1 of 3 | Jun 1, 2027 | 12-month lease from June | Furnished | b41 | 7 |
-| demo-74 | Bright private room in the Highlands | Private room | The Highlands | 1.9 km | $1,200 per room | 1 of 3 | Jul 15, 2027 | 12-month lease from mid-July | Furnished | b04 | 11 |
-| demo-75 | Bright furnished room on the South Side | Private room | South Side | 1.8 km | $950 per room | 1 of 3 | Jun 1, 2027 | 12-month lease from June | Furnished | b25 | 8 |
-| demo-76 | Spring semester sublet near campus | Sublet | near Brandeis | 0.5 km | $1,000 per room | 1 of 4 | Dec 1, 2026 | Spring sublet, December 2026 to May 2027 | Furnished | b24 | 11 |
-| demo-77 | Furnished room with a desk near the Brandeis stop | Private room | near Brandeis | 0.4 km | $1,150 per room | 1 of 3 | Jan 1, 2027 | Six-month lease, January to June 2027 | Furnished | b31 | 8 |
-| demo-78 | Furnished room off Moody Street | Private room | Moody Street | 2.1 km | $1,150 per room | 1 of 4 | Jul 1, 2027 | 12-month lease from July | Furnished | b22 | 13 |
-| demo-79 | Furnished room with a desk near the commuter rail | Private room | Downtown | 2.3 km | $1,350 per room | 1 of 3 | Aug 15, 2027 | 12-month lease from mid-August | Furnished | b27 | 5 |
+| demo-75 | Bright furnished room on the South Side | Private room | South Side | 1.8 km | $950 per room | 1 of 3 | Jun 1, 2027 | 12-month lease from June | Furnished | b25 | 3 |
+| demo-76 | Spring semester sublet near campus | Sublet | near Brandeis | 0.5 km | $1,000 per room | 1 of 4 | Dec 1, 2026 | Spring sublet, December 2026 to May 2027 | Furnished | b24 | 3 |
 | demo-80 | Spring sublet near Prospect Hill Park | Sublet | Prospect Hill | 2.7 km | $1,050 per room | 1 of 4 | Dec 15, 2026 | Spring sublet, mid-December 2026 to mid-June 2027 | Furnished | b22 | 5 |
-| demo-81 | Bright furnished room in Warrendale | Private room | Warrendale | 1.1 km | $1,150 per room | 1 of 4 | Aug 15, 2027 | 12-month lease from mid-August | Furnished | b27 | 15 |
-| demo-82 | Room in a four-bedroom near Moody Street | Private room | Moody Street | 1.7 km | $1,000 per room | 1 of 4 | May 15, 2027 | 12-month lease from mid-May | Unfurnished | e29 | 12 |
-| demo-83 | Housemates in Warrendale need a fourth | Replacing a roommate | Warrendale | 1 km | $1,000 per room | 1 of 4 | May 15, 2027 | Join the group's lease, mid-May 2027 to mid-May 2028 | Unfurnished | k23 | 11 |
-| demo-84 | Furnished corner room near the Brandeis stop | Private room | near Brandeis | 0.6 km | $1,200 per room | 1 of 3 | Aug 1, 2027 | 12-month lease from August | Furnished | b28 | 13 |
-| demo-85 | Top-floor room near the commuter rail | Private room | Downtown | 2.1 km | $1,150 per room | 1 of 3 | Dec 1, 2026 | 12-month lease from December | Unfurnished | k33 | 5 |
-| demo-86 | Furnished room with a desk a short walk from campus | Private room | near Brandeis | 0.3 km | $1,250 per room | 1 of 3 | Jul 15, 2027 | 12-month lease from mid-July | Furnished | b09 | 9 |
-| demo-87 | Furnished room near Waltham Common | Private room | Downtown | 2.2 km | $1,150 per room | 1 of 3 | Aug 15, 2027 | 10-month lease, mid-August 2027 to mid-June 2028 | Furnished | b12 | 6 |
-| demo-88 | Whole two-bedroom on the South Side | Whole apartment | South Side | 1.5 km | $2,650 whole place | 2 of 2 | Sep 1, 2027 | 12-month lease from September | Unfurnished | l07 | 6 |
-| demo-89 | Take over a lease in Warrendale | Lease takeover | Warrendale | 0.9 km | $1,000 per room | 1 of 4 | Jan 15, 2027 | Lease takeover, mid-January to mid-September 2027 | Furnished | b16 | 5 |
-| demo-90 | Furnished room near the commuter rail | Private room | Downtown | 2.1 km | $1,100 per room | 1 of 3 | Jul 1, 2027 | 12-month lease from July | Furnished | b38 | 13 |
-| demo-91 | Furnished room near the Brandeis stop | Private room | near Brandeis | 0.3 km | $1,000 per room | 1 of 4 | Aug 15, 2027 | Academic-year lease, mid-August 2027 to mid-May 2028 | Furnished | b20 | 3 |
-| demo-92 | Top-floor room off Moody Street | Private room | Moody Street | 1.9 km | $1,100 per room | 1 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | e30 | 24 |
-| demo-93 | Bright furnished room near the Brandeis stop | Private room | near Brandeis | 0.3 km | $1,200 per room | 1 of 3 | Aug 15, 2027 | 12-month lease from mid-August | Furnished | b28 | 13 |
-| demo-94 | Whole three-bedroom by the Riverwalk | Whole apartment | Moody Street | 2 km | $3,300 whole place | 3 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | e29 | 5 |
-| demo-95 | Bright furnished room in the Highlands | Private room | The Highlands | 2 km | $1,250 per room | 1 of 3 | Jun 15, 2027 | 12-month lease from mid-June | Furnished | b21 | 5 |
-| demo-96 | Summer sublet on the South Side | Sublet | South Side | 1.5 km | $850 per room | 1 of 3 | Jun 1, 2027 | Summer sublet, June to July 2027 | Furnished | b31 | 5 |
-| demo-97 | Two open rooms a short walk from campus | Private room | near Brandeis | 0.2 km | $1,100 per room | 2 of 4 | Aug 1, 2027 | 12-month lease from August | Unfurnished | k34 | 12 |
-| demo-98 | Sunny room near Hardy Pond | Private room | Lakeview | 2.9 km | $1,150 per room | 1 of 3 | Sep 1, 2027 | 12-month lease from September | Unfurnished | k01 | 4 |
-| demo-99 | Whole two-bedroom downtown | Whole apartment | Downtown | 2.2 km | $2,500 whole place | 2 of 2 | Sep 1, 2027 | 12-month lease from September | Unfurnished | e05 | 6 |
-| demo-100 | Take over a lease on Prospect Hill | Lease takeover | Prospect Hill | 2.7 km | $1,150 per room | 1 of 3 | Aug 1, 2027 | Lease takeover, August 2027 to July 2028 | Unfurnished | e15 | 12 |
+| demo-81 | Bright furnished room in Warrendale | Private room | Warrendale | 1.1 km | $1,150 per room | 1 of 4 | Aug 15, 2027 | 12-month lease from mid-August | Furnished | drawing (b27 is on an earlier listing) | 6 |
+| demo-82 | Room in a four-bedroom near Moody Street | Private room | Moody Street | 1.7 km | $1,000 per room | 1 of 4 | May 15, 2027 | 12-month lease from mid-May | Unfurnished | e29 | 7 |
+| demo-83 | Housemates in Warrendale need a fourth | Replacing a roommate | Warrendale | 1 km | $1,000 per room | 1 of 4 | May 15, 2027 | Join the group's lease, mid-May 2027 to mid-May 2028 | Unfurnished | drawing (k23 is on an earlier listing) | 7 |
+| demo-84 | Furnished corner room near the Brandeis stop | Private room | near Brandeis | 0.6 km | $1,200 per room | 1 of 3 | Aug 1, 2027 | 12-month lease from August | Furnished | drawing (b28 is on an earlier listing) | 5 |
+| demo-90 | Furnished room near the commuter rail | Private room | Downtown | 2.1 km | $1,100 per room | 1 of 3 | Jul 1, 2027 | 12-month lease from July | Furnished | b38 | 7 |
+| demo-92 | Top-floor room off Moody Street | Private room | Moody Street | 1.9 km | $1,100 per room | 1 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | drawing (e30 is on an earlier listing) | 14 |
+| demo-94 | Whole three-bedroom by the Riverwalk | Whole apartment | Moody Street | 2 km | $3,300 whole place | 3 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | drawing (e29 is on an earlier listing) | 2 |
+| demo-97 | Two open rooms a short walk from campus | Private room | near Brandeis | 0.2 km | $1,100 per room | 2 of 4 | Aug 1, 2027 | 12-month lease from August | Unfurnished | drawing (k34 is on an earlier listing) | 4 |
+| demo-100 | Take over a lease on Prospect Hill | Lease takeover | Prospect Hill | 2.7 km | $1,150 per room | 1 of 3 | Aug 1, 2027 | Lease takeover, August 2027 to July 2028 | Unfurnished | e15 | 7 |
 
 ## Listing photos (sources and licenses)
 
 Illustrative stock photos of ordinary rooms; none shows the listing it's on or any real Waltham property, and each is
 labeled "Illustrative demo photo" with a credit in Details. All are free photos under the
 [Unsplash License](https://unsplash.com/license) (not Unsplash+), each checked on its photo page (the first 15 on
-2026-10-14, the other 26 on 2026-10-17). They load from Unsplash's image server, resized for the card or dialog; nothing
-is downloaded into this project, and if a photo can't load the card shows coHabit's drawing instead. Furnished rooms use
-bedroom photos, unfurnished places empty rooms, kitchens or living rooms, studios studio photos and shared rooms photos
-with two beds. No photo is used for more than three listings.
+2026-10-14, the other 26 on 2026-10-17; the 39 shown on kept listings re-checked on 2026-11-16, all still "Free Photo on
+Unsplash"). They load from Unsplash's image server, resized for the card or dialog; nothing is downloaded into this
+project, and if a photo can't load the card shows coHabit's drawing instead. Furnished rooms use bedroom photos,
+unfurnished places empty rooms, kitchens or living rooms, studios studio photos and shared rooms photos with two beds.
+No photo is on two kept listings: the 11 kept listings whose photo is already on an earlier kept listing show
+coHabit's drawing instead. Each listing has one illustrative photo, not a set.
 
 | Key | Kind | What it shows | Photographer | Source | Used by |
 | --- | --- | --- | --- | --- | --- |
-| k01 | kitchen | a small white kitchen with a gas stove | [Andrea Davis](https://unsplash.com/@andreaedavis?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/Wj6oZNCAzs4?utm_source=cohabit&utm_medium=referral) | demo-01, demo-35, demo-98 |
-| b02 | bedroom | a bedroom with a white desk beside the bed | [Gabriel Beaudry](https://unsplash.com/@gbeaudry?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/WuQME0I_oZA?utm_source=cohabit&utm_medium=referral) | demo-02, demo-20, demo-29 |
+| k01 | kitchen | a small white kitchen with a gas stove | [Andrea Davis](https://unsplash.com/@andreaedavis?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/Wj6oZNCAzs4?utm_source=cohabit&utm_medium=referral) | demo-01 |
+| b02 | bedroom | a bedroom with a white desk beside the bed | [Gabriel Beaudry](https://unsplash.com/@gbeaudry?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/WuQME0I_oZA?utm_source=cohabit&utm_medium=referral) | demo-20 |
 | s03 | studio | a studio with a kitchenette and a small dining table | [Aquilion Property](https://unsplash.com/@aquilionproperty?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/NoPzk4m4jHc?utm_source=cohabit&utm_medium=referral) | demo-03 |
-| b04 | bedroom | a student's bedroom with a wall map and a guitar | [Emma Dau](https://unsplash.com/@daugirl?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/26OziLnJHFs?utm_source=cohabit&utm_medium=referral) | demo-04, demo-62, demo-74 |
-| e05 | empty | an empty room with white walls and wood floors | [Brian Wangenheim](https://unsplash.com/@brianwangenheim?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/SCbkyJR3QSM?utm_source=cohabit&utm_medium=referral) | demo-05, demo-58, demo-99 |
-| e06 | empty | an empty room with grey walls and a window | [Josh Lemmon](https://unsplash.com/@wolfiex2?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/nLTk9N2eg2U?utm_source=cohabit&utm_medium=referral) | demo-06, demo-21 |
-| l07 | living | a living room with a grey loveseat and plants | [Patrick Perkins](https://unsplash.com/@patrickperkins?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/3wylDrjxH-E?utm_source=cohabit&utm_medium=referral) | demo-07, demo-43, demo-88 |
+| b04 | bedroom | a student's bedroom with a wall map and a guitar | [Emma Dau](https://unsplash.com/@daugirl?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/26OziLnJHFs?utm_source=cohabit&utm_medium=referral) | demo-04 |
+| e05 | empty | an empty room with white walls and wood floors | [Brian Wangenheim](https://unsplash.com/@brianwangenheim?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/SCbkyJR3QSM?utm_source=cohabit&utm_medium=referral) | demo-58 |
+| e06 | empty | an empty room with grey walls and a window | [Josh Lemmon](https://unsplash.com/@wolfiex2?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/nLTk9N2eg2U?utm_source=cohabit&utm_medium=referral) | demo-21 |
+| l07 | living | a living room with a grey loveseat and plants | [Patrick Perkins](https://unsplash.com/@patrickperkins?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/3wylDrjxH-E?utm_source=cohabit&utm_medium=referral) | demo-43 |
 | h08 | shared | a bedroom with two single beds and a desk | [Febrian Zakaria](https://unsplash.com/@febrianzakaria?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/M6S1WvfW68A?utm_source=cohabit&utm_medium=referral) | demo-08 |
-| b09 | bedroom | a bedroom with a single bed and a desk | [Zac Gudakov](https://unsplash.com/@zacgudakov?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/qnYbBALP4dA?utm_source=cohabit&utm_medium=referral) | demo-09, demo-86 |
-| k10 | kitchen | a narrow white kitchen with pans on the wall | [Dinh Ng.](https://unsplash.com/@dinhnext?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/2Cc0KnE3lCs?utm_source=cohabit&utm_medium=referral) | demo-10, demo-56, demo-64 |
-| e11 | empty | an empty room with grey walls | [Josh Lemmon](https://unsplash.com/@wolfiex2?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/47c3k8CIKzQ?utm_source=cohabit&utm_medium=referral) | demo-11, demo-45, demo-51 |
-| b12 | bedroom | a bedroom with string lights and a round mirror | [Jonathan Borba](https://unsplash.com/@jonathanborba?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/wD3dur3v9aE?utm_source=cohabit&utm_medium=referral) | demo-12, demo-25, demo-87 |
+| b09 | bedroom | a bedroom with a single bed and a desk | [Zac Gudakov](https://unsplash.com/@zacgudakov?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/qnYbBALP4dA?utm_source=cohabit&utm_medium=referral) | demo-09 |
+| k10 | kitchen | a narrow white kitchen with pans on the wall | [Dinh Ng.](https://unsplash.com/@dinhnext?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/2Cc0KnE3lCs?utm_source=cohabit&utm_medium=referral) | demo-10 |
+| e11 | empty | an empty room with grey walls | [Josh Lemmon](https://unsplash.com/@wolfiex2?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/47c3k8CIKzQ?utm_source=cohabit&utm_medium=referral) | demo-51 |
+| b12 | bedroom | a bedroom with string lights and a round mirror | [Jonathan Borba](https://unsplash.com/@jonathanborba?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/wD3dur3v9aE?utm_source=cohabit&utm_medium=referral) | demo-25 |
 | s13 | studio | a furnished studio with a table and a sofa | [deborah cortelazzi](https://unsplash.com/@deborah_cortelazzi?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/gREquCUXQLI?utm_source=cohabit&utm_medium=referral) | demo-13 |
-| l14 | living | a shared living room with a sofa and armchairs | [Evan Wise](https://unsplash.com/@evanthewise?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/i4WbkwwvRj4?utm_source=cohabit&utm_medium=referral) | demo-14, demo-63, demo-67 |
-| e15 | empty | an empty room with a large window | [Point3D Commercial Imaging Ltd.](https://unsplash.com/@3dottawa?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/fbCqpQreg4Q?utm_source=cohabit&utm_medium=referral) | demo-15, demo-100 |
-| b16 | bedroom | a lived-in bedroom with a bed, a desk and a chair | [Aim / @photobypitcha](https://unsplash.com/@aimpitcha?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/jM-dZdFtnbk?utm_source=cohabit&utm_medium=referral) | demo-27, demo-33, demo-89 |
-| b17 | bedroom | a bedroom with a bed, a desk and a window | [Lotus Design N Print](https://unsplash.com/@lotusdnp?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/WDUtNbot6Qw?utm_source=cohabit&utm_medium=referral) | demo-23, demo-42 |
-| b18 | bedroom | a bright room with a desk, a pink chair and window blinds | [JEJOONG LEE](https://unsplash.com/@rfcking?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/KGo29e3zjI0?utm_source=cohabit&utm_medium=referral) | demo-32, demo-69 |
-| h19 | shared | a black metal bunk bed | [Marcus Loke](https://unsplash.com/@marcusloke?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/WQJvWU_HZFo?utm_source=cohabit&utm_medium=referral) | demo-28 |
-| b20 | bedroom | a student room with a desk, chairs and luggage | [Robiul Islam](https://unsplash.com/@connect2robiul?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/mORrLn55f0M?utm_source=cohabit&utm_medium=referral) | demo-49, demo-57, demo-91 |
-| b21 | bedroom | a cozy bed beside a white cabinet | [Shashi Chaturvedula](https://unsplash.com/@thephotographermom?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/xdY1s1I6J8U?utm_source=cohabit&utm_medium=referral) | demo-48, demo-53, demo-95 |
-| b22 | bedroom | a small bedroom with a nightstand by the window | [Daria Shevtsova](https://unsplash.com/@daria_shevtsova?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/RP4mtXJM7es?utm_source=cohabit&utm_medium=referral) | demo-78, demo-80 |
-| k23 | kitchen | a small apartment kitchen | [Y K](https://unsplash.com/@yokeboy?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/bn4Ve3NjQ8g?utm_source=cohabit&utm_medium=referral) | demo-26, demo-36, demo-83 |
-| b24 | bedroom | a bedroom with blue and white sheets and a black bed frame | [CHUTTERSNAP](https://unsplash.com/@chuttersnap?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/ftG8WcHwg7o?utm_source=cohabit&utm_medium=referral) | demo-52, demo-76 |
-| b25 | bedroom | a bedroom with a desk, a globe and a radio | [Ivona Rož](https://unsplash.com/@ivonar?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/qDeMuOXFYXU?utm_source=cohabit&utm_medium=referral) | demo-39, demo-55, demo-75 |
-| h26 | shared | two wooden beds with white mattresses | [yi sk](https://unsplash.com/@bemerrychristmas?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/i7-zqldb2os?utm_source=cohabit&utm_medium=referral) | demo-40, demo-68 |
-| b27 | bedroom | a bedroom with a wooden nightstand | [Clay Banks](https://unsplash.com/@claybanks?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/tstSvl2Z3_0?utm_source=cohabit&utm_medium=referral) | demo-18, demo-79, demo-81 |
-| b28 | bedroom | a bed with white linen | [Sam Moghadam](https://unsplash.com/@sammoghadam?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/eU4kIKCMGk8?utm_source=cohabit&utm_medium=referral) | demo-47, demo-84, demo-93 |
-| e29 | empty | an empty room with grey walls and white doors | [Josh Lemmon](https://unsplash.com/@wolfiex2?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/CYj8RjUeFlY?utm_source=cohabit&utm_medium=referral) | demo-71, demo-82, demo-94 |
-| e30 | empty | an empty room with grey walls and light wood floors | [Josh Lemmon](https://unsplash.com/@wolfiex2?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/y2mAxcgm19s?utm_source=cohabit&utm_medium=referral) | demo-46, demo-92 |
-| b31 | bedroom | a cozy bedroom with a bedside table and a lamp | [Franco Debartolo](https://unsplash.com/@francotheshooter?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/kUd6KkVfbCY?utm_source=cohabit&utm_medium=referral) | demo-22, demo-77, demo-96 |
-| k32 | kitchen | a kitchen with a steel refrigerator | [Naomi Hébert](https://unsplash.com/@naomish?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/MP0bgaS_d1c?utm_source=cohabit&utm_medium=referral) | demo-34, demo-60, demo-72 |
-| k33 | kitchen | a kitchen with white and brown cabinets | [Point3D Commercial Imaging Ltd.](https://unsplash.com/@3dottawa?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/2fJB9gwnA6U?utm_source=cohabit&utm_medium=referral) | demo-50, demo-85 |
-| k34 | kitchen | a white kitchen with a microwave | [Point3D Commercial Imaging Ltd.](https://unsplash.com/@3dottawa?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/0t5erEPTFuk?utm_source=cohabit&utm_medium=referral) | demo-38, demo-61, demo-97 |
-| l35 | living | a living room with a grey sofa and a wooden coffee table | [Francesca Tosolini](https://unsplash.com/@fromitaly?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/DmOhItSo49k?utm_source=cohabit&utm_medium=referral) | demo-16, demo-17, demo-54 |
-| l36 | living | a bright living room | [Francesca Tosolini](https://unsplash.com/@fromitaly?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/6japTIjUQoI?utm_source=cohabit&utm_medium=referral) | demo-31, demo-65, demo-66 |
-| l37 | living | a living room with wooden furniture | [Francesca Tosolini](https://unsplash.com/@fromitaly?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/yYUu4R4Wuwk?utm_source=cohabit&utm_medium=referral) | demo-19, demo-37, demo-41 |
-| b38 | bedroom | a black platform bed with a white mattress | [Sonnie Hiles](https://unsplash.com/@sonniehiles?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/DhFHtkECn7Q?utm_source=cohabit&utm_medium=referral) | demo-70, demo-90 |
+| l14 | living | a shared living room with a sofa and armchairs | [Evan Wise](https://unsplash.com/@evanthewise?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/i4WbkwwvRj4?utm_source=cohabit&utm_medium=referral) | demo-67 |
+| e15 | empty | an empty room with a large window | [Point3D Commercial Imaging Ltd.](https://unsplash.com/@3dottawa?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/fbCqpQreg4Q?utm_source=cohabit&utm_medium=referral) | demo-100 |
+| b16 | bedroom | a lived-in bedroom with a bed, a desk and a chair | [Aim / @photobypitcha](https://unsplash.com/@aimpitcha?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/jM-dZdFtnbk?utm_source=cohabit&utm_medium=referral) | demo-27 |
+| b17 | bedroom | a bedroom with a bed, a desk and a window | [Lotus Design N Print](https://unsplash.com/@lotusdnp?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/WDUtNbot6Qw?utm_source=cohabit&utm_medium=referral) | demo-42 |
+| b18 | bedroom | a bright room with a desk, a pink chair and window blinds | [JEJOONG LEE](https://unsplash.com/@rfcking?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/KGo29e3zjI0?utm_source=cohabit&utm_medium=referral) | demo-69 |
+| h19 | shared | a black metal bunk bed | [Marcus Loke](https://unsplash.com/@marcusloke?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/WQJvWU_HZFo?utm_source=cohabit&utm_medium=referral) |  |
+| b20 | bedroom | a student room with a desk, chairs and luggage | [Robiul Islam](https://unsplash.com/@connect2robiul?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/mORrLn55f0M?utm_source=cohabit&utm_medium=referral) | demo-49 |
+| b21 | bedroom | a cozy bed beside a white cabinet | [Shashi Chaturvedula](https://unsplash.com/@thephotographermom?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/xdY1s1I6J8U?utm_source=cohabit&utm_medium=referral) | demo-53 |
+| b22 | bedroom | a small bedroom with a nightstand by the window | [Daria Shevtsova](https://unsplash.com/@daria_shevtsova?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/RP4mtXJM7es?utm_source=cohabit&utm_medium=referral) | demo-80 |
+| k23 | kitchen | a small apartment kitchen | [Y K](https://unsplash.com/@yokeboy?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/bn4Ve3NjQ8g?utm_source=cohabit&utm_medium=referral) | demo-36 |
+| b24 | bedroom | a bedroom with blue and white sheets and a black bed frame | [CHUTTERSNAP](https://unsplash.com/@chuttersnap?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/ftG8WcHwg7o?utm_source=cohabit&utm_medium=referral) | demo-76 |
+| b25 | bedroom | a bedroom with a desk, a globe and a radio | [Ivona Rož](https://unsplash.com/@ivonar?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/qDeMuOXFYXU?utm_source=cohabit&utm_medium=referral) | demo-75 |
+| h26 | shared | two wooden beds with white mattresses | [yi sk](https://unsplash.com/@bemerrychristmas?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/i7-zqldb2os?utm_source=cohabit&utm_medium=referral) |  |
+| b27 | bedroom | a bedroom with a wooden nightstand | [Clay Banks](https://unsplash.com/@claybanks?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/tstSvl2Z3_0?utm_source=cohabit&utm_medium=referral) | demo-18 |
+| b28 | bedroom | a bed with white linen | [Sam Moghadam](https://unsplash.com/@sammoghadam?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/eU4kIKCMGk8?utm_source=cohabit&utm_medium=referral) | demo-47 |
+| e29 | empty | an empty room with grey walls and white doors | [Josh Lemmon](https://unsplash.com/@wolfiex2?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/CYj8RjUeFlY?utm_source=cohabit&utm_medium=referral) | demo-82 |
+| e30 | empty | an empty room with grey walls and light wood floors | [Josh Lemmon](https://unsplash.com/@wolfiex2?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/y2mAxcgm19s?utm_source=cohabit&utm_medium=referral) | demo-46 |
+| b31 | bedroom | a cozy bedroom with a bedside table and a lamp | [Franco Debartolo](https://unsplash.com/@francotheshooter?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/kUd6KkVfbCY?utm_source=cohabit&utm_medium=referral) | demo-22 |
+| k32 | kitchen | a kitchen with a steel refrigerator | [Naomi Hébert](https://unsplash.com/@naomish?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/MP0bgaS_d1c?utm_source=cohabit&utm_medium=referral) | demo-60 |
+| k33 | kitchen | a kitchen with white and brown cabinets | [Point3D Commercial Imaging Ltd.](https://unsplash.com/@3dottawa?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/2fJB9gwnA6U?utm_source=cohabit&utm_medium=referral) | demo-50 |
+| k34 | kitchen | a white kitchen with a microwave | [Point3D Commercial Imaging Ltd.](https://unsplash.com/@3dottawa?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/0t5erEPTFuk?utm_source=cohabit&utm_medium=referral) | demo-38 |
+| l35 | living | a living room with a grey sofa and a wooden coffee table | [Francesca Tosolini](https://unsplash.com/@fromitaly?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/DmOhItSo49k?utm_source=cohabit&utm_medium=referral) | demo-17 |
+| l36 | living | a bright living room | [Francesca Tosolini](https://unsplash.com/@fromitaly?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/6japTIjUQoI?utm_source=cohabit&utm_medium=referral) | demo-65 |
+| l37 | living | a living room with wooden furniture | [Francesca Tosolini](https://unsplash.com/@fromitaly?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/yYUu4R4Wuwk?utm_source=cohabit&utm_medium=referral) | demo-19 |
+| b38 | bedroom | a black platform bed with a white mattress | [Sonnie Hiles](https://unsplash.com/@sonniehiles?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/DhFHtkECn7Q?utm_source=cohabit&utm_medium=referral) | demo-90 |
 | s39 | studio | a white bed by a white window | [Julia](https://unsplash.com/@beazy?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/ABohRftG_Os?utm_source=cohabit&utm_medium=referral) | demo-44 |
-| s40 | studio | a compact kitchen with a microwave, a mini-fridge and a sink | [Alexander Mass](https://unsplash.com/@alexandermassph?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/Rjnzt2wvMQE?utm_source=cohabit&utm_medium=referral) | demo-24, demo-30 |
-| b41 | bedroom | a small room with a white bed by the window | [Andrea Davis](https://unsplash.com/@andreaedavis?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/NngNVT74o6s?utm_source=cohabit&utm_medium=referral) | demo-59, demo-73 |
+| s40 | studio | a compact kitchen with a microwave, a mini-fridge and a sink | [Alexander Mass](https://unsplash.com/@alexandermassph?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/Rjnzt2wvMQE?utm_source=cohabit&utm_medium=referral) | demo-24 |
+| b41 | bedroom | a small room with a white bed by the window | [Andrea Davis](https://unsplash.com/@andreaedavis?utm_source=cohabit&utm_medium=referral) | [Photo page](https://unsplash.com/photos/NngNVT74o6s?utm_source=cohabit&utm_medium=referral) | demo-73 |
 
 ## Roommate profiles
 
-Fictional seniors and graduate students. Each shown profile has an AI-generated photo of a person who doesn't exist (see
-"Profile photos" below). No contact details, references, verification or testimonials. "Rooms" counts rooms that
-match everything for them; "Roommates" counts visible profiles mutually compatible with them.
+Fictional seniors and graduate students, labeled "Demo profile • Fictional details." No photos (initials, see "Profile
+photos" below), contact details, references, verification or testimonials. "Rooms" counts rooms that match everything
+for them; "Roommates" counts visible profiles mutually compatible with them.
 
 | Id | Name | Program | Looking in | Move-in | Budget | Wants | Lifestyle | Rooms | Roommates | Shown |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| demo-p01 | Ari | PhD student in neuroscience, 2nd year | near Brandeis, Warrendale | Jun 2027 | $950–$1,350 | 12 mo, 1 room, ≤1.5 km | early, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 25 | Yes |
-| demo-p02 | Bea | Incoming master's student in global health | Moody Street, South Side | Jun 2027 | $1,000–$1,450 | 12 mo, 1 room, must: month | early, average tidiness, quiet, guests rarely, no pets, no smoking | 7 | 20 | Yes |
-| demo-p03 | Cam | Senior in music and computer science | Downtown, Moody Street | Jul 2027 | $800–$1,200 | 12 mo, 1 room | flexible sleep, very tidy, some noise, guests sometimes, OK with pets, no smoking | 8 | 41 | Yes |
-| demo-p04 | Dev | MBA student, 1st year | Moody Street, Downtown | Jun 2027 | $1,100–$1,600 | 12 mo, 1 room | night owl, relaxed tidiness, lively, guests often, OK with pets, smoking outside OK | 8 | 17 | Yes |
-| demo-p05 | Eli | Senior in environmental studies | South Side, Moody Street | Jun 2027 | $750–$1,050 | 12 mo, 1 room, must: area | night owl, average tidiness, some noise, guests sometimes, has a pet, no smoking | 3 | 15 | Yes |
-| demo-p06 | Fern | PhD student in chemistry, 3rd year | The Highlands, Prospect Hill | Aug 2027 | $1,100–$1,500 | 12 mo, 1 room | early, very tidy, quiet, guests rarely, OK with pets, no smoking | 8 | 27 | Yes |
-| demo-p07 | Gus | Master's student in sustainable development | Downtown, Moody Street | Jun 2027 | $900–$1,300 | 12 mo, 1 room | night owl, average tidiness, some noise, guests often, OK with pets, smokes | 8 | 8 | Yes |
-| demo-p08 | Hana | Master's student in public policy, 2nd year | near Brandeis, Warrendale | May 2027 | $950–$1,350 | 12 mo, 1 room, must: month | early, very tidy, quiet, guests rarely, no pets, no smoking | 4 | 2 | Yes |
-| demo-p09 | Ira | PhD student in English and teaching assistant | Warrendale, near Brandeis | Jun 2027 | $1,000–$1,400 | 12 mo, 1 room | flexible sleep, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 29 | Yes |
-| demo-p10 | Jules | Senior in economics | Downtown, Moody Street | Sep 2027 | $1,000–$1,400 | 9 mo, 1 room | night owl, average tidiness, lively, guests often, OK with pets, no smoking | 6 | 7 | Yes |
-| demo-p11 | Kai | Senior in computer science | Moody Street, Downtown | Jun 2027 | $800–$1,100 | 12 mo, 1 room | night owl, relaxed tidiness, lively, guests often, OK with pets, smoking outside OK | 7 | 16 | Yes |
+| demo-p01 | Ari | PhD student in neuroscience, 2nd year | near Brandeis, Warrendale | Jun 2027 | $950–$1,350 | 12 mo, 1 room, ≤1.5 km | early, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 15 | Yes |
+| demo-p03 | Cam | Senior in music and computer science | Downtown, Moody Street | Jul 2027 | $800–$1,200 | 12 mo, 1 room | flexible sleep, very tidy, some noise, guests sometimes, OK with pets, no smoking | 7 | 22 | Yes |
+| demo-p04 | Dev | MBA student, 1st year | Moody Street, Downtown | Jun 2027 | $1,100–$1,600 | 12 mo, 1 room | night owl, relaxed tidiness, lively, guests often, OK with pets, smoking outside OK | 8 | 6 | Yes |
+| demo-p06 | Fern | PhD student in chemistry, 3rd year | The Highlands, Prospect Hill | Aug 2027 | $1,100–$1,500 | 12 mo, 1 room | early, very tidy, quiet, guests rarely, OK with pets, no smoking | 5 | 12 | Yes |
+| demo-p09 | Ira | PhD student in English and teaching assistant | Warrendale, near Brandeis | Jun 2027 | $1,000–$1,400 | 12 mo, 1 room | flexible sleep, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 16 | Yes |
+| demo-p10 | Jules | Senior in economics | Downtown, Moody Street | Sep 2027 | $1,000–$1,400 | 9 mo, 1 room | night owl, average tidiness, lively, guests often, OK with pets, no smoking | 3 | 4 | Yes |
+| demo-p11 | Kai | Senior in computer science | Moody Street, Downtown | Jun 2027 | $800–$1,100 | 12 mo, 1 room | night owl, relaxed tidiness, lively, guests often, OK with pets, smoking outside OK | 7 | 6 | Yes |
 | demo-p12 | Lena | PhD student in history, writing a thesis | Prospect Hill, The Highlands | Jan 2027 | $800–$1,100 | 5 mo, 1 room, furnished, must: month | early, very tidy, quiet, guests rarely, no pets, no smoking | 4 | 5 | Yes |
-| demo-p13 | Milo | Incoming PhD student in economics | South Side, Moody Street | Jun 2027 | $1,000–$1,500 | 12 mo, 1 room | early, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 7 | 37 | Yes |
-| demo-p14 | Noor | Incoming master's student in biotechnology | near Brandeis, Warrendale | Aug 2027 | $900–$1,300 | 12 mo, 1 room, furnished | flexible sleep, very tidy, quiet, guests sometimes, no pets, no smoking | 7 | 31 | Yes |
-| demo-p15 | Omar | Master's student in computer science | Downtown, Prospect Hill | Sep 2027 | $1,100–$1,600 | 12 mo, 1 room | early, very tidy, some noise, guests sometimes, OK with pets, no smoking | 6 | 25 | Yes |
-| demo-p16 | Pia | PhD student in biology | near Brandeis, Warrendale | Jun 2027 | $900–$1,400 | 12 mo, 1 room | early, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 26 | No (never shown) |
-| demo-p17 | Quinn | Senior in psychology | Moody Street, South Side | Jun 2027 | $900–$1,300 | 12 mo, 1 room | early, very tidy, quiet, guests rarely, OK with pets, no smoking | 7 | 32 | No (never shown) |
-| demo-p18 | Rosa | Senior in sociology | Lakeview, Prospect Hill | Jun 2027 | $900–$1,250 | 12 mo, 1 room | flexible sleep, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 3 | 34 | Yes |
-| demo-p19 | Sam | Senior in film and media | Moody Street, Downtown | Sep 2027 | $800–$1,200 | 9 mo, 1 room | night owl, average tidiness, lively, guests often, OK with pets, no smoking | 6 | 9 | Yes |
-| demo-p20 | Theo | Master's student in finance | The Highlands, Prospect Hill | Jul 2027 | $1,000–$1,400 | 12 mo, 1 room | early, very tidy, quiet, guests rarely, no pets, no smoking | 6 | 36 | No (never shown) |
-| demo-p21 | Priya | Senior in Hispanic studies | Prospect Hill, Lakeview | Jun 2027 | $850–$1,300 | 12 mo, 1 room, must: area | early, very tidy, quiet, guests rarely, OK with pets, no smoking | 3 | 7 | Yes |
-| demo-p22 | Bilal | PhD student in chemistry, 4th year | Warrendale, near Brandeis | Feb 2027 | $650–$1,250 | 7 mo, 1 room | night owl, very tidy, quiet, guests rarely, OK with pets, no smoking | 4 | 4 | Yes |
-| demo-p23 | Jonah | Incoming master's student in teaching | near Brandeis, Warrendale | Aug 2027 | $750–$1,350 | 12 mo, 1 room, furnished, ≤1.5 km | night owl, relaxed tidiness, lively, guests rarely, OK with pets, no smoking | 7 | 23 | Yes |
-| demo-p24 | Nell | Master's student in Jewish professional leadership | Downtown, South Side | Sep 2027 | $900–$1,500 | 12 mo, 2 rooms, must: month, must: area | flexible sleep, average tidiness, some noise, guests sometimes, no pets, no smoking | 3 | 9 | Yes |
-| demo-p25 | Yusuf | Master's student in international economics and finance | Downtown, Moody Street | Jul 2027 | $700–$1,200 | 12 mo, 1 room, must: area | flexible sleep, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 8 | 19 | Yes |
-| demo-p26 | Selin | Visiting master's student in teaching | within 2 km | Jan 2027 | $600–$1,150 | 5 mo, 1 room, furnished, ≤2 km, must: month | night owl, relaxed tidiness, lively, guests sometimes, OK with pets, no smoking | 7 | 6 | Yes |
-| demo-p27 | Iris | Senior in Hispanic studies | Moody Street, Downtown, South Side | Jul 2027 | $800–$1,250 | 12 mo, 1 room, must: month | flexible sleep, relaxed tidiness, lively, guests often, OK with pets, smoking outside OK | 12 | 11 | Yes |
-| demo-p28 | Uri | Master's student in public policy | near Brandeis, Warrendale | Aug 2027 | $950–$1,300 | 12 mo, 2 rooms, ≤1.5 km | night owl, relaxed tidiness, lively, guests often, no pets, smoking outside OK | 5 | 18 | Yes |
-| demo-p29 | Kenji | Master's student in teaching, 2nd year | within 2 km | Jun 2027 | $800–$1,450 | 12 mo, 1 room, ≤2 km | flexible sleep, very tidy, quiet, guests rarely, OK with pets, no smoking | 21 | 28 | Yes |
-| demo-p30 | Ren | Senior in history | Moody Street, Downtown | Jul 2027 | $900–$1,200 | 12 mo, 1 room, must: area | night owl, very tidy, some noise, guests rarely, OK with pets, no smoking | 8 | 17 | Yes |
-| demo-p31 | Gemma | Master's student in data science | near Brandeis, Warrendale, The Highlands | Dec 2026 | $850–$1,150 | 6 mo, 1 room, furnished, ≤1.5 km | flexible sleep, relaxed tidiness, quiet, guests sometimes, OK with pets, no smoking | 3 | 10 | Yes |
-| demo-p32 | Gabe | Visiting master's student in Jewish professional leadership | near Brandeis, Warrendale | Jan 2027 | $700–$1,150 | 5 mo, 1 room, furnished, must: area | night owl, very tidy, some noise, guests often, OK with pets, no smoking | 5 | 2 | Yes |
-| demo-p33 | Xavier | PhD student in computer science, 3rd year | Lakeview, The Highlands | Sep 2027 | $1,750–$2,050 | 12 mo, 1 room | night owl, relaxed tidiness, quiet, guests sometimes, OK with pets, no smoking | 6 | 2 | Yes |
-| demo-p34 | Cleo | Senior in economics | The Highlands, Prospect Hill | Aug 2027 | $900–$1,550 | 12 mo, 1 room, must: month, must: area | flexible sleep, very tidy, some noise, guests sometimes, no pets, no smoking | 8 | 8 | Yes |
-| demo-p35 | Marisol | Incoming master's student in data science | Warrendale, near Brandeis | Aug 2027 | $1,100–$1,400 | 12 mo, 1 room, furnished, must: area | flexible sleep, very tidy, some noise, guests often, no pets, no smoking | 7 | 18 | Yes |
-| demo-p36 | Isla | PhD student in anthropology, 2nd year | Prospect Hill, The Highlands | Jan 2027 | $950–$1,250 | 5 mo, 1 room, furnished | flexible sleep, average tidiness, quiet, guests sometimes, no pets, no smoking | 4 | 10 | Yes |
-| demo-p37 | Ada | Master's student in genetic counseling, 2nd year | Warrendale, near Brandeis | Aug 2027 | $550–$1,050 | 12 mo, 1 room | early, very tidy, quiet, guests rarely, OK with pets, no smoking | 4 | 22 | Yes |
-| demo-p38 | Clara | Senior in music | Warrendale, near Brandeis | Aug 2027 | $800–$1,100 | 9 mo, 1 room, ≤1.5 km, must: month | flexible sleep, average tidiness, quiet, guests rarely, OK with pets, no smoking | 3 | 2 | Yes |
-| demo-p39 | Pilar | PhD student in anthropology, 4th year | near Brandeis, Warrendale | Jun 2027 | $900–$1,400 | 12 mo, 1 room | flexible sleep, very tidy, lively, guests sometimes, OK with pets, no smoking | 7 | 30 | Yes |
-| demo-p40 | Chiara | Master's student in computational linguistics, 2nd year | within 2 km | Dec 2026 | $950–$1,250 | 6 mo, 1 room, furnished, ≤2 km | flexible sleep, very tidy, quiet, guests rarely, OK with pets, no smoking | 3 | 8 | Yes |
-| demo-p41 | Sami | Master's student in sustainable international development | South Side, Moody Street, Downtown | Jun 2027 | $750–$1,150 | 3 mo, 1 room, furnished, must: month, must: area | flexible sleep, very tidy, lively, guests often, OK with pets, no smoking | 4 | 4 | Yes |
-| demo-p42 | Mina | Master's student in global health policy, 2nd year | Moody Street, Downtown | Jul 2027 | $800–$1,250 | 12 mo, 1 room | early, average tidiness, some noise, guests sometimes, OK with pets, smoking outside OK | 9 | 39 | Yes |
-| demo-p43 | Nadia | PhD student in chemistry, 1st year | South Side, Moody Street | Jun 2027 | $1,050–$1,450 | 12 mo, 2 rooms, must: month, must: area | flexible sleep, relaxed tidiness, lively, guests sometimes, no pets, no smoking | 4 | 13 | Yes |
-| demo-p45 | Rowan | Incoming PhD student in economics | Downtown, Prospect Hill | Sep 2027 | $1,200–$1,550 | 12 mo, 1 room, must: month | early, very tidy, quiet, guests sometimes, no pets, no smoking | 6 | 11 | Yes |
-| demo-p46 | Esther | PhD student in chemistry, 3rd year | Warrendale, near Brandeis | Jun 2027 | $500–$1,150 | 3 mo, 1 room | flexible sleep, very tidy, quiet, guests rarely, OK with pets, no smoking | 3 | 4 | Yes |
-| demo-p47 | Uma | Incoming master's student in teaching | within 2 km | Sep 2027 | $1,050–$1,300 | 12 mo, 1 room, ≤2 km | night owl, average tidiness, some noise, guests often, OK with pets, no smoking | 15 | 17 | Yes |
-| demo-p48 | Rhea | PhD student in biochemistry, 4th year | Downtown, Moody Street | Sep 2027 | $600–$1,200 | 9 mo, 1 room | early, average tidiness, lively, guests sometimes, OK with pets, no smoking | 6 | 9 | Yes |
-| demo-p49 | Petra | Senior in psychology | Downtown, Moody Street | Jul 2027 | $700–$1,300 | 12 mo, 1 room, must: area | night owl, very tidy, some noise, guests often, OK with pets, no smoking | 9 | 20 | Yes |
-| demo-p50 | Bianca | Master's student in computer science, 2nd year | Warrendale, near Brandeis | Dec 2026 | $850–$1,150 | 6 mo, 1 room, furnished, must: area | early, very tidy, quiet, guests rarely, OK with pets, no smoking | 3 | 3 | Yes |
-| demo-p51 | Tamar | Senior in film and media | within 2 km | Dec 2026 | $950–$1,200 | 6 mo, 1 room, furnished, ≤2 km, must: month | night owl, very tidy, quiet, guests often, OK with pets, no smoking | 3 | 5 | Yes |
-| demo-p52 | Alma | Master's student in conflict resolution and coexistence, 2nd year | Warrendale, near Brandeis, The Highlands | Jan 2027 | $650–$1,300 | 5 mo, 1 room, furnished, ≤1.5 km, must: month | flexible sleep, very tidy, lively, guests sometimes, no pets, smoking outside OK | 7 | 8 | Yes |
-| demo-p53 | Keiko | PhD student in biochemistry, 2nd year | The Highlands, Prospect Hill, Warrendale | Aug 2027 | $900–$1,550 | 12 mo, 1 room, must: month, must: area | early, very tidy, quiet, guests sometimes, OK with pets, no smoking | 10 | 21 | Yes |
-| demo-p54 | Zuri | Senior in English | Warrendale, near Brandeis | Sep 2027 | $700–$1,200 | 12 mo, 1 room, ≤1.5 km | night owl, average tidiness, quiet, guests often, OK with pets, no smoking | 11 | 23 | Yes |
-| demo-p55 | Idris | Master's student in biotechnology | Prospect Hill, The Highlands | Aug 2027 | $1,000–$1,500 | 12 mo, 1 room | early, relaxed tidiness, some noise, guests rarely, OK with pets, no smoking | 8 | 29 | Yes |
-| demo-p56 | Yasmin | Master's student in Jewish professional leadership | The Highlands, Prospect Hill | Jul 2027 | $1,100–$1,350 | 12 mo, 1 room, must: month, must: area | early, average tidiness, quiet, guests sometimes, OK with pets, no smoking | 6 | 4 | Yes |
-| demo-p57 | Luka | Master's student in social impact management, 2nd year | South Side, Moody Street | Jun 2027 | $850–$1,450 | 12 mo, 2 rooms, must: area | flexible sleep, very tidy, some noise, guests sometimes, OK with pets, no smoking | 4 | 24 | Yes |
-| demo-p58 | Hugo | Master's student in sustainable international development | near Brandeis, Warrendale | Aug 2027 | $1,000–$1,300 | 12 mo, 1 room, furnished | early, very tidy, lively, guests sometimes, OK with pets, no smoking | 7 | 33 | Yes |
-| demo-p59 | Leila | Senior in chemistry | Downtown, Moody Street, South Side | Sep 2027 | $650–$900 | 9 mo, 1 room, must: area | early, average tidiness, quiet, guests rarely, no pets, no smoking | 3 | 7 | Yes |
-| demo-p60 | Sana | PhD student in philosophy, 4th year | Warrendale, near Brandeis, The Highlands | Jun 2027 | $1,050–$1,450 | 12 mo, 1 room | early, very tidy, quiet, guests often, no pets, no smoking | 8 | 27 | Yes |
-| demo-p61 | Kemal | Senior in theater arts | Moody Street, Downtown | Jun 2027 | $850–$1,200 | 12 mo, 3 rooms | flexible sleep, very tidy, lively, guests sometimes, no pets, no smoking | 4 | 35 | Yes |
-| demo-p62 | Bryn | MBA student, 2nd year | Downtown, Moody Street | Jul 2027 | $1,300–$1,800 | 12 mo, 1 room, must: month, must: area | early, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 12 | 6 | Yes |
-| demo-p63 | Cyrus | Master's student in sustainable international development | Downtown, Moody Street | Jul 2027 | $750–$1,300 | 12 mo, 1 room | flexible sleep, average tidiness, some noise, guests sometimes, has a pet, no smoking | 9 | 36 | Yes |
-| demo-p64 | Amara | Incoming PhD student in philosophy | near Brandeis, Warrendale | Sep 2027 | $650–$1,300 | 12 mo, 1 room, must: area | early, very tidy, some noise, guests sometimes, has a pet, no smoking | 12 | 11 | Yes |
-| demo-p65 | Hedda | PhD student in molecular and cell biology, 2nd year | near Brandeis, Warrendale | Dec 2026 | $600–$1,250 | 6 mo, 1 room, furnished | flexible sleep, relaxed tidiness, some noise, guests sometimes, OK with pets, no smoking | 3 | 12 | Yes |
-| demo-p66 | Victor | PhD student in social policy, 4th year | near Brandeis, Warrendale | Jan 2027 | $800–$1,250 | 5 mo, 1 room, furnished | early, relaxed tidiness, some noise, guests sometimes, no pets, smoking outside OK | 5 | 9 | Yes |
-| demo-p68 | Mariam | Master's student in computer science | within 2 km | Dec 2026 | $650–$1,100 | 6 mo, 1 room, furnished, ≤2 km, must: month | early, very tidy, lively, guests sometimes, no pets, no smoking | 3 | 5 | Yes |
-| demo-p69 | Aditi | Master's student in public policy | South Side, Downtown | Sep 2027 | $1,200–$1,450 | 12 mo, 2 rooms | night owl, average tidiness, lively, guests sometimes, OK with pets, smoking outside OK | 3 | 17 | Yes |
-| demo-p70 | Ivan | Master's student in Jewish professional leadership | Moody Street, South Side | Jun 2027 | $800–$1,150 | 3 mo, 1 room, furnished | early, average tidiness, some noise, guests rarely, OK with pets, smoking outside OK | 4 | 7 | Yes |
-| demo-p71 | Tess | Senior in sociology | Moody Street, Downtown | Jun 2027 | $800–$1,250 | 12 mo, 1 room | night owl, very tidy, lively, guests sometimes, OK with pets, no smoking | 8 | 36 | Yes |
-| demo-p72 | Eamon | MBA student, 1st year | South Side, Downtown | Sep 2027 | $950–$1,500 | 12 mo, 2 rooms, must: month, must: area | early, very tidy, lively, guests sometimes, OK with pets, no smoking | 3 | 10 | Yes |
-| demo-p73 | Adaeze | Senior in East Asian studies | Prospect Hill, Lakeview | Jun 2027 | $700–$1,150 | 12 mo, 1 room, must: month | night owl, very tidy, some noise, guests sometimes, OK with pets, no smoking | 3 | 23 | Yes |
-| demo-p74 | Liam | PhD student in anthropology, 2nd year | The Highlands, Prospect Hill | Jul 2027 | $800–$1,150 | 12 mo, 1 room | flexible sleep, very tidy, some noise, guests often, no pets, no smoking | 4 | 35 | Yes |
-| demo-p75 | Anika | Master's student in international economics and finance | Warrendale, near Brandeis | Aug 2027 | $900–$1,400 | 12 mo, 1 room, furnished, must: month | early, very tidy, some noise, guests sometimes, OK with pets, no smoking | 7 | 20 | Yes |
-| demo-p76 | Zain | Master's student in data science | Moody Street, Downtown | Dec 2026 | $700–$1,300 | 12 mo, 1 room, must: month, must: area | flexible sleep, average tidiness, quiet, guests sometimes, OK with pets, no smoking | 3 | 4 | Yes |
-| demo-p77 | Jade | Senior in African and African American studies | Warrendale, near Brandeis | Feb 2027 | $750–$1,250 | 7 mo, 1 room | flexible sleep, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 4 | 4 | Yes |
-| demo-p78 | Hiro | PhD student in social policy, 2nd year | near Brandeis, Warrendale | Jun 2027 | $1,050–$1,400 | 12 mo, 1 room | early, very tidy, lively, guests sometimes, OK with pets, no smoking | 7 | 27 | Yes |
-| demo-p79 | Ilana | Senior in physics | Moody Street, South Side, Downtown | Jun 2027 | $850–$1,100 | 3 mo, 1 room, furnished | early, very tidy, some noise, guests sometimes, OK with pets, no smoking | 4 | 7 | Yes |
-| demo-p80 | Wren | PhD student in chemistry, 4th year | near Brandeis, Warrendale | Dec 2026 | $1,000–$1,250 | 6 mo, 1 room, furnished, ≤1.5 km, must: month | flexible sleep, very tidy, some noise, guests often, OK with pets, no smoking | 3 | 6 | Yes |
-| demo-p81 | Jasper | PhD student in physics, 6th year | near Brandeis, Warrendale, The Highlands | Feb 2027 | $1,000–$1,250 | 7 mo, 1 room, must: area | flexible sleep, average tidiness, quiet, guests sometimes, no pets, no smoking | 4 | 4 | Yes |
-| demo-p82 | Camila | Master's student in biotechnology | Moody Street, South Side | Jun 2027 | $700–$1,100 | 3 mo, 1 room, furnished, must: month | flexible sleep, relaxed tidiness, lively, guests sometimes, OK with pets, smoking outside OK | 4 | 5 | Yes |
-| demo-p83 | Nia | PhD student in social policy, 1st year | Moody Street, South Side | Jun 2027 | $1,150–$1,400 | 12 mo, 2 rooms, must: area | night owl, average tidiness, lively, guests sometimes, has a pet, no smoking | 4 | 16 | Yes |
-| demo-p84 | Paloma | Master's student in biotechnology, 2nd year | Moody Street, Downtown | Sep 2027 | $600–$950 | 9 mo, 1 room, must: month, must: area | early, very tidy, some noise, guests sometimes, no pets, no smoking | 4 | 7 | Yes |
-| demo-p85 | Owen | Master's student in conflict resolution and coexistence, 2nd year | Prospect Hill, Lakeview | Jun 2027 | $750–$1,150 | 12 mo, 1 room | night owl, relaxed tidiness, some noise, guests often, OK with pets, no smoking | 3 | 20 | Yes |
-| demo-p86 | Elif | Senior in history | near Brandeis, Warrendale | Aug 2027 | $600–$900 | 12 mo, 1 room, must: area | night owl, average tidiness, some noise, guests often, OK with pets, no smoking | 3 | 15 | Yes |
-| demo-p87 | Harper | Master's student in social impact management, 2nd year | near Brandeis, Warrendale | Feb 2027 | $700–$1,250 | 7 mo, 1 room | early, very tidy, quiet, guests rarely, OK with pets, no smoking | 4 | 4 | Yes |
-| demo-p88 | Aurora | Senior in computer science and business | Downtown, Moody Street, South Side | Jun 2027 | $1,100–$1,350 | 12 mo, 3 rooms, must: area | flexible sleep, average tidiness, lively, guests often, no pets, no smoking | 4 | 20 | Yes |
-| demo-p89 | Hannah | Master's student in international economics and finance | Lakeview, The Highlands | Sep 2027 | $1,500–$1,900 | 12 mo, 1 room | flexible sleep, very tidy, quiet, guests rarely, no pets, smoking outside OK | 5 | 6 | Yes |
-| demo-p90 | Farah | Master's student in public policy | Warrendale, near Brandeis | Jun 2027 | $500–$1,050 | 3 mo, 1 room | early, average tidiness, some noise, guests rarely, OK with pets, smoking outside OK | 3 | 5 | Yes |
-| demo-p91 | Dalia | Master's student in sustainable international development, 2nd year | Prospect Hill, The Highlands | Jul 2027 | $600–$1,200 | 12 mo, 1 room | flexible sleep, average tidiness, quiet, guests sometimes, OK with pets, no smoking | 5 | 40 | Yes |
-| demo-p92 | Leo | Senior in business | near Brandeis, Warrendale | Aug 2027 | $750–$1,100 | 12 mo, 1 room, must: area | night owl, relaxed tidiness, some noise, guests sometimes, OK with pets, no smoking | 5 | 17 | Yes |
-| demo-p93 | Fatima | MBA student, 1st year | Downtown, Moody Street | Dec 2026 | $800–$1,300 | 12 mo, 1 room | early, very tidy, quiet, guests sometimes, has a pet, no smoking | 3 | 3 | Yes |
-| demo-p94 | Rafael | Master's student in computer science | Warrendale, near Brandeis, The Highlands | Aug 2027 | $650–$1,250 | 12 mo, 2 rooms, must: area | flexible sleep, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 4 | 33 | Yes |
-| demo-p95 | Valentina | PhD student in structural biology, 5th year | Prospect Hill, The Highlands, Lakeview | Aug 2027 | $1,050–$1,300 | 12 mo, 1 room, must: area | flexible sleep, very tidy, quiet, guests rarely, no pets, no smoking | 7 | 13 | Yes |
-| demo-p96 | Galen | Master's student in Jewish professional leadership | Downtown, Moody Street | Dec 2026 | $850–$1,250 | 12 mo, 1 room, must: month | early, very tidy, some noise, guests rarely, OK with pets, no smoking | 3 | 4 | Yes |
-| demo-p97 | Malik | Senior in mathematics | near Brandeis, Warrendale | Aug 2027 | $750–$1,050 | 12 mo, 1 room, must: month | night owl, average tidiness, lively, guests sometimes, has a pet, no smoking | 4 | 14 | Yes |
-| demo-p98 | Eden | Senior in theater arts | Warrendale, near Brandeis | Aug 2027 | $800–$1,100 | 9 mo, 1 room | flexible sleep, very tidy, some noise, guests often, OK with pets, no smoking | 3 | 6 | Yes |
-| demo-p99 | Basil | Master's student in teaching, 2nd year | South Side, Moody Street | Jun 2027 | $850–$1,300 | 12 mo, 1 room | early, very tidy, some noise, guests rarely, no pets, no smoking | 7 | 31 | Yes |
-| demo-p101 | Dov | PhD student in physics, 5th year | South Side, Downtown | Sep 2027 | $1,250–$1,550 | 12 mo, 2 rooms, must: month | early, very tidy, quiet, guests rarely, OK with pets, no smoking | 3 | 8 | Yes |
-| demo-p102 | Daniela | PhD student in biophysics, 5th year | Warrendale, near Brandeis | Aug 2027 | $950–$1,300 | 12 mo, 1 room, furnished, ≤1.5 km, must: area | early, relaxed tidiness, some noise, guests sometimes, OK with pets, smoking outside OK | 7 | 20 | Yes |
-| demo-p103 | Juno | Master's student in public policy, 2nd year | Warrendale, near Brandeis | Aug 2027 | $950–$1,450 | 12 mo, 2 rooms | flexible sleep, average tidiness, quiet, guests rarely, OK with pets, no smoking | 5 | 36 | Yes |
-| demo-p104 | Rina | Master's student in nonprofit management, 2nd year | Downtown, Moody Street | Jul 2027 | $1,200–$1,850 | 12 mo, 1 room | early, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 12 | 39 | Yes |
-| demo-p105 | Rania | PhD student in philosophy, 6th year | Moody Street, South Side, Downtown | Jun 2027 | $1,200–$1,550 | 12 mo, 2 rooms | flexible sleep, average tidiness, some noise, guests sometimes, OK with pets, smokes | 5 | 6 | Yes |
-| demo-p106 | Kofi | Master's student in global health policy | Prospect Hill, The Highlands | Jan 2027 | $700–$1,100 | 5 mo, 1 room, furnished | flexible sleep, very tidy, some noise, guests rarely, OK with pets, no smoking | 4 | 9 | Yes |
-| demo-p107 | Wen | Incoming PhD student in history | Warrendale, near Brandeis | Aug 2027 | $750–$1,350 | 12 mo, 1 room, furnished, ≤1.5 km | flexible sleep, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 7 | 39 | Yes |
-| demo-p108 | Thea | Master's student in genetic counseling | Prospect Hill, The Highlands | Jan 2027 | $550–$1,200 | 5 mo, 1 room, furnished | flexible sleep, very tidy, quiet, guests sometimes, no pets, no smoking | 4 | 10 | Yes |
-| demo-p109 | Ines | MBA student, 2nd year | Downtown, Moody Street | Jul 2027 | $1,500–$1,800 | 12 mo, 1 room, must: month | early, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 12 | 3 | Yes |
-| demo-p110 | Lina | Senior in film and media | Lakeview, Prospect Hill | Jun 2027 | $700–$1,250 | 12 mo, 1 room, must: area | early, average tidiness, quiet, guests rarely, OK with pets, no smoking | 3 | 6 | Yes |
-| demo-p111 | Diego | Incoming master's student in data science | Warrendale, near Brandeis | Sep 2027 | $750–$1,100 | 12 mo, 1 room, must: area | early, very tidy, some noise, guests often, OK with pets, no smoking | 8 | 14 | Yes |
-| demo-p112 | Gael | Senior in sociology | The Highlands, Prospect Hill, Warrendale | Aug 2027 | $950–$1,450 | 12 mo, 1 room | early, relaxed tidiness, quiet, guests sometimes, OK with pets, no smoking | 10 | 31 | Yes |
-| demo-p113 | Sora | Master's student in business analytics | Moody Street, Downtown | Jul 2027 | $800–$1,200 | 12 mo, 1 room | flexible sleep, very tidy, some noise, guests sometimes, OK with pets, no smoking | 8 | 41 | Yes |
-| demo-p114 | Dami | Master's student in teaching, 2nd year | near Brandeis, Warrendale | Aug 2027 | $800–$1,300 | 12 mo, 1 room, furnished | early, average tidiness, some noise, guests rarely, no pets, no smoking | 7 | 31 | Yes |
-| demo-p115 | Anaya | Senior in music | Moody Street, Downtown | Sep 2027 | $700–$1,350 | 9 mo, 1 room, must: month | early, very tidy, some noise, guests often, no pets, no smoking | 6 | 8 | Yes |
-| demo-p116 | Zev | PhD student in mathematics, 1st year | Downtown, Prospect Hill, The Highlands | Sep 2027 | $950–$1,350 | 12 mo, 1 room | night owl, average tidiness, lively, guests sometimes, no pets, no smoking | 7 | 21 | Yes |
-| demo-p117 | Lars | Master's student in computer science | Warrendale, near Brandeis | Feb 2027 | $600–$1,100 | 7 mo, 1 room | night owl, average tidiness, some noise, guests sometimes, no pets, no smoking | 3 | 4 | Yes |
-| demo-p118 | Vera | Senior in theater arts | near Brandeis, Warrendale | Aug 2027 | $800–$1,100 | 12 mo, 1 room | night owl, average tidiness, some noise, guests sometimes, no pets, smoking outside OK | 5 | 29 | Yes |
-| demo-p119 | Jamal | PhD student in biochemistry, 3rd year | Prospect Hill, The Highlands | Jan 2027 | $550–$1,200 | 5 mo, 1 room, furnished | night owl, relaxed tidiness, some noise, guests sometimes, no pets, no smoking | 4 | 8 | Yes |
-| demo-p120 | Chidi | Senior in computer science | Downtown, Moody Street | Jun 2027 | $550–$1,200 | 12 mo, 1 room, must: month | flexible sleep, average tidiness, some noise, guests sometimes, no pets, no smoking | 7 | 24 | Yes |
-| demo-p121 | Ahmed | Senior in sociology | Moody Street, Downtown | Jun 2027 | $550–$1,150 | 12 mo, 3 rooms | night owl, relaxed tidiness, lively, guests often, OK with pets, smokes | 3 | 3 | Yes |
-| demo-p122 | Maya | PhD student in economics, 2nd year | The Highlands, Prospect Hill, Lakeview | Jul 2027 | $950–$1,350 | 12 mo, 1 room, must: area | flexible sleep, very tidy, some noise, guests sometimes, no pets, no smoking | 7 | 14 | Yes |
-| demo-p123 | Freya | Senior in politics | South Side, Moody Street, Downtown | Jun 2027 | $700–$1,100 | 3 mo, 1 room, furnished, must: area | night owl, very tidy, some noise, guests often, no pets, no smoking | 4 | 3 | Yes |
-| demo-p124 | Cedric | Master's student in global health policy | Downtown, Moody Street | Jul 2027 | $700–$1,300 | 12 mo, 1 room | night owl, very tidy, lively, guests often, OK with pets, no smoking | 9 | 36 | Yes |
-| demo-p125 | Grace | Incoming master's student in genetic counseling | near Brandeis, Warrendale | May 2027 | $700–$1,200 | 12 mo, 1 room | flexible sleep, very tidy, some noise, guests rarely, OK with pets, smoking outside OK | 4 | 17 | Yes |
-| demo-p126 | Noa | Master's student in nonprofit management, 2nd year | Prospect Hill, The Highlands | Jul 2027 | $750–$1,300 | 12 mo, 1 room | night owl, average tidiness, quiet, guests rarely, OK with pets, smoking outside OK | 6 | 29 | Yes |
-| demo-p127 | Enzo | MBA student, 2nd year | Moody Street, Downtown | Dec 2026 | $900–$1,250 | 12 mo, 1 room | flexible sleep, average tidiness, quiet, guests sometimes, OK with pets, no smoking | 3 | 4 | Yes |
-| demo-p128 | Sofia | PhD student in chemistry, 5th year | Downtown, Moody Street | Dec 2026 | $1,050–$1,350 | 12 mo, 1 room | night owl, average tidiness, some noise, guests often, OK with pets, smoking outside OK | 3 | 3 | Yes |
-| demo-p129 | Gia | Master's student in social impact management | Downtown, Moody Street | Sep 2027 | $500–$1,050 | 9 mo, 1 room | flexible sleep, relaxed tidiness, lively, guests often, no pets, no smoking | 5 | 9 | Yes |
-| demo-p130 | Mehmet | PhD student in neuroscience, 6th year | Prospect Hill, The Highlands | Aug 2027 | $800–$1,450 | 12 mo, 1 room, must: month | early, relaxed tidiness, lively, guests sometimes, OK with pets, no smoking | 8 | 20 | Yes |
-| demo-p131 | Carmen | Master's student in social impact management, 2nd year | Prospect Hill, Downtown, Lakeview | Sep 2027 | $750–$1,400 | 12 mo, 1 room, must: month | early, very tidy, some noise, guests often, no pets, smoking outside OK | 7 | 10 | Yes |
-| demo-p132 | Saanvi | Incoming master's student in genetic counseling | Warrendale, near Brandeis | Aug 2027 | $1,150–$1,400 | 12 mo, 1 room, furnished | night owl, relaxed tidiness, lively, guests often, OK with pets, no smoking | 7 | 18 | Yes |
-| demo-p133 | Felix | PhD student in chemistry, 3rd year | Warrendale, near Brandeis | Jun 2027 | $600–$1,200 | 12 mo, 1 room | early, very tidy, some noise, guests rarely, OK with pets, smoking outside OK | 6 | 26 | Yes |
-| demo-p134 | Kiara | PhD student in politics, 1st year | Downtown, South Side | Sep 2027 | $1,100–$1,500 | 12 mo, 2 rooms, must: month | flexible sleep, relaxed tidiness, lively, guests often, has a pet, no smoking | 3 | 6 | Yes |
-| demo-p135 | Darius | Master's student in nonprofit management | Downtown, Moody Street | Jun 2027 | $650–$1,150 | 12 mo, 3 rooms, must: month | early, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 3 | 25 | Yes |
-| demo-p136 | Tal | Master's student in Jewish professional leadership, 2nd year | South Side, Downtown, Moody Street | Sep 2027 | $800–$1,400 | 12 mo, 2 rooms, must: month | night owl, average tidiness, lively, guests often, no pets, no smoking | 3 | 9 | Yes |
-| demo-p137 | Ayumi | Senior in music | Moody Street, Downtown | Jun 2027 | $650–$1,250 | 12 mo, 3 rooms, must: month, must: area | night owl, average tidiness, some noise, guests often, OK with pets, no smoking | 4 | 16 | Yes |
-| demo-p138 | Dana | Senior in business | near Brandeis, Warrendale | Sep 2027 | $1,000–$1,300 | 12 mo, 1 room, must: month, must: area | early, average tidiness, quiet, guests sometimes, OK with pets, smoking outside OK | 12 | 3 | Yes |
-| demo-p139 | Orla | Senior in music | Downtown, Moody Street | Sep 2027 | $750–$1,300 | 9 mo, 1 room, must: month | flexible sleep, average tidiness, lively, guests sometimes, OK with pets, no smoking | 6 | 8 | Yes |
-| demo-p140 | Olu | Senior in film and media | near Brandeis, Warrendale, The Highlands | Jun 2027 | $700–$1,100 | 3 mo, 1 room, ≤1.5 km | night owl, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 3 | 5 | Yes |
-| demo-p141 | Hamza | PhD student in biophysics, 4th year | near Brandeis, Warrendale | Jun 2027 | $850–$1,400 | 12 mo, 1 room, must: month | early, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 17 | Yes |
-| demo-p142 | Anya | Master's student in conflict resolution and coexistence | near Brandeis, Warrendale | Aug 2027 | $500–$1,100 | 12 mo, 1 room | early, relaxed tidiness, lively, guests often, OK with pets, no smoking | 5 | 22 | Yes |
-| demo-p143 | Eun | Master's student in teaching, 2nd year | Moody Street, Downtown | Jul 2027 | $1,450–$1,850 | 12 mo, 1 room | early, average tidiness, quiet, guests sometimes, OK with pets, no smoking | 12 | 11 | Yes |
-| demo-p144 | Sunny | Master's student in business analytics, 2nd year | Downtown, Moody Street | Sep 2027 | $800–$1,150 | 9 mo, 1 room, must: area | flexible sleep, average tidiness, some noise, guests often, OK with pets, no smoking | 6 | 8 | Yes |
-| demo-p145 | Pedro | PhD student in English, 6th year | Lakeview, The Highlands | Sep 2027 | $1,550–$2,000 | 12 mo, 1 room | flexible sleep, average tidiness, some noise, guests rarely, OK with pets, no smoking | 6 | 5 | Yes |
-| demo-p146 | Esme | Senior in mathematics | Moody Street, Downtown, South Side | Jun 2027 | $700–$1,250 | 12 mo, 1 room | night owl, average tidiness, lively, guests often, has a pet, no smoking | 11 | 26 | Yes |
-| demo-p147 | Mira | PhD student in molecular and cell biology, 4th year | near Brandeis, Warrendale, The Highlands | Aug 2027 | $800–$1,450 | 12 mo, 2 rooms | flexible sleep, very tidy, lively, guests often, no pets, no smoking | 5 | 34 | Yes |
-| demo-p148 | Mateo | Master's student in business analytics | Prospect Hill, Downtown | Sep 2027 | $900–$1,500 | 12 mo, 1 room, must: area | flexible sleep, very tidy, some noise, guests often, OK with pets, no smoking | 6 | 12 | Yes |
-| demo-p149 | Naomi | PhD student in philosophy, 6th year | Warrendale, near Brandeis | May 2027 | $1,000–$1,400 | 12 mo, 1 room, ≤1.5 km, must: month, must: area | flexible sleep, very tidy, quiet, guests sometimes, OK with pets, no smoking | 4 | 2 | Yes |
-| demo-p150 | Femi | Senior in mathematics | Warrendale, near Brandeis, The Highlands | Aug 2027 | $850–$1,200 | 9 mo, 1 room, must: month, must: area | night owl, relaxed tidiness, some noise, guests sometimes, OK with pets, no smoking | 3 | 2 | Yes |
-| demo-p151 | Tariq | Master's student in social impact management | South Side, Moody Street | Jun 2027 | $1,000–$1,300 | 12 mo, 1 room | early, average tidiness, some noise, guests sometimes, no pets, no smoking | 7 | 32 | Yes |
+| demo-p13 | Milo | Incoming PhD student in economics | South Side, Moody Street | Jun 2027 | $1,000–$1,500 | 12 mo, 1 room | early, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 5 | 18 | Yes |
+| demo-p14 | Noor | Incoming master's student in biotechnology | near Brandeis, Warrendale | Aug 2027 | $900–$1,300 | 12 mo, 1 room, furnished | flexible sleep, very tidy, quiet, guests sometimes, no pets, no smoking | 4 | 13 | Yes |
+| demo-p15 | Omar | Master's student in computer science | Downtown, Prospect Hill | Sep 2027 | $1,100–$1,600 | 12 mo, 1 room | early, very tidy, some noise, guests sometimes, OK with pets, no smoking | 4 | 11 | Yes |
+| demo-p16 | Pia | PhD student in biology | near Brandeis, Warrendale | Jun 2027 | $900–$1,400 | 12 mo, 1 room | early, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 16 | No (never shown) |
+| demo-p17 | Quinn | Senior in psychology | Moody Street, South Side | Jun 2027 | $900–$1,300 | 12 mo, 1 room | early, very tidy, quiet, guests rarely, OK with pets, no smoking | 5 | 18 | No (never shown) |
+| demo-p19 | Sam | Senior in film and media | Moody Street, Downtown | Sep 2027 | $800–$1,200 | 9 mo, 1 room | night owl, average tidiness, lively, guests often, OK with pets, no smoking | 3 | 4 | Yes |
+| demo-p20 | Theo | Master's student in finance | The Highlands, Prospect Hill | Jul 2027 | $1,000–$1,400 | 12 mo, 1 room | early, very tidy, quiet, guests rarely, no pets, no smoking | 1 | 19 | No (never shown) |
+| demo-p26 | Selin | Visiting master's student in teaching | within 2 km | Jan 2027 | $600–$1,150 | 5 mo, 1 room, furnished, ≤2 km, must: month | night owl, relaxed tidiness, lively, guests sometimes, OK with pets, no smoking | 6 | 6 | Yes |
+| demo-p29 | Kenji | Master's student in teaching, 2nd year | within 2 km | Jun 2027 | $800–$1,450 | 12 mo, 1 room, ≤2 km | flexible sleep, very tidy, quiet, guests rarely, OK with pets, no smoking | 16 | 16 | Yes |
+| demo-p30 | Ren | Senior in history | Moody Street, Downtown | Jul 2027 | $900–$1,200 | 12 mo, 1 room, must: area | night owl, very tidy, some noise, guests rarely, OK with pets, no smoking | 7 | 10 | Yes |
+| demo-p36 | Isla | PhD student in anthropology, 2nd year | Prospect Hill, The Highlands | Jan 2027 | $950–$1,250 | 5 mo, 1 room, furnished | flexible sleep, average tidiness, quiet, guests sometimes, no pets, no smoking | 4 | 7 | Yes |
+| demo-p39 | Pilar | PhD student in anthropology, 4th year | near Brandeis, Warrendale | Jun 2027 | $900–$1,400 | 12 mo, 1 room | flexible sleep, very tidy, lively, guests sometimes, OK with pets, no smoking | 7 | 18 | Yes |
+| demo-p47 | Uma | Incoming master's student in teaching | within 2 km | Sep 2027 | $1,050–$1,300 | 12 mo, 1 room, ≤2 km | night owl, average tidiness, some noise, guests often, OK with pets, no smoking | 7 | 7 | Yes |
+| demo-p48 | Rhea | PhD student in biochemistry, 4th year | Downtown, Moody Street | Sep 2027 | $600–$1,200 | 9 mo, 1 room | early, average tidiness, lively, guests sometimes, OK with pets, no smoking | 3 | 4 | Yes |
+| demo-p49 | Petra | Senior in psychology | Downtown, Moody Street | Jul 2027 | $700–$1,300 | 12 mo, 1 room, must: area | night owl, very tidy, some noise, guests often, OK with pets, no smoking | 8 | 11 | Yes |
+| demo-p52 | Alma | Master's student in conflict resolution and coexistence, 2nd year | Warrendale, near Brandeis, The Highlands | Jan 2027 | $650–$1,300 | 5 mo, 1 room, furnished, ≤1.5 km, must: month | flexible sleep, very tidy, lively, guests sometimes, no pets, smoking outside OK | 6 | 7 | Yes |
+| demo-p53 | Keiko | PhD student in biochemistry, 2nd year | The Highlands, Prospect Hill, Warrendale | Aug 2027 | $900–$1,550 | 12 mo, 1 room, must: month, must: area | early, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 8 | Yes |
+| demo-p54 | Zuri | Senior in English | Warrendale, near Brandeis | Sep 2027 | $700–$1,200 | 12 mo, 1 room, ≤1.5 km | night owl, average tidiness, quiet, guests often, OK with pets, no smoking | 5 | 7 | Yes |
+| demo-p55 | Idris | Master's student in biotechnology | Prospect Hill, The Highlands | Aug 2027 | $1,000–$1,500 | 12 mo, 1 room | early, relaxed tidiness, some noise, guests rarely, OK with pets, no smoking | 5 | 12 | Yes |
+| demo-p57 | Luka | Master's student in social impact management, 2nd year | South Side, Moody Street | Jun 2027 | $850–$1,450 | 12 mo, 2 rooms, must: area | flexible sleep, very tidy, some noise, guests sometimes, OK with pets, no smoking | 3 | 12 | Yes |
+| demo-p60 | Sana | PhD student in philosophy, 4th year | Warrendale, near Brandeis, The Highlands | Jun 2027 | $1,050–$1,450 | 12 mo, 1 room | early, very tidy, quiet, guests often, no pets, no smoking | 7 | 15 | Yes |
+| demo-p61 | Kemal | Senior in theater arts | Moody Street, Downtown | Jun 2027 | $850–$1,200 | 12 mo, 3 rooms | flexible sleep, very tidy, lively, guests sometimes, no pets, no smoking | 3 | 20 | Yes |
+| demo-p62 | Bryn | MBA student, 2nd year | Downtown, Moody Street | Jul 2027 | $1,300–$1,800 | 12 mo, 1 room, must: month, must: area | early, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 11 | 3 | Yes |
+| demo-p63 | Cyrus | Master's student in sustainable international development | Downtown, Moody Street | Jul 2027 | $750–$1,300 | 12 mo, 1 room | flexible sleep, average tidiness, some noise, guests sometimes, has a pet, no smoking | 8 | 17 | Yes |
+| demo-p66 | Victor | PhD student in social policy, 4th year | near Brandeis, Warrendale | Jan 2027 | $800–$1,250 | 5 mo, 1 room, furnished | early, relaxed tidiness, some noise, guests sometimes, no pets, smoking outside OK | 4 | 7 | Yes |
+| demo-p71 | Tess | Senior in sociology | Moody Street, Downtown | Jun 2027 | $800–$1,250 | 12 mo, 1 room | night owl, very tidy, lively, guests sometimes, OK with pets, no smoking | 8 | 21 | Yes |
+| demo-p78 | Hiro | PhD student in social policy, 2nd year | near Brandeis, Warrendale | Jun 2027 | $1,050–$1,400 | 12 mo, 1 room | early, very tidy, lively, guests sometimes, OK with pets, no smoking | 7 | 16 | Yes |
+| demo-p94 | Rafael | Master's student in computer science | Warrendale, near Brandeis, The Highlands | Aug 2027 | $650–$1,250 | 12 mo, 2 rooms, must: area | flexible sleep, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 3 | 9 | Yes |
+| demo-p95 | Valentina | PhD student in structural biology, 5th year | Prospect Hill, The Highlands, Lakeview | Aug 2027 | $1,050–$1,300 | 12 mo, 1 room, must: area | flexible sleep, very tidy, quiet, guests rarely, no pets, no smoking | 4 | 6 | Yes |
+| demo-p106 | Kofi | Master's student in global health policy | Prospect Hill, The Highlands | Jan 2027 | $700–$1,100 | 5 mo, 1 room, furnished | flexible sleep, very tidy, some noise, guests rarely, OK with pets, no smoking | 4 | 7 | Yes |
+| demo-p107 | Wen | Incoming PhD student in history | Warrendale, near Brandeis | Aug 2027 | $750–$1,350 | 12 mo, 1 room, furnished, ≤1.5 km | flexible sleep, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 4 | 14 | Yes |
+| demo-p108 | Thea | Master's student in genetic counseling | Prospect Hill, The Highlands | Jan 2027 | $550–$1,200 | 5 mo, 1 room, furnished | flexible sleep, very tidy, quiet, guests sometimes, no pets, no smoking | 4 | 7 | Yes |
+| demo-p113 | Sora | Master's student in business analytics | Moody Street, Downtown | Jul 2027 | $800–$1,200 | 12 mo, 1 room | flexible sleep, very tidy, some noise, guests sometimes, OK with pets, no smoking | 7 | 22 | Yes |
+| demo-p114 | Dami | Master's student in teaching, 2nd year | near Brandeis, Warrendale | Aug 2027 | $800–$1,300 | 12 mo, 1 room, furnished | early, average tidiness, some noise, guests rarely, no pets, no smoking | 4 | 11 | Yes |
+| demo-p118 | Vera | Senior in theater arts | near Brandeis, Warrendale | Aug 2027 | $800–$1,100 | 12 mo, 1 room | night owl, average tidiness, some noise, guests sometimes, no pets, smoking outside OK | 3 | 12 | Yes |
+| demo-p119 | Jamal | PhD student in biochemistry, 3rd year | Prospect Hill, The Highlands | Jan 2027 | $550–$1,200 | 5 mo, 1 room, furnished | night owl, relaxed tidiness, some noise, guests sometimes, no pets, no smoking | 4 | 6 | Yes |
+| demo-p120 | Chidi | Senior in computer science | Downtown, Moody Street | Jun 2027 | $550–$1,200 | 12 mo, 1 room, must: month | flexible sleep, average tidiness, some noise, guests sometimes, no pets, no smoking | 7 | 15 | Yes |
+| demo-p124 | Cedric | Master's student in global health policy | Downtown, Moody Street | Jul 2027 | $700–$1,300 | 12 mo, 1 room | night owl, very tidy, lively, guests often, OK with pets, no smoking | 8 | 19 | Yes |
+| demo-p131 | Carmen | Master's student in social impact management, 2nd year | Prospect Hill, Downtown, Lakeview | Sep 2027 | $750–$1,400 | 12 mo, 1 room, must: month | early, very tidy, some noise, guests often, no pets, smoking outside OK | 4 | 4 | Yes |
+| demo-p135 | Darius | Master's student in nonprofit management | Downtown, Moody Street | Jun 2027 | $650–$1,150 | 12 mo, 3 rooms, must: month | early, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 3 | 13 | Yes |
+| demo-p139 | Orla | Senior in music | Downtown, Moody Street | Sep 2027 | $750–$1,300 | 9 mo, 1 room, must: month | flexible sleep, average tidiness, lively, guests sometimes, OK with pets, no smoking | 3 | 4 | Yes |
+| demo-p141 | Hamza | PhD student in biophysics, 4th year | near Brandeis, Warrendale | Jun 2027 | $850–$1,400 | 12 mo, 1 room, must: month | early, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 12 | Yes |
+| demo-p144 | Sunny | Master's student in business analytics, 2nd year | Downtown, Moody Street | Sep 2027 | $800–$1,150 | 9 mo, 1 room, must: area | flexible sleep, average tidiness, some noise, guests often, OK with pets, no smoking | 3 | 4 | Yes |
+| demo-p148 | Mateo | Master's student in business analytics | Prospect Hill, Downtown | Sep 2027 | $900–$1,500 | 12 mo, 1 room, must: area | flexible sleep, very tidy, some noise, guests often, OK with pets, no smoking | 4 | 4 | Yes |
+| demo-p151 | Tariq | Master's student in social impact management | South Side, Moody Street | Jun 2027 | $1,000–$1,300 | 12 mo, 1 room | early, average tidiness, some noise, guests sometimes, no pets, no smoking | 5 | 17 | Yes |
 
-## Profile photos (AI-generated)
+## Profile photos
 
-Each of the 145 shown profiles has one realistic AI-generated portrait of a person who doesn't exist,
-`public/demo-faces/<id>.webp` (640 x 640), the same on every screen: cards, profile details, Vibe and Saved. They are
-served from coHabit's own site; if one can't load, the profile's initials show instead. Every card says "Demo ·
-AI-generated photo", and the profile says the photo is AI-generated and the person doesn't exist, with links to the
-model and its license.
+None. Demo profiles show their initials, like real renters (coHabit has no profile photo upload, and real accounts never
+get a generated or stock photo). There are no AI-generated images of people and no stock photos of people.
 
-- **How they were made (2026-11-14).** With FLUX.1 [schnell] by Black Forest Labs (`@cf/black-forest-labs/flux-1-schnell`)
-  on Cloudflare Workers AI, through a throwaway local Worker run with `wrangler dev` (never deployed), inside the free
-  daily allowance (10,000 neurons a day; the account is on the Workers Free plan, which refuses extra use rather than
-  billing it), so they cost nothing. The 1024 px results were cropped by 2.4% on each side (FLUX sometimes draws a
-  thin edge) and saved as WebP.
-- **License.** FLUX.1 [schnell] is released under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0),
-  which allows using its outputs freely, including commercially; its out-of-scope uses (illegal use, harming minors,
-  false information meant to harm, harassment) don't apply. Cloudflare's [terms](https://www.cloudflare.com/policies/terms/)
-  cover the service. Stock portraits (Pexels, Unsplash) weren't used: the people in them never agreed to appear as
-  roommate profiles, and Unsplash's Terms exclude recognizable people.
-- **Casting.** The prompts ask for a natural, casual photo of an adult in their twenties (early twenties for seniors,
-  mid for master's students, late for PhD students), from a mixed cast assigned in turn, not from the names. Women or
-  men follow how each first name is commonly used; names used either way alternate. Matching never sees names, photos
-  or anything about gender.
-- **Real accounts** never get a generated or stock photo. coHabit has no profile photo upload, so real renters show
-  their initials.
+From 2026-11-15 to 2026-11-16 the shown profiles had AI-generated portraits (FLUX.1 [schnell] on Cloudflare Workers AI,
+Apache License 2.0). They were taken off with the owner's approval; the files are kept, not served, in
+`archive/demo-faces/` (see `archive/README.md`).
 
-| Profile | Name | Prompt |
+## Archived records
+
+Archived on 2026-11-16: left out of Demo mode everywhere (Listings, Roommates, My matches, Vibe, the assistant, Details,
+counts) but kept in the data files. A bookmark to one shows "no longer available"; the database row isn't touched. To
+restore one, delete its line from `ARCHIVED_LISTINGS` or `ARCHIVED_PEOPLE` in `src/assistant/demo-data.js`.
+
+| Id | Name | Why archived |
 | --- | --- | --- |
-| demo-p01 | Ari | Candid natural-light portrait photograph of a East Asian woman in their late twenties with shoulder-length wavy hair, a friendly closed-mouth smile, wearing a knit sweater, in a sunny park. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p02 | Bea | Candid natural-light portrait photograph of a Black woman in their mid twenties with hair tied back in a ponytail, a soft laugh, wearing a black turtleneck, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p03 | Cam | Candid natural-light portrait photograph of a South Asian man in their early twenties with wavy medium-length hair, a big genuine smile, wearing a simple button-up shirt, on a quiet residential street. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p04 | Dev | Candid natural-light portrait photograph of a white man in their mid twenties with shoulder-length hair, a warm smile, wearing a corduroy jacket, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p05 | Eli | Candid natural-light portrait photograph of a Latino man in their early twenties with light stubble and short hair, a calm, friendly expression, wearing a plain white t-shirt, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p06 | Fern | Candid natural-light portrait photograph of a Middle Eastern woman in their late twenties with a short bob, wearing glasses, a relaxed smile, wearing a black turtleneck, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p07 | Gus | Candid natural-light portrait photograph of a Southeast Asian man in their mid twenties with a fade haircut, a friendly closed-mouth smile, wearing a flannel shirt, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p08 | Hana | Candid natural-light portrait photograph of a white woman in their mid twenties with short curly hair, wearing glasses, a relaxed smile, wearing a simple button-up shirt, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p09 | Ira | Candid natural-light portrait photograph of a Black woman in their late twenties with shoulder-length wavy hair, wearing a hijab, a relaxed smile, wearing a simple button-up shirt, on a city sidewalk. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p10 | Jules | Candid natural-light portrait photograph of a mixed-race man in their early twenties with shoulder-length hair, a calm, friendly expression, wearing a plain white t-shirt, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p11 | Kai | Candid natural-light portrait photograph of a East Asian woman in their early twenties with long auburn hair, a calm, friendly expression, wearing a plain white t-shirt, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p12 | Lena | Candid natural-light portrait photograph of a Latina woman in their late twenties with long straight dark hair, a friendly closed-mouth smile, wearing a denim jacket, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p13 | Milo | Candid natural-light portrait photograph of a white man in their late twenties with messy brown hair, wearing glasses, a soft laugh, wearing a black turtleneck, on a quiet residential street. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p14 | Noor | Candid natural-light portrait photograph of a South Asian woman in their mid twenties with long auburn hair, wearing a hijab, a big genuine smile, wearing a black turtleneck, on a city sidewalk. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p15 | Omar | Candid natural-light portrait photograph of a East Asian man in their mid twenties with a buzz cut, a friendly closed-mouth smile, wearing a striped t-shirt, in a sunny park. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p18 | Rosa | Candid natural-light portrait photograph of a Black woman in their early twenties with long auburn hair, a soft laugh, wearing a simple button-up shirt, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p19 | Sam | Candid natural-light portrait photograph of a South Asian man in their early twenties with curly hair, wearing glasses, a soft laugh, wearing a denim jacket, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p21 | Priya | Candid natural-light portrait photograph of a white woman in their early twenties with a pixie cut, a friendly closed-mouth smile, wearing a corduroy jacket, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p22 | Bilal | Candid natural-light portrait photograph of a Latino man in their late twenties with short dark hair, a big genuine smile, wearing a striped t-shirt, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p23 | Jonah | Candid natural-light portrait photograph of a Middle Eastern man in their mid twenties with neatly styled hair, a relaxed smile, wearing a denim jacket, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p24 | Nell | Candid natural-light portrait photograph of a Southeast Asian woman in their mid twenties with long straight dark hair, a friendly closed-mouth smile, wearing a light cardigan, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p25 | Yusuf | Candid natural-light portrait photograph of a white man in their mid twenties with shoulder-length hair, wearing glasses, a relaxed smile, wearing a navy crewneck sweatshirt, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p26 | Selin | Candid natural-light portrait photograph of a Black woman in their mid twenties with hair in a loose bun, wearing a hijab, a big genuine smile, wearing a grey hoodie, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p27 | Iris | Candid natural-light portrait photograph of a mixed-race woman in their early twenties with long blonde hair, a calm, friendly expression, wearing a light cardigan, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p28 | Uri | Candid natural-light portrait photograph of a East Asian man in their mid twenties with wavy medium-length hair, a relaxed smile, wearing a simple button-up shirt, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p29 | Kenji | Candid natural-light portrait photograph of a Latino man in their mid twenties with messy brown hair, a relaxed smile, wearing a simple button-up shirt, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p30 | Ren | Candid natural-light portrait photograph of a white woman in their early twenties with hair in a loose bun, a big genuine smile, wearing a light cardigan, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p31 | Gemma | Candid natural-light portrait photograph of a South Asian woman in their mid twenties with hair tied back in a ponytail, a relaxed smile, wearing a grey hoodie, on a quiet residential street. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p32 | Gabe | Candid natural-light portrait photograph of a East Asian man in their mid twenties with short dark hair, wearing glasses, a calm, friendly expression, wearing an olive utility jacket, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p33 | Xavier | Candid natural-light portrait photograph of a Black man in their late twenties with short dark hair, wearing glasses, a relaxed smile, wearing an olive utility jacket, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p34 | Cleo | Candid natural-light portrait photograph of a South Asian woman in their early twenties with long blonde hair, wearing glasses, a relaxed smile, wearing a denim jacket, on a quiet residential street. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p35 | Marisol | Candid natural-light portrait photograph of a white woman in their mid twenties with long straight dark hair, a calm, friendly expression, wearing a corduroy jacket, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p36 | Isla | Candid natural-light portrait photograph of a Latina woman in their late twenties with shoulder-length wavy hair, a soft laugh, wearing a flannel shirt, on a city sidewalk. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p37 | Ada | Candid natural-light portrait photograph of a Middle Eastern woman in their mid twenties with a pixie cut, wearing glasses, a warm smile, wearing a striped t-shirt, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p38 | Clara | Candid natural-light portrait photograph of a Southeast Asian woman in their early twenties with a short bob, a relaxed smile, wearing an olive utility jacket, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p39 | Pilar | Candid natural-light portrait photograph of a white woman in their late twenties with long blonde hair, a friendly closed-mouth smile, wearing a light cardigan, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p40 | Chiara | Candid natural-light portrait photograph of a Black woman in their mid twenties with hair in a loose bun, wearing glasses, a soft laugh, wearing a navy crewneck sweatshirt, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p41 | Sami | Candid natural-light portrait photograph of a mixed-race man in their mid twenties with light stubble and short hair, wearing glasses, a big genuine smile, wearing a striped t-shirt, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p42 | Mina | Candid natural-light portrait photograph of a East Asian woman in their mid twenties with natural coily hair, a soft laugh, wearing a flannel shirt, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p43 | Nadia | Candid natural-light portrait photograph of a Latina woman in their late twenties with a short bob, a relaxed smile, wearing a black turtleneck, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p45 | Rowan | Candid natural-light portrait photograph of a South Asian woman in their late twenties with shoulder-length wavy hair, a friendly closed-mouth smile, wearing a navy crewneck sweatshirt, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p46 | Esther | Candid natural-light portrait photograph of a East Asian woman in their late twenties with hair in a loose bun, a big genuine smile, wearing a black turtleneck, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p47 | Uma | Candid natural-light portrait photograph of a Black woman in their mid twenties with hair tied back in a ponytail, a friendly closed-mouth smile, wearing a light cardigan, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p48 | Rhea | Candid natural-light portrait photograph of a South Asian woman in their late twenties with hair in a loose bun, a friendly closed-mouth smile, wearing a flannel shirt, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p49 | Petra | Candid natural-light portrait photograph of a white woman in their early twenties with natural coily hair, a friendly closed-mouth smile, wearing a corduroy jacket, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p50 | Bianca | Candid natural-light portrait photograph of a Latina woman in their mid twenties with a pixie cut, wearing a hijab, a calm, friendly expression, wearing a striped t-shirt, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p51 | Tamar | Candid natural-light portrait photograph of a Middle Eastern woman in their early twenties with long blonde hair, wearing glasses, a big genuine smile, wearing a simple button-up shirt, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p52 | Alma | Candid natural-light portrait photograph of a Southeast Asian woman in their mid twenties with box braids, a soft laugh, wearing a navy crewneck sweatshirt, in a sunny park. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p53 | Keiko | Candid natural-light portrait photograph of a white woman in their late twenties with box braids, a relaxed smile, wearing an olive utility jacket, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p54 | Zuri | Candid natural-light portrait photograph of a Black woman in their early twenties with natural coily hair, a big genuine smile, wearing a corduroy jacket, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p55 | Idris | Candid natural-light portrait photograph of a mixed-race man in their mid twenties with a fade haircut, a friendly closed-mouth smile, wearing a plain white t-shirt, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p56 | Yasmin | Candid natural-light portrait photograph of a East Asian woman in their mid twenties with a pixie cut, a soft laugh, wearing an olive utility jacket, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p57 | Luka | Candid natural-light portrait photograph of a Latino man in their mid twenties with short dark hair, a relaxed smile, wearing a plain white t-shirt, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p58 | Hugo | Candid natural-light portrait photograph of a white man in their mid twenties with neatly styled hair, a friendly closed-mouth smile, wearing a black turtleneck, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p59 | Leila | Candid natural-light portrait photograph of a South Asian woman in their early twenties with hair tied back in a ponytail, wearing glasses, a friendly closed-mouth smile, wearing a corduroy jacket, in a sunny park. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p60 | Sana | Candid natural-light portrait photograph of a East Asian woman in their late twenties with shoulder-length wavy hair, a calm, friendly expression, wearing a flannel shirt, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p61 | Kemal | Candid natural-light portrait photograph of a Black man in their early twenties with a fade haircut, a calm, friendly expression, wearing a knit sweater, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p62 | Bryn | Candid natural-light portrait photograph of a South Asian woman in their mid twenties with a short bob, a calm, friendly expression, wearing a corduroy jacket, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p63 | Cyrus | Candid natural-light portrait photograph of a white man in their mid twenties with neatly styled hair, a big genuine smile, wearing a grey hoodie, in a sunny park. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p64 | Amara | Candid natural-light portrait photograph of a Latina woman in their late twenties with a short bob, wearing glasses, a big genuine smile, wearing a knit sweater, in a sunny park. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p65 | Hedda | Candid natural-light portrait photograph of a Middle Eastern woman in their late twenties with short curly hair, wearing glasses, a big genuine smile, wearing a grey hoodie, on a quiet residential street. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p66 | Victor | Candid natural-light portrait photograph of a Southeast Asian man in their late twenties with short blond hair, a big genuine smile, wearing an olive utility jacket, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p68 | Mariam | Candid natural-light portrait photograph of a Black woman in their mid twenties with a pixie cut, wearing glasses, a big genuine smile, wearing an olive utility jacket, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p69 | Aditi | Candid natural-light portrait photograph of a mixed-race woman in their mid twenties with short curly hair, a relaxed smile, wearing a light cardigan, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p70 | Ivan | Candid natural-light portrait photograph of a East Asian man in their mid twenties with wavy medium-length hair, a relaxed smile, wearing a knit sweater, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p71 | Tess | Candid natural-light portrait photograph of a Latina woman in their early twenties with curly hair, wearing glasses, a calm, friendly expression, wearing a light cardigan, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p72 | Eamon | Candid natural-light portrait photograph of a white man in their mid twenties with short locs, wearing glasses, a relaxed smile, wearing a plain white t-shirt, in a sunny park. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p73 | Adaeze | Candid natural-light portrait photograph of a South Asian woman in their early twenties with hair in a loose bun, a warm smile, wearing a plain white t-shirt, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p74 | Liam | Candid natural-light portrait photograph of a East Asian man in their late twenties with a short beard and short hair, a relaxed smile, wearing a denim jacket, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p75 | Anika | Candid natural-light portrait photograph of a Black woman in their mid twenties with a pixie cut, a friendly closed-mouth smile, wearing a black turtleneck, on a city sidewalk. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p76 | Zain | Candid natural-light portrait photograph of a South Asian man in their mid twenties with short blond hair, wearing glasses, a relaxed smile, wearing a striped t-shirt, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p77 | Jade | Candid natural-light portrait photograph of a white woman in their early twenties with hair tied back in a ponytail, wearing glasses, a big genuine smile, wearing a black turtleneck, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p78 | Hiro | Candid natural-light portrait photograph of a Latino man in their late twenties with short locs, a soft laugh, wearing a navy crewneck sweatshirt, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p79 | Ilana | Candid natural-light portrait photograph of a Middle Eastern woman in their early twenties with long auburn hair, a warm smile, wearing a striped t-shirt, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p80 | Wren | Candid natural-light portrait photograph of a Southeast Asian man in their late twenties with curly hair, a big genuine smile, wearing a light cardigan, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p81 | Jasper | Candid natural-light portrait photograph of a white man in their late twenties with short blond hair, wearing glasses, a soft laugh, wearing a striped t-shirt, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p82 | Camila | Candid natural-light portrait photograph of a Black woman in their mid twenties with a pixie cut, a soft laugh, wearing a grey hoodie, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p83 | Nia | Candid natural-light portrait photograph of a mixed-race woman in their late twenties with box braids, a soft laugh, wearing a corduroy jacket, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p84 | Paloma | Candid natural-light portrait photograph of a East Asian woman in their mid twenties with box braids, a calm, friendly expression, wearing a corduroy jacket, on a city sidewalk. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p85 | Owen | Candid natural-light portrait photograph of a Latino man in their mid twenties with a fade haircut, a friendly closed-mouth smile, wearing a flannel shirt, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p86 | Elif | Candid natural-light portrait photograph of a white woman in their early twenties with long blonde hair, a warm smile, wearing a flannel shirt, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p87 | Harper | Candid natural-light portrait photograph of a South Asian woman in their mid twenties with a pixie cut, a friendly closed-mouth smile, wearing a striped t-shirt, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p88 | Aurora | Candid natural-light portrait photograph of a East Asian woman in their early twenties with long auburn hair, a soft laugh, wearing an olive utility jacket, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p89 | Hannah | Candid natural-light portrait photograph of a Black woman in their mid twenties with hair tied back in a ponytail, a friendly closed-mouth smile, wearing a corduroy jacket, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p90 | Farah | Candid natural-light portrait photograph of a South Asian woman in their mid twenties with long straight dark hair, a soft laugh, wearing a grey hoodie, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p91 | Dalia | Candid natural-light portrait photograph of a white woman in their mid twenties with hair in a loose bun, a soft laugh, wearing a striped t-shirt, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p92 | Leo | Candid natural-light portrait photograph of a Latino man in their early twenties with curly hair, a big genuine smile, wearing a knit sweater, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p93 | Fatima | Candid natural-light portrait photograph of a Middle Eastern woman in their mid twenties with curly hair, a relaxed smile, wearing a navy crewneck sweatshirt, on a city sidewalk. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p94 | Rafael | Candid natural-light portrait photograph of a Southeast Asian man in their mid twenties with messy brown hair, wearing glasses, a soft laugh, wearing a corduroy jacket, in a sunny park. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p95 | Valentina | Candid natural-light portrait photograph of a white woman in their late twenties with long auburn hair, wearing glasses, a warm smile, wearing a knit sweater, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p96 | Galen | Candid natural-light portrait photograph of a Black man in their mid twenties with a short beard and short hair, a big genuine smile, wearing a corduroy jacket, on a city sidewalk. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p97 | Malik | Candid natural-light portrait photograph of a mixed-race man in their early twenties with a buzz cut, a friendly closed-mouth smile, wearing an olive utility jacket, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p98 | Eden | Candid natural-light portrait photograph of a East Asian man in their early twenties with short locs, a big genuine smile, wearing a black turtleneck, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p99 | Basil | Candid natural-light portrait photograph of a Latino man in their mid twenties with a short beard and short hair, a calm, friendly expression, wearing a denim jacket, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p101 | Dov | Candid natural-light portrait photograph of a South Asian man in their late twenties with messy brown hair, a soft laugh, wearing a denim jacket, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p102 | Daniela | Candid natural-light portrait photograph of a East Asian woman in their late twenties with long blonde hair, wearing glasses, a soft laugh, wearing a striped t-shirt, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p103 | Juno | Candid natural-light portrait photograph of a Black woman in their mid twenties with a pixie cut, a soft laugh, wearing a black turtleneck, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p104 | Rina | Candid natural-light portrait photograph of a South Asian woman in their mid twenties with long auburn hair, a big genuine smile, wearing a flannel shirt, on a city sidewalk. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p105 | Rania | Candid natural-light portrait photograph of a white woman in their late twenties with long blonde hair, a friendly closed-mouth smile, wearing a denim jacket, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p106 | Kofi | Candid natural-light portrait photograph of a Latino man in their mid twenties with a buzz cut, a calm, friendly expression, wearing a knit sweater, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p107 | Wen | Candid natural-light portrait photograph of a Middle Eastern man in their late twenties with a short beard and short hair, a warm smile, wearing a flannel shirt, on a quiet residential street. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p108 | Thea | Candid natural-light portrait photograph of a Southeast Asian woman in their mid twenties with box braids, a soft laugh, wearing a striped t-shirt, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p109 | Ines | Candid natural-light portrait photograph of a white woman in their mid twenties with long auburn hair, a friendly closed-mouth smile, wearing a grey hoodie, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p110 | Lina | Candid natural-light portrait photograph of a Black woman in their early twenties with shoulder-length wavy hair, wearing glasses, a warm smile, wearing an olive utility jacket, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p111 | Diego | Candid natural-light portrait photograph of a mixed-race man in their mid twenties with a buzz cut, a calm, friendly expression, wearing a plain white t-shirt, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p112 | Gael | Candid natural-light portrait photograph of a East Asian man in their early twenties with short blond hair, a friendly closed-mouth smile, wearing a light cardigan, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p113 | Sora | Candid natural-light portrait photograph of a Latina woman in their mid twenties with hair tied back in a ponytail, a soft laugh, wearing a flannel shirt, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p114 | Dami | Candid natural-light portrait photograph of a white man in their mid twenties with light stubble and short hair, a big genuine smile, wearing a flannel shirt, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p115 | Anaya | Candid natural-light portrait photograph of a South Asian woman in their early twenties with hair in a loose bun, wearing glasses, a friendly closed-mouth smile, wearing a navy crewneck sweatshirt, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p116 | Zev | Candid natural-light portrait photograph of a East Asian man in their late twenties with a buzz cut, wearing glasses, a soft laugh, wearing a corduroy jacket, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p117 | Lars | Candid natural-light portrait photograph of a Black man in their mid twenties with curly hair, a friendly closed-mouth smile, wearing a navy crewneck sweatshirt, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p118 | Vera | Candid natural-light portrait photograph of a South Asian woman in their early twenties with long auburn hair, a soft laugh, wearing a knit sweater, on a city sidewalk. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p119 | Jamal | Candid natural-light portrait photograph of a white man in their late twenties with light stubble and short hair, a calm, friendly expression, wearing a simple button-up shirt, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p120 | Chidi | Candid natural-light portrait photograph of a Latino man in their early twenties with short blond hair, a soft laugh, wearing a black turtleneck, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p121 | Ahmed | Candid natural-light portrait photograph of a Middle Eastern man in their early twenties with light stubble and short hair, a calm, friendly expression, wearing a simple button-up shirt, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p122 | Maya | Candid natural-light portrait photograph of a Southeast Asian woman in their late twenties with a pixie cut, a friendly closed-mouth smile, wearing a striped t-shirt, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p123 | Freya | Candid natural-light portrait photograph of a white woman in their early twenties with box braids, a warm smile, wearing a simple button-up shirt, on a quiet residential street. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p124 | Cedric | Candid natural-light portrait photograph of a Black man in their mid twenties with a buzz cut, a soft laugh, wearing an olive utility jacket, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p125 | Grace | Candid natural-light portrait photograph of a mixed-race woman in their mid twenties with long auburn hair, a soft laugh, wearing a light cardigan, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p126 | Noa | Candid natural-light portrait photograph of a East Asian woman in their mid twenties with long auburn hair, wearing glasses, a calm, friendly expression, wearing a striped t-shirt, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p127 | Enzo | Candid natural-light portrait photograph of a Latino man in their mid twenties with a fade haircut, a soft laugh, wearing a flannel shirt, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p128 | Sofia | Candid natural-light portrait photograph of a white woman in their late twenties with long blonde hair, wearing a hijab, a warm smile, wearing a striped t-shirt, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p129 | Gia | Candid natural-light portrait photograph of a South Asian woman in their mid twenties with box braids, a relaxed smile, wearing a striped t-shirt, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p130 | Mehmet | Candid natural-light portrait photograph of a East Asian man in their late twenties with short locs, a big genuine smile, wearing a flannel shirt, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p131 | Carmen | Candid natural-light portrait photograph of a Black woman in their mid twenties with box braids, a friendly closed-mouth smile, wearing a striped t-shirt, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p132 | Saanvi | Candid natural-light portrait photograph of a South Asian woman in their mid twenties with curly hair, a friendly closed-mouth smile, wearing a corduroy jacket, on a quiet residential street. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p133 | Felix | Candid natural-light portrait photograph of a white man in their late twenties with short dark hair, wearing glasses, a warm smile, wearing a corduroy jacket, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p134 | Kiara | Candid natural-light portrait photograph of a Latina woman in their late twenties with hair in a loose bun, a relaxed smile, wearing a simple button-up shirt, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p135 | Darius | Candid natural-light portrait photograph of a Middle Eastern man in their mid twenties with light stubble and short hair, a calm, friendly expression, wearing an olive utility jacket, in a sunny park. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p136 | Tal | Candid natural-light portrait photograph of a Southeast Asian man in their mid twenties with curly hair, a calm, friendly expression, wearing a grey hoodie, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p137 | Ayumi | Candid natural-light portrait photograph of a white woman in their early twenties with hair in a loose bun, a warm smile, wearing a knit sweater, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p138 | Dana | Candid natural-light portrait photograph of a Black woman in their early twenties with long auburn hair, a calm, friendly expression, wearing a light cardigan, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p139 | Orla | Candid natural-light portrait photograph of a mixed-race woman in their early twenties with natural coily hair, a big genuine smile, wearing a denim jacket, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p140 | Olu | Candid natural-light portrait photograph of a East Asian man in their early twenties with wavy medium-length hair, a warm smile, wearing a striped t-shirt, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p141 | Hamza | Candid natural-light portrait photograph of a Latino man in their late twenties with light stubble and short hair, a warm smile, wearing a flannel shirt, in front of a brick wall. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p142 | Anya | Candid natural-light portrait photograph of a white woman in their mid twenties with short curly hair, a calm, friendly expression, wearing a light cardigan, in a modern study lounge. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p143 | Eun | Candid natural-light portrait photograph of a South Asian man in their mid twenties with a fade haircut, a relaxed smile, wearing a knit sweater, at an outdoor cafe table. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p144 | Sunny | Candid natural-light portrait photograph of a East Asian woman in their mid twenties with box braids, a soft laugh, wearing a black turtleneck, on a leafy university campus. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p145 | Pedro | Candid natural-light portrait photograph of a Black man in their late twenties with a fade haircut, wearing glasses, a relaxed smile, wearing a denim jacket, in a sunny park. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p146 | Esme | Candid natural-light portrait photograph of a South Asian woman in their early twenties with box braids, a soft laugh, wearing a grey hoodie, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p147 | Mira | Candid natural-light portrait photograph of a white woman in their late twenties with long blonde hair, a big genuine smile, wearing an olive utility jacket, by a window in a bright apartment. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p148 | Mateo | Candid natural-light portrait photograph of a Latino man in their mid twenties with short locs, a soft laugh, wearing a plain white t-shirt, in a library with bookshelves behind. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p149 | Naomi | Candid natural-light portrait photograph of a Middle Eastern woman in their late twenties with a pixie cut, a soft laugh, wearing a navy crewneck sweatshirt, in a sunny park. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p150 | Femi | Candid natural-light portrait photograph of a Southeast Asian man in their early twenties with shoulder-length hair, a big genuine smile, wearing a plain white t-shirt, in a cozy coffee shop. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
-| demo-p151 | Tariq | Candid natural-light portrait photograph of a white man in their mid twenties with neatly styled hair, wearing glasses, a friendly closed-mouth smile, wearing a denim jacket, on a city sidewalk. Head and shoulders, face in the upper half of the frame, looking at the camera. 50mm lens, shallow depth of field, realistic skin texture, everyday casual style. Full-bleed photo with no border, no frame, no text, no watermark. |
+| demo-02 | Furnished room on the South Side | not chosen |
+| demo-05 | Lease takeover in Warrendale | not chosen |
+| demo-06 | Whole two-bedroom for two friends | not chosen |
+| demo-07 | Group house needs a fourth | not chosen |
+| demo-11 | Room on Prospect Hill | not chosen |
+| demo-12 | Furnished summer sublet off Moody Street | not chosen |
+| demo-14 | Room in a five-bedroom near campus | not chosen |
+| demo-15 | Whole one-bedroom by Hardy Pond | over $1,700 per person |
+| demo-16 | Three-bedroom apartment near Waltham Common | not chosen |
+| demo-23 | Furnished summer sublet on the South Side | not chosen |
+| demo-26 | Group house in Lakeview needs a fourth | not chosen |
+| demo-28 | Bed in a shared room off Moody Street | duplicate of demo-08 |
+| demo-29 | Summer room near the Brandeis stop | not chosen |
+| demo-30 | Studio in the Highlands | not chosen |
+| demo-31 | Top-floor room in Warrendale | not chosen |
+| demo-32 | Furnished corner room on the South Side | not chosen |
+| demo-33 | Furnished corner room near campus | not chosen |
+| demo-34 | Two rooms in a four-bedroom on the South Side | not chosen |
+| demo-37 | Room with a bay window near Prospect Hill Park | not chosen |
+| demo-39 | Bright furnished room by the Riverwalk | not chosen |
+| demo-40 | Bed in a shared room near campus | duplicate of demo-08 |
+| demo-41 | Whole two-bedroom in Warrendale | not chosen |
+| demo-45 | Corner room in Warrendale | not chosen |
+| demo-48 | Furnished room with a desk downtown | not chosen |
+| demo-52 | Furnished room with a desk in the Highlands | not chosen |
+| demo-55 | Bright furnished room near Hardy Pond | not chosen |
+| demo-56 | Whole one-bedroom in Lakeview | over $1,700 per person |
+| demo-57 | Summer room by the Riverwalk | not chosen |
+| demo-59 | Sublet in Warrendale | move-in date passed |
+| demo-61 | Room to take over near Waltham Common | move-in date passed |
+| demo-63 | Large room near the commuter rail | not chosen |
+| demo-68 | Bed in a shared room a short walk from campus | duplicate of demo-08 |
+| demo-70 | Lease takeover a short walk from campus | not chosen |
+| demo-71 | Join a friendly house in Warrendale | not chosen |
+| demo-72 | Summer sublet in Warrendale | not chosen |
+| demo-74 | Bright private room in the Highlands | duplicate of demo-73 |
+| demo-77 | Furnished room with a desk near the Brandeis stop | not chosen |
+| demo-78 | Furnished room off Moody Street | not chosen |
+| demo-79 | Furnished room with a desk near the commuter rail | not chosen |
+| demo-85 | Top-floor room near the commuter rail | not chosen |
+| demo-86 | Furnished room with a desk a short walk from campus | not chosen |
+| demo-87 | Furnished room near Waltham Common | not chosen |
+| demo-88 | Whole two-bedroom on the South Side | not chosen |
+| demo-89 | Take over a lease in Warrendale | not chosen |
+| demo-91 | Furnished room near the Brandeis stop | not chosen |
+| demo-93 | Bright furnished room near the Brandeis stop | duplicate of demo-87 |
+| demo-95 | Bright furnished room in the Highlands | duplicate of demo-75 |
+| demo-96 | Summer sublet on the South Side | not chosen |
+| demo-98 | Sunny room near Hardy Pond | not chosen |
+| demo-99 | Whole two-bedroom downtown | not chosen |
+| demo-p02 | Bea | not chosen |
+| demo-p05 | Eli | not chosen |
+| demo-p07 | Gus | not chosen |
+| demo-p08 | Hana | fewer than 3 compatible roommates |
+| demo-p18 | Rosa | not chosen |
+| demo-p21 | Priya | not chosen |
+| demo-p22 | Bilal | not chosen |
+| demo-p23 | Jonah | not chosen |
+| demo-p24 | Nell | not chosen |
+| demo-p25 | Yusuf | not chosen |
+| demo-p27 | Iris | not chosen |
+| demo-p28 | Uri | not chosen |
+| demo-p31 | Gemma | fewer than 3 suitable rooms |
+| demo-p32 | Gabe | fewer than 3 compatible roommates |
+| demo-p33 | Xavier | budget over $1,800 |
+| demo-p34 | Cleo | not chosen |
+| demo-p35 | Marisol | not chosen |
+| demo-p37 | Ada | not chosen |
+| demo-p38 | Clara | fewer than 3 compatible roommates |
+| demo-p40 | Chiara | fewer than 3 suitable rooms |
+| demo-p41 | Sami | not chosen |
+| demo-p42 | Mina | not chosen |
+| demo-p43 | Nadia | not chosen |
+| demo-p45 | Rowan | not chosen |
+| demo-p46 | Esther | not chosen |
+| demo-p50 | Bianca | fewer than 3 suitable rooms |
+| demo-p51 | Tamar | fewer than 3 suitable rooms |
+| demo-p56 | Yasmin | not chosen |
+| demo-p58 | Hugo | not chosen |
+| demo-p59 | Leila | fewer than 3 suitable rooms |
+| demo-p64 | Amara | not chosen |
+| demo-p65 | Hedda | fewer than 3 suitable rooms |
+| demo-p68 | Mariam | fewer than 3 suitable rooms |
+| demo-p69 | Aditi | not chosen |
+| demo-p70 | Ivan | not chosen |
+| demo-p72 | Eamon | not chosen |
+| demo-p73 | Adaeze | not chosen |
+| demo-p74 | Liam | not chosen |
+| demo-p75 | Anika | not chosen |
+| demo-p76 | Zain | fewer than 3 suitable rooms |
+| demo-p77 | Jade | not chosen |
+| demo-p79 | Ilana | not chosen |
+| demo-p80 | Wren | fewer than 3 suitable rooms |
+| demo-p81 | Jasper | not chosen |
+| demo-p82 | Camila | not chosen |
+| demo-p83 | Nia | not chosen |
+| demo-p84 | Paloma | not chosen |
+| demo-p85 | Owen | not chosen |
+| demo-p86 | Elif | fewer than 3 suitable rooms |
+| demo-p87 | Harper | not chosen |
+| demo-p88 | Aurora | not chosen |
+| demo-p89 | Hannah | budget over $1,800 |
+| demo-p90 | Farah | not chosen |
+| demo-p91 | Dalia | not chosen |
+| demo-p92 | Leo | not chosen |
+| demo-p93 | Fatima | fewer than 3 suitable rooms |
+| demo-p96 | Galen | fewer than 3 suitable rooms |
+| demo-p97 | Malik | not chosen |
+| demo-p98 | Eden | fewer than 3 suitable rooms |
+| demo-p99 | Basil | not chosen |
+| demo-p101 | Dov | not chosen |
+| demo-p102 | Daniela | not chosen |
+| demo-p103 | Juno | not chosen |
+| demo-p104 | Rina | budget over $1,800 |
+| demo-p105 | Rania | not chosen |
+| demo-p109 | Ines | not chosen |
+| demo-p110 | Lina | not chosen |
+| demo-p111 | Diego | not chosen |
+| demo-p112 | Gael | not chosen |
+| demo-p115 | Anaya | not chosen |
+| demo-p116 | Zev | not chosen |
+| demo-p117 | Lars | not chosen |
+| demo-p121 | Ahmed | not chosen |
+| demo-p122 | Maya | not chosen |
+| demo-p123 | Freya | not chosen |
+| demo-p125 | Grace | not chosen |
+| demo-p126 | Noa | not chosen |
+| demo-p127 | Enzo | fewer than 3 suitable rooms |
+| demo-p128 | Sofia | fewer than 3 suitable rooms |
+| demo-p129 | Gia | not chosen |
+| demo-p130 | Mehmet | not chosen |
+| demo-p132 | Saanvi | not chosen |
+| demo-p133 | Felix | not chosen |
+| demo-p134 | Kiara | not chosen |
+| demo-p136 | Tal | not chosen |
+| demo-p137 | Ayumi | not chosen |
+| demo-p138 | Dana | not chosen |
+| demo-p140 | Olu | not chosen |
+| demo-p142 | Anya | not chosen |
+| demo-p143 | Eun | budget over $1,800 |
+| demo-p145 | Pedro | budget over $1,800 |
+| demo-p146 | Esme | not chosen |
+| demo-p147 | Mira | not chosen |
+| demo-p149 | Naomi | fewer than 3 compatible roommates |
+| demo-p150 | Femi | fewer than 3 compatible roommates |
