@@ -80,6 +80,10 @@ export const REMOVED_PEOPLE = new Set([
 // Archived records are left out everywhere: Listings, Roommates, My matches, Vibe, the assistant, Details and counts.
 // A bookmark pointing at one shows "no longer available" (the database row isn't touched). To restore a record,
 // delete its line here; the coverage tests then say whether everyone still has enough matches.
+// Later the same day, at the owner's request, two smokers came back so smoking shows up in the demo: Gus (demo-p07)
+// and Ahmed (demo-p121) replaced Jules (demo-p10) and Carmen (demo-p131): a senior and a Master's student like them,
+// and nobody else loses their only strong match. No single swap worked: each smoker needs 3 kept roommates who don't
+// want no smoking, so they need each other.
 export const ARCHIVED_LISTINGS = new Map([
   ["demo-02", "not chosen"],
   ["demo-05", "not chosen"],
@@ -135,8 +139,8 @@ export const ARCHIVED_LISTINGS = new Map([
 export const ARCHIVED_PEOPLE = new Map([
   ["demo-p02", "not chosen"],
   ["demo-p05", "not chosen"],
-  ["demo-p07", "not chosen"],
   ["demo-p08", "fewer than 3 compatible roommates"],
+  ["demo-p10", "swapped out for the smokers demo-p07 and demo-p121"],
   ["demo-p18", "not chosen"],
   ["demo-p21", "not chosen"],
   ["demo-p22", "not chosen"],
@@ -205,7 +209,6 @@ export const ARCHIVED_PEOPLE = new Map([
   ["demo-p115", "not chosen"],
   ["demo-p116", "not chosen"],
   ["demo-p117", "not chosen"],
-  ["demo-p121", "not chosen"],
   ["demo-p122", "not chosen"],
   ["demo-p123", "not chosen"],
   ["demo-p125", "not chosen"],
@@ -214,6 +217,7 @@ export const ARCHIVED_PEOPLE = new Map([
   ["demo-p128", "fewer than 3 suitable rooms"],
   ["demo-p129", "not chosen"],
   ["demo-p130", "not chosen"],
+  ["demo-p131", "swapped out for the smokers demo-p07 and demo-p121"],
   ["demo-p132", "not chosen"],
   ["demo-p133", "not chosen"],
   ["demo-p134", "not chosen"],

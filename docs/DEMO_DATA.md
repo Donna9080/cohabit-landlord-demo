@@ -58,15 +58,15 @@ Definitions (in [`scripts/demo-coverage.mjs`](../scripts/demo-coverage.mjs)):
 | Target | Result (min / median / max) |
 | --- | --- |
 | Each shown profile has 3+ suitable rooms | 3 / 5 / 16 rooms per profile (plus 15 partial matches at the median) |
-| Each shown profile has 3+ mutually compatible roommates | 3 / 11 / 22 (the matching code alone allows 5 / 19 / 29) |
-| Strong matches (score 90+, the "Strong match" label) | 23 of 50 profiles have 3+, 46 have at least one (not a target; owner's decision 2026-11-16) |
-| Each room suits 1+ shown profile | 1 / 5 / 14 visible profiles per room |
-| An incompatible pair never scores 60+ | highest 59 across 793 incompatible pairs |
+| Each shown profile has 3+ mutually compatible roommates | 3 / 11 / 22 (the matching code alone allows 3 / 19 / 29) |
+| Strong matches (score 90+, the "Strong match" label) | 22 of 50 profiles have 3+, 45 have at least one (not a target; owner's decision 2026-11-16) |
+| Each room suits 1+ shown profile | 1 / 5 / 16 visible profiles per room |
+| An incompatible pair never scores 60+ | highest 59 across 816 incompatible pairs |
 | Targets missed | 0 |
 
-Not everyone matches everyone. Of the 2,189 reasons counted across pairs of visible profiles
-(a pair can have several), 271 pairs are compatible; the rest fail on:
-move-in months more than a month apart (710), lease lengths more than a month apart (521), a must-have move-in month that differs (354), a must-have area the other isn't looking in (222), lifestyle answers too far apart (score under 60) (75), budgets don't overlap (21), one has a pet and the other wants no pets (15).
+Not everyone matches everyone. Of the 2,185 reasons counted across pairs of visible profiles
+(a pair can have several), 268 pairs are compatible; the rest fail on:
+move-in months more than a month apart (698), lease lengths more than a month apart (488), a must-have move-in month that differs (318), a must-have area the other isn't looking in (223), one smokes and the other wants no smoking (86), lifestyle answers too far apart (score under 60) (68), budgets don't overlap (22), one has a pet and the other wants no pets (14).
 
 Listings by kind: Private room 26, Studio 4, Sublet 6, Shared room 1, Whole apartment 6, Replacing a roommate 5, Lease takeover 2. By neighborhood: Moody Street 9, Downtown 9, The Highlands 4, near Brandeis 10, Prospect Hill 7, South Side 2, Warrendale 9.
 
@@ -89,10 +89,14 @@ With the owner's approval, Demo mode keeps the strongest 50 of each; the rest ar
   repeated photos as possible.
 - **Kept together on purpose:** the one-semester exchange students (January to May) with their spring sublets, and the
   one shared room with the September renters on small budgets it suits.
+- **Smokers swapped in (owner's request, the same day):** none of the first 50 smoked, so Gus and Ahmed, who both smoke,
+  replaced Jules and Carmen (a senior and a Master's student like them; nobody else loses their only strong match).
+  One swap wasn't enough: each smoker needs 3 kept roommates who don't want no smoking, so they need each other.
+  Rania, the third smoker, has too few compatible roommates among the kept profiles to come back.
 - **Not checked, because the data has no such fields:** gender, age, background, nationality, international or local.
   Nothing was guessed from names.
 - **Archived listings:** not chosen 40, duplicate of demo-08 3, over $1,700 per person 2, move-in date passed 2, duplicate of demo-73 1, duplicate of demo-87 1, duplicate of demo-75 1.
-- **Archived profiles:** not chosen 70, fewer than 3 suitable rooms 15, fewer than 3 compatible roommates 5, budget over $1,800 5.
+- **Archived profiles:** not chosen 68, fewer than 3 suitable rooms 15, fewer than 3 compatible roommates 5, budget over $1,800 5, swapped out for the smokers demo-p07 and demo-p121 2.
 
 ## Bugs found and fixed
 
@@ -267,7 +271,7 @@ something flexible, and the card says what. Roommate searches compare the answer
 ### 19. Strong: A roommate for June 2027: early bird, very tidy, quiet, guests sometimes, OK with pets, no smoking, $900–$1,300
 
 - **Result:** 20 of 50 visible profiles are possible roommates: 5 strong (90+), 15 partial. The 3 hidden profiles are never compared.
-- **Not a match (first reason each):** lifestyle answers too far apart (score under 60) 3; move-in months more than a month apart 27.
+- **Not a match (first reason each):** lifestyle answers too far apart (score under 60) 3; move-in months more than a month apart 25; one smokes and the other wants no smoking 2.
 - **First three:** demo-p01 Ari 100%; demo-p141 Hamza 100%; demo-p09 Ira 95%.
 
 ### 20. No match: A roommate moving in November 2027 (nobody in the demo data moves then or a month either side)
@@ -282,25 +286,25 @@ something flexible, and the card says what. Roommate searches compare the answer
 
 | Id | Name | Kind | Area | From Brandeis | Rent | Rooms free | Available | Lease | Furnishing | Photo | Suits |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| demo-01 | Private room in a four-bedroom house | Private room | Moody Street | 1.8 km | $1,050 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k01 | 14 |
+| demo-01 | Private room in a four-bedroom house | Private room | Moody Street | 1.8 km | $1,050 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k01 | 15 |
 | demo-03 | Furnished studio downtown | Studio | Downtown | 2.2 km | $1,650 whole place | 1 of 1 | Jul 1, 2027 | 12-month lease from July | Furnished | s03 | 1 |
 | demo-04 | Spring sublet in a four-bedroom | Sublet | The Highlands | 1.8 km | $950 per room | 1 of 4 | Jan 15, 2027 | Spring sublet, mid-January to May 2027 | Furnished | b04 | 7 |
-| demo-08 | Shared bedroom for budget savers | Shared room | Downtown | 2.1 km | $700 per bed | 1 of 3 | Sep 1, 2027 | Academic-year lease, September to May | Furnished | h08 | 5 |
+| demo-08 | Shared bedroom for budget savers | Shared room | Downtown | 2.1 km | $700 per bed | 1 of 3 | Sep 1, 2027 | Academic-year lease, September to May | Furnished | h08 | 4 |
 | demo-09 | Garden-level room near campus | Private room | near Brandeis | 0.5 km | $1,300 per room | 1 of 3 | Aug 15, 2027 | 12-month lease from mid-August | Furnished | b09 | 4 |
-| demo-10 | Whole three-bedroom near Waltham Common | Whole apartment | Downtown | 2 km | $3,450 whole place | 3 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k10 | 2 |
+| demo-10 | Whole three-bedroom near Waltham Common | Whole apartment | Downtown | 2 km | $3,450 whole place | 3 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k10 | 3 |
 | demo-13 | Small furnished studio in the Highlands | Studio | The Highlands | 1.9 km | $1,450 whole place | 1 of 1 | Aug 1, 2027 | 12-month lease from August | Furnished | s13 | 3 |
-| demo-17 | Join a friendly house near Moody Street | Replacing a roommate | Moody Street | 2 km | $900 per room | 1 of 5 | Sep 1, 2027 | Join the current lease, September 2027 to May 2028 | Unfurnished | l35 | 5 |
+| demo-17 | Join a friendly house near Moody Street | Replacing a roommate | Moody Street | 2 km | $900 per room | 1 of 5 | Sep 1, 2027 | Join the current lease, September 2027 to May 2028 | Unfurnished | l35 | 4 |
 | demo-18 | Spring sublet on Prospect Hill | Sublet | Prospect Hill | 2.7 km | $900 per room | 1 of 3 | Jan 1, 2027 | Spring sublet, January to May 2027 | Furnished | b27 | 5 |
 | demo-19 | Sunny room near the Brandeis stop | Private room | near Brandeis | 0.4 km | $1,200 per room | 1 of 3 | May 1, 2027 | 12-month lease from May | Unfurnished | l37 | 7 |
-| demo-20 | Bright furnished room on Prospect Hill | Private room | Prospect Hill | 2.7 km | $1,150 per room | 1 of 4 | Sep 1, 2027 | 12-month lease from September | Furnished | b02 | 3 |
-| demo-21 | Top-floor room by the Riverwalk | Private room | Moody Street | 1.7 km | $1,050 per room | 1 of 4 | Sep 1, 2027 | Academic-year lease, September 2027 to May 2028 | Unfurnished | e06 | 5 |
+| demo-20 | Bright furnished room on Prospect Hill | Private room | Prospect Hill | 2.7 km | $1,150 per room | 1 of 4 | Sep 1, 2027 | 12-month lease from September | Furnished | b02 | 2 |
+| demo-21 | Top-floor room by the Riverwalk | Private room | Moody Street | 1.7 km | $1,050 per room | 1 of 4 | Sep 1, 2027 | Academic-year lease, September 2027 to May 2028 | Unfurnished | e06 | 4 |
 | demo-22 | Furnished room in the Highlands | Private room | The Highlands | 1.9 km | $1,100 per room | 1 of 3 | Aug 1, 2027 | 12-month lease from August | Furnished | b31 | 5 |
 | demo-24 | Small furnished studio by the Riverwalk | Studio | Moody Street | 2 km | $1,550 whole place | 1 of 1 | Jul 1, 2027 | 12-month lease from July | Furnished | s40 | 1 |
 | demo-25 | Bright furnished room near campus | Private room | near Brandeis | 0.7 km | $1,150 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Furnished | b12 | 7 |
-| demo-27 | Furnished room with a desk near Waltham Common | Private room | Downtown | 2 km | $1,000 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Furnished | b16 | 12 |
-| demo-35 | Three rooms in a five-bedroom near the commuter rail | Private room | Downtown | 1.9 km | $1,050 per room | 3 of 5 | Jun 1, 2027 | 12-month lease from June | Unfurnished | drawing (k01 is on an earlier listing) | 14 |
-| demo-36 | Two open rooms near Moody Street | Private room | Moody Street | 1.8 km | $1,250 per room | 2 of 4 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k23 | 10 |
-| demo-38 | Take over a lease near Prospect Hill Park | Lease takeover | Prospect Hill | 2.6 km | $1,200 per room | 1 of 3 | Sep 1, 2027 | Lease takeover, September 2027 to August 2028 | Unfurnished | k34 | 3 |
+| demo-27 | Furnished room with a desk near Waltham Common | Private room | Downtown | 2 km | $1,000 per room | 1 of 4 | Jun 1, 2027 | 12-month lease from June | Furnished | b16 | 13 |
+| demo-35 | Three rooms in a five-bedroom near the commuter rail | Private room | Downtown | 1.9 km | $1,050 per room | 3 of 5 | Jun 1, 2027 | 12-month lease from June | Unfurnished | drawing (k01 is on an earlier listing) | 16 |
+| demo-36 | Two open rooms near Moody Street | Private room | Moody Street | 1.8 km | $1,250 per room | 2 of 4 | Jun 1, 2027 | 12-month lease from June | Unfurnished | k23 | 11 |
+| demo-38 | Take over a lease near Prospect Hill Park | Lease takeover | Prospect Hill | 2.6 km | $1,200 per room | 1 of 3 | Sep 1, 2027 | Lease takeover, September 2027 to August 2028 | Unfurnished | k34 | 2 |
 | demo-42 | Spring sublet near campus | Sublet | near Brandeis | 0.3 km | $1,000 per room | 1 of 4 | Jan 1, 2027 | Spring sublet, January to May 2027 | Furnished | b17 | 3 |
 | demo-43 | Two-bedroom apartment on the South Side | Whole apartment | South Side | 1.5 km | $2,800 whole place | 2 of 2 | Jun 1, 2027 | 12-month lease from June | Unfurnished | l07 | 1 |
 | demo-44 | Studio near Waltham Common | Studio | Downtown | 1.9 km | $1,700 whole place | 1 of 1 | Jul 1, 2027 | 12-month lease from July | Unfurnished | s39 | 1 |
@@ -311,10 +315,10 @@ something flexible, and the card says what. Roommate searches compare the answer
 | demo-51 | Whole two-bedroom near Moody Street | Whole apartment | Moody Street | 2.1 km | $2,600 whole place | 2 of 2 | Jun 1, 2027 | 12-month lease from June | Unfurnished | e11 | 1 |
 | demo-53 | Furnished corner room in the Highlands | Private room | The Highlands | 2 km | $1,000 per room | 1 of 4 | Jan 15, 2027 | Five-month lease, mid-January to mid-June 2027 | Furnished | b21 | 7 |
 | demo-54 | Group house in Warrendale needs a fourth | Replacing a roommate | Warrendale | 0.8 km | $1,050 per room | 1 of 4 | May 1, 2027 | Join the group's lease, May 2027 to April 2028 | Unfurnished | drawing (l35 is on an earlier listing) | 7 |
-| demo-58 | Room in a four-bedroom on Prospect Hill | Private room | Prospect Hill | 2.7 km | $1,050 per room | 1 of 4 | Aug 15, 2027 | 12-month lease from mid-August | Unfurnished | e05 | 7 |
-| demo-60 | Room in a four-bedroom near the commuter rail | Private room | Downtown | 2.2 km | $1,000 per room | 1 of 4 | Jun 15, 2027 | 12-month lease from mid-June | Unfurnished | k32 | 12 |
+| demo-58 | Room in a four-bedroom on Prospect Hill | Private room | Prospect Hill | 2.7 km | $1,050 per room | 1 of 4 | Aug 15, 2027 | 12-month lease from mid-August | Unfurnished | e05 | 6 |
+| demo-60 | Room in a four-bedroom near the commuter rail | Private room | Downtown | 2.2 km | $1,000 per room | 1 of 4 | Jun 15, 2027 | 12-month lease from mid-June | Unfurnished | k32 | 13 |
 | demo-62 | Furnished room in Warrendale | Private room | Warrendale | 0.7 km | $950 per room | 1 of 4 | Aug 1, 2027 | 12-month lease from August | Furnished | drawing (b04 is on an earlier listing) | 7 |
-| demo-64 | Group house near Waltham Common needs a fifth | Replacing a roommate | Downtown | 2 km | $950 per room | 1 of 5 | Jun 1, 2027 | Join the group's lease, June 2027 to May 2028 | Unfurnished | drawing (k10 is on an earlier listing) | 12 |
+| demo-64 | Group house near Waltham Common needs a fifth | Replacing a roommate | Downtown | 2 km | $950 per room | 1 of 5 | Jun 1, 2027 | Join the group's lease, June 2027 to May 2028 | Unfurnished | drawing (k10 is on an earlier listing) | 13 |
 | demo-65 | Second-floor room in Warrendale | Private room | Warrendale | 0.7 km | $1,050 per room | 1 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | l36 | 7 |
 | demo-66 | Two-bedroom apartment in Warrendale | Whole apartment | Warrendale | 0.8 km | $2,400 whole place | 2 of 2 | Aug 15, 2027 | 12-month lease from mid-August | Unfurnished | drawing (l36 is on an earlier listing) | 1 |
 | demo-67 | Two-bedroom apartment near the Brandeis stop | Whole apartment | near Brandeis | 0.6 km | $2,500 whole place | 2 of 2 | Aug 1, 2027 | 12-month lease from August | Unfurnished | l14 | 1 |
@@ -324,14 +328,14 @@ something flexible, and the card says what. Roommate searches compare the answer
 | demo-76 | Spring semester sublet near campus | Sublet | near Brandeis | 0.5 km | $1,000 per room | 1 of 4 | Dec 1, 2026 | Spring sublet, December 2026 to May 2027 | Furnished | b24 | 3 |
 | demo-80 | Spring sublet near Prospect Hill Park | Sublet | Prospect Hill | 2.7 km | $1,050 per room | 1 of 4 | Dec 15, 2026 | Spring sublet, mid-December 2026 to mid-June 2027 | Furnished | b22 | 5 |
 | demo-81 | Bright furnished room in Warrendale | Private room | Warrendale | 1.1 km | $1,150 per room | 1 of 4 | Aug 15, 2027 | 12-month lease from mid-August | Furnished | drawing (b27 is on an earlier listing) | 6 |
-| demo-82 | Room in a four-bedroom near Moody Street | Private room | Moody Street | 1.7 km | $1,000 per room | 1 of 4 | May 15, 2027 | 12-month lease from mid-May | Unfurnished | e29 | 7 |
+| demo-82 | Room in a four-bedroom near Moody Street | Private room | Moody Street | 1.7 km | $1,000 per room | 1 of 4 | May 15, 2027 | 12-month lease from mid-May | Unfurnished | e29 | 8 |
 | demo-83 | Housemates in Warrendale need a fourth | Replacing a roommate | Warrendale | 1 km | $1,000 per room | 1 of 4 | May 15, 2027 | Join the group's lease, mid-May 2027 to mid-May 2028 | Unfurnished | drawing (k23 is on an earlier listing) | 7 |
 | demo-84 | Furnished corner room near the Brandeis stop | Private room | near Brandeis | 0.6 km | $1,200 per room | 1 of 3 | Aug 1, 2027 | 12-month lease from August | Furnished | drawing (b28 is on an earlier listing) | 5 |
 | demo-90 | Furnished room near the commuter rail | Private room | Downtown | 2.1 km | $1,100 per room | 1 of 3 | Jul 1, 2027 | 12-month lease from July | Furnished | b38 | 7 |
-| demo-92 | Top-floor room off Moody Street | Private room | Moody Street | 1.9 km | $1,100 per room | 1 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | drawing (e30 is on an earlier listing) | 14 |
-| demo-94 | Whole three-bedroom by the Riverwalk | Whole apartment | Moody Street | 2 km | $3,300 whole place | 3 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | drawing (e29 is on an earlier listing) | 2 |
+| demo-92 | Top-floor room off Moody Street | Private room | Moody Street | 1.9 km | $1,100 per room | 1 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | drawing (e30 is on an earlier listing) | 15 |
+| demo-94 | Whole three-bedroom by the Riverwalk | Whole apartment | Moody Street | 2 km | $3,300 whole place | 3 of 3 | Jun 1, 2027 | 12-month lease from June | Unfurnished | drawing (e29 is on an earlier listing) | 3 |
 | demo-97 | Two open rooms a short walk from campus | Private room | near Brandeis | 0.2 km | $1,100 per room | 2 of 4 | Aug 1, 2027 | 12-month lease from August | Unfurnished | drawing (k34 is on an earlier listing) | 4 |
-| demo-100 | Take over a lease on Prospect Hill | Lease takeover | Prospect Hill | 2.7 km | $1,150 per room | 1 of 3 | Aug 1, 2027 | Lease takeover, August 2027 to July 2028 | Unfurnished | e15 | 7 |
+| demo-100 | Take over a lease on Prospect Hill | Lease takeover | Prospect Hill | 2.7 km | $1,150 per room | 1 of 3 | Aug 1, 2027 | Lease takeover, August 2027 to July 2028 | Unfurnished | e15 | 6 |
 
 ## Listing photos (sources and licenses)
 
@@ -399,30 +403,30 @@ for them; "Roommates" counts visible profiles mutually compatible with them.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | demo-p01 | Ari | PhD student in neuroscience, 2nd year | near Brandeis, Warrendale | Jun 2027 | $950–$1,350 | 12 mo, 1 room, ≤1.5 km | early, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 15 | Yes |
 | demo-p03 | Cam | Senior in music and computer science | Downtown, Moody Street | Jul 2027 | $800–$1,200 | 12 mo, 1 room | flexible sleep, very tidy, some noise, guests sometimes, OK with pets, no smoking | 7 | 22 | Yes |
-| demo-p04 | Dev | MBA student, 1st year | Moody Street, Downtown | Jun 2027 | $1,100–$1,600 | 12 mo, 1 room | night owl, relaxed tidiness, lively, guests often, OK with pets, smoking outside OK | 8 | 6 | Yes |
+| demo-p04 | Dev | MBA student, 1st year | Moody Street, Downtown | Jun 2027 | $1,100–$1,600 | 12 mo, 1 room | night owl, relaxed tidiness, lively, guests often, OK with pets, smoking outside OK | 8 | 8 | Yes |
 | demo-p06 | Fern | PhD student in chemistry, 3rd year | The Highlands, Prospect Hill | Aug 2027 | $1,100–$1,500 | 12 mo, 1 room | early, very tidy, quiet, guests rarely, OK with pets, no smoking | 5 | 12 | Yes |
+| demo-p07 | Gus | Master's student in sustainable development | Downtown, Moody Street | Jun 2027 | $900–$1,300 | 12 mo, 1 room | night owl, average tidiness, some noise, guests often, OK with pets, smokes | 8 | 3 | Yes |
 | demo-p09 | Ira | PhD student in English and teaching assistant | Warrendale, near Brandeis | Jun 2027 | $1,000–$1,400 | 12 mo, 1 room | flexible sleep, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 16 | Yes |
-| demo-p10 | Jules | Senior in economics | Downtown, Moody Street | Sep 2027 | $1,000–$1,400 | 9 mo, 1 room | night owl, average tidiness, lively, guests often, OK with pets, no smoking | 3 | 4 | Yes |
-| demo-p11 | Kai | Senior in computer science | Moody Street, Downtown | Jun 2027 | $800–$1,100 | 12 mo, 1 room | night owl, relaxed tidiness, lively, guests often, OK with pets, smoking outside OK | 7 | 6 | Yes |
+| demo-p11 | Kai | Senior in computer science | Moody Street, Downtown | Jun 2027 | $800–$1,100 | 12 mo, 1 room | night owl, relaxed tidiness, lively, guests often, OK with pets, smoking outside OK | 7 | 8 | Yes |
 | demo-p12 | Lena | PhD student in history, writing a thesis | Prospect Hill, The Highlands | Jan 2027 | $800–$1,100 | 5 mo, 1 room, furnished, must: month | early, very tidy, quiet, guests rarely, no pets, no smoking | 4 | 5 | Yes |
 | demo-p13 | Milo | Incoming PhD student in economics | South Side, Moody Street | Jun 2027 | $1,000–$1,500 | 12 mo, 1 room | early, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 5 | 18 | Yes |
 | demo-p14 | Noor | Incoming master's student in biotechnology | near Brandeis, Warrendale | Aug 2027 | $900–$1,300 | 12 mo, 1 room, furnished | flexible sleep, very tidy, quiet, guests sometimes, no pets, no smoking | 4 | 13 | Yes |
-| demo-p15 | Omar | Master's student in computer science | Downtown, Prospect Hill | Sep 2027 | $1,100–$1,600 | 12 mo, 1 room | early, very tidy, some noise, guests sometimes, OK with pets, no smoking | 4 | 11 | Yes |
+| demo-p15 | Omar | Master's student in computer science | Downtown, Prospect Hill | Sep 2027 | $1,100–$1,600 | 12 mo, 1 room | early, very tidy, some noise, guests sometimes, OK with pets, no smoking | 4 | 10 | Yes |
 | demo-p16 | Pia | PhD student in biology | near Brandeis, Warrendale | Jun 2027 | $900–$1,400 | 12 mo, 1 room | early, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 16 | No (never shown) |
 | demo-p17 | Quinn | Senior in psychology | Moody Street, South Side | Jun 2027 | $900–$1,300 | 12 mo, 1 room | early, very tidy, quiet, guests rarely, OK with pets, no smoking | 5 | 18 | No (never shown) |
-| demo-p19 | Sam | Senior in film and media | Moody Street, Downtown | Sep 2027 | $800–$1,200 | 9 mo, 1 room | night owl, average tidiness, lively, guests often, OK with pets, no smoking | 3 | 4 | Yes |
+| demo-p19 | Sam | Senior in film and media | Moody Street, Downtown | Sep 2027 | $800–$1,200 | 9 mo, 1 room | night owl, average tidiness, lively, guests often, OK with pets, no smoking | 3 | 3 | Yes |
 | demo-p20 | Theo | Master's student in finance | The Highlands, Prospect Hill | Jul 2027 | $1,000–$1,400 | 12 mo, 1 room | early, very tidy, quiet, guests rarely, no pets, no smoking | 1 | 19 | No (never shown) |
 | demo-p26 | Selin | Visiting master's student in teaching | within 2 km | Jan 2027 | $600–$1,150 | 5 mo, 1 room, furnished, ≤2 km, must: month | night owl, relaxed tidiness, lively, guests sometimes, OK with pets, no smoking | 6 | 6 | Yes |
 | demo-p29 | Kenji | Master's student in teaching, 2nd year | within 2 km | Jun 2027 | $800–$1,450 | 12 mo, 1 room, ≤2 km | flexible sleep, very tidy, quiet, guests rarely, OK with pets, no smoking | 16 | 16 | Yes |
 | demo-p30 | Ren | Senior in history | Moody Street, Downtown | Jul 2027 | $900–$1,200 | 12 mo, 1 room, must: area | night owl, very tidy, some noise, guests rarely, OK with pets, no smoking | 7 | 10 | Yes |
 | demo-p36 | Isla | PhD student in anthropology, 2nd year | Prospect Hill, The Highlands | Jan 2027 | $950–$1,250 | 5 mo, 1 room, furnished | flexible sleep, average tidiness, quiet, guests sometimes, no pets, no smoking | 4 | 7 | Yes |
 | demo-p39 | Pilar | PhD student in anthropology, 4th year | near Brandeis, Warrendale | Jun 2027 | $900–$1,400 | 12 mo, 1 room | flexible sleep, very tidy, lively, guests sometimes, OK with pets, no smoking | 7 | 18 | Yes |
-| demo-p47 | Uma | Incoming master's student in teaching | within 2 km | Sep 2027 | $1,050–$1,300 | 12 mo, 1 room, ≤2 km | night owl, average tidiness, some noise, guests often, OK with pets, no smoking | 7 | 7 | Yes |
-| demo-p48 | Rhea | PhD student in biochemistry, 4th year | Downtown, Moody Street | Sep 2027 | $600–$1,200 | 9 mo, 1 room | early, average tidiness, lively, guests sometimes, OK with pets, no smoking | 3 | 4 | Yes |
+| demo-p47 | Uma | Incoming master's student in teaching | within 2 km | Sep 2027 | $1,050–$1,300 | 12 mo, 1 room, ≤2 km | night owl, average tidiness, some noise, guests often, OK with pets, no smoking | 7 | 6 | Yes |
+| demo-p48 | Rhea | PhD student in biochemistry, 4th year | Downtown, Moody Street | Sep 2027 | $600–$1,200 | 9 mo, 1 room | early, average tidiness, lively, guests sometimes, OK with pets, no smoking | 3 | 3 | Yes |
 | demo-p49 | Petra | Senior in psychology | Downtown, Moody Street | Jul 2027 | $700–$1,300 | 12 mo, 1 room, must: area | night owl, very tidy, some noise, guests often, OK with pets, no smoking | 8 | 11 | Yes |
 | demo-p52 | Alma | Master's student in conflict resolution and coexistence, 2nd year | Warrendale, near Brandeis, The Highlands | Jan 2027 | $650–$1,300 | 5 mo, 1 room, furnished, ≤1.5 km, must: month | flexible sleep, very tidy, lively, guests sometimes, no pets, smoking outside OK | 6 | 7 | Yes |
 | demo-p53 | Keiko | PhD student in biochemistry, 2nd year | The Highlands, Prospect Hill, Warrendale | Aug 2027 | $900–$1,550 | 12 mo, 1 room, must: month, must: area | early, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 8 | Yes |
-| demo-p54 | Zuri | Senior in English | Warrendale, near Brandeis | Sep 2027 | $700–$1,200 | 12 mo, 1 room, ≤1.5 km | night owl, average tidiness, quiet, guests often, OK with pets, no smoking | 5 | 7 | Yes |
+| demo-p54 | Zuri | Senior in English | Warrendale, near Brandeis | Sep 2027 | $700–$1,200 | 12 mo, 1 room, ≤1.5 km | night owl, average tidiness, quiet, guests often, OK with pets, no smoking | 5 | 6 | Yes |
 | demo-p55 | Idris | Master's student in biotechnology | Prospect Hill, The Highlands | Aug 2027 | $1,000–$1,500 | 12 mo, 1 room | early, relaxed tidiness, some noise, guests rarely, OK with pets, no smoking | 5 | 12 | Yes |
 | demo-p57 | Luka | Master's student in social impact management, 2nd year | South Side, Moody Street | Jun 2027 | $850–$1,450 | 12 mo, 2 rooms, must: area | flexible sleep, very tidy, some noise, guests sometimes, OK with pets, no smoking | 3 | 12 | Yes |
 | demo-p60 | Sana | PhD student in philosophy, 4th year | Warrendale, near Brandeis, The Highlands | Jun 2027 | $1,050–$1,450 | 12 mo, 1 room | early, very tidy, quiet, guests often, no pets, no smoking | 7 | 15 | Yes |
@@ -442,13 +446,13 @@ for them; "Roommates" counts visible profiles mutually compatible with them.
 | demo-p118 | Vera | Senior in theater arts | near Brandeis, Warrendale | Aug 2027 | $800–$1,100 | 12 mo, 1 room | night owl, average tidiness, some noise, guests sometimes, no pets, smoking outside OK | 3 | 12 | Yes |
 | demo-p119 | Jamal | PhD student in biochemistry, 3rd year | Prospect Hill, The Highlands | Jan 2027 | $550–$1,200 | 5 mo, 1 room, furnished | night owl, relaxed tidiness, some noise, guests sometimes, no pets, no smoking | 4 | 6 | Yes |
 | demo-p120 | Chidi | Senior in computer science | Downtown, Moody Street | Jun 2027 | $550–$1,200 | 12 mo, 1 room, must: month | flexible sleep, average tidiness, some noise, guests sometimes, no pets, no smoking | 7 | 15 | Yes |
+| demo-p121 | Ahmed | Senior in sociology | Moody Street, Downtown | Jun 2027 | $550–$1,150 | 12 mo, 3 rooms | night owl, relaxed tidiness, lively, guests often, OK with pets, smokes | 3 | 3 | Yes |
 | demo-p124 | Cedric | Master's student in global health policy | Downtown, Moody Street | Jul 2027 | $700–$1,300 | 12 mo, 1 room | night owl, very tidy, lively, guests often, OK with pets, no smoking | 8 | 19 | Yes |
-| demo-p131 | Carmen | Master's student in social impact management, 2nd year | Prospect Hill, Downtown, Lakeview | Sep 2027 | $750–$1,400 | 12 mo, 1 room, must: month | early, very tidy, some noise, guests often, no pets, smoking outside OK | 4 | 4 | Yes |
 | demo-p135 | Darius | Master's student in nonprofit management | Downtown, Moody Street | Jun 2027 | $650–$1,150 | 12 mo, 3 rooms, must: month | early, average tidiness, some noise, guests sometimes, OK with pets, no smoking | 3 | 13 | Yes |
-| demo-p139 | Orla | Senior in music | Downtown, Moody Street | Sep 2027 | $750–$1,300 | 9 mo, 1 room, must: month | flexible sleep, average tidiness, lively, guests sometimes, OK with pets, no smoking | 3 | 4 | Yes |
+| demo-p139 | Orla | Senior in music | Downtown, Moody Street | Sep 2027 | $750–$1,300 | 9 mo, 1 room, must: month | flexible sleep, average tidiness, lively, guests sometimes, OK with pets, no smoking | 3 | 3 | Yes |
 | demo-p141 | Hamza | PhD student in biophysics, 4th year | near Brandeis, Warrendale | Jun 2027 | $850–$1,400 | 12 mo, 1 room, must: month | early, very tidy, quiet, guests sometimes, OK with pets, no smoking | 7 | 12 | Yes |
-| demo-p144 | Sunny | Master's student in business analytics, 2nd year | Downtown, Moody Street | Sep 2027 | $800–$1,150 | 9 mo, 1 room, must: area | flexible sleep, average tidiness, some noise, guests often, OK with pets, no smoking | 3 | 4 | Yes |
-| demo-p148 | Mateo | Master's student in business analytics | Prospect Hill, Downtown | Sep 2027 | $900–$1,500 | 12 mo, 1 room, must: area | flexible sleep, very tidy, some noise, guests often, OK with pets, no smoking | 4 | 4 | Yes |
+| demo-p144 | Sunny | Master's student in business analytics, 2nd year | Downtown, Moody Street | Sep 2027 | $800–$1,150 | 9 mo, 1 room, must: area | flexible sleep, average tidiness, some noise, guests often, OK with pets, no smoking | 3 | 3 | Yes |
+| demo-p148 | Mateo | Master's student in business analytics | Prospect Hill, Downtown | Sep 2027 | $900–$1,500 | 12 mo, 1 room, must: area | flexible sleep, very tidy, some noise, guests often, OK with pets, no smoking | 4 | 3 | Yes |
 | demo-p151 | Tariq | Master's student in social impact management | South Side, Moody Street | Jun 2027 | $1,000–$1,300 | 12 mo, 1 room | early, average tidiness, some noise, guests sometimes, no pets, no smoking | 5 | 17 | Yes |
 
 ## Profile photos
@@ -520,8 +524,8 @@ restore one, delete its line from `ARCHIVED_LISTINGS` or `ARCHIVED_PEOPLE` in `s
 | demo-99 | Whole two-bedroom downtown | not chosen |
 | demo-p02 | Bea | not chosen |
 | demo-p05 | Eli | not chosen |
-| demo-p07 | Gus | not chosen |
 | demo-p08 | Hana | fewer than 3 compatible roommates |
+| demo-p10 | Jules | swapped out for the smokers demo-p07 and demo-p121 |
 | demo-p18 | Rosa | not chosen |
 | demo-p21 | Priya | not chosen |
 | demo-p22 | Bilal | not chosen |
@@ -590,7 +594,6 @@ restore one, delete its line from `ARCHIVED_LISTINGS` or `ARCHIVED_PEOPLE` in `s
 | demo-p115 | Anaya | not chosen |
 | demo-p116 | Zev | not chosen |
 | demo-p117 | Lars | not chosen |
-| demo-p121 | Ahmed | not chosen |
 | demo-p122 | Maya | not chosen |
 | demo-p123 | Freya | not chosen |
 | demo-p125 | Grace | not chosen |
@@ -599,6 +602,7 @@ restore one, delete its line from `ARCHIVED_LISTINGS` or `ARCHIVED_PEOPLE` in `s
 | demo-p128 | Sofia | fewer than 3 suitable rooms |
 | demo-p129 | Gia | not chosen |
 | demo-p130 | Mehmet | not chosen |
+| demo-p131 | Carmen | swapped out for the smokers demo-p07 and demo-p121 |
 | demo-p132 | Saanvi | not chosen |
 | demo-p133 | Felix | not chosen |
 | demo-p134 | Kiara | not chosen |

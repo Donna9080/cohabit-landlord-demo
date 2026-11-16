@@ -229,6 +229,10 @@ With the owner's approval, Demo mode keeps the strongest 50 of each; the rest ar
   repeated photos as possible.
 - **Kept together on purpose:** the one-semester exchange students (January to May) with their spring sublets, and the
   one shared room with the September renters on small budgets it suits.
+- **Smokers swapped in (owner's request, the same day):** none of the first 50 smoked, so Gus and Ahmed, who both smoke,
+  replaced Jules and Carmen (a senior and a Master's student like them; nobody else loses their only strong match).
+  One swap wasn't enough: each smoker needs 3 kept roommates who don't want no smoking, so they need each other.
+  Rania, the third smoker, has too few compatible roommates among the kept profiles to come back.
 - **Not checked, because the data has no such fields:** gender, age, background, nationality, international or local.
   Nothing was guessed from names.
 - **Archived listings:** ${reasonCounts(ARCHIVED_LISTINGS).map(([r, n]) => `${r} ${n}`).join(", ")}.

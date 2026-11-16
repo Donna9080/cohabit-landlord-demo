@@ -310,8 +310,9 @@ try {
     check("Demo coverage: an incompatible pair of kept profiles never scores 60 or more", offPairs.length > 0 && offPairs.every((x) => (x.score ?? 0) < 60));
     const roomCounts = [...cov.perPerson.values()].map((c) => c.rooms.length);
     const mateCounts = [...cov.perPerson.values()].map((c) => c.mates.length);
-    // The kept 50 have no smokers (the three who smoke weren't chosen), so smoking never blocks a kept pair.
-    check("Demo coverage: realistic variation, nobody matches everything or everyone", Math.max(...roomCounts) < 40 && Math.max(...mateCounts) < 100 && (cov.pairReasons.month || 0) > 0 && (cov.pairReasons.pets || 0) > 0 && (cov.pairReasons.lease || 0) > 0 && (cov.pairReasons.score || 0) > 0);
+    // Two of the kept 50 smoke (Gus and Ahmed, swapped in on 2026-11-16), so smoking blocks some kept pairs.
+    check("Demo coverage: realistic variation, nobody matches everything or everyone", Math.max(...roomCounts) < 40 && Math.max(...mateCounts) < 100 && (cov.pairReasons.month || 0) > 0 && (cov.pairReasons.pets || 0) > 0 && (cov.pairReasons.lease || 0) > 0 && (cov.pairReasons.score || 0) > 0 && (cov.pairReasons.smoking || 0) > 0);
+    check("Demo data: the kept profiles include smokers (Gus and Ahmed), each with 3+ compatible roommates", ["demo-p07", "demo-p121"].every((id) => DEMO_PEOPLE.some((p) => p.id === id && p.discoverable && p.smoking === "smoker") && cov.perPerson.get(id).mates.length >= 3) && ARCHIVED_PEOPLE.has("demo-p10") && ARCHIVED_PEOPLE.has("demo-p131"));
     const ari = DEMO_PEOPLE[0];
     check("Demo coverage: a suitable room really matches everything for that profile, must-haves included", cov.perPerson.get(ari.id).rooms.every((id) => searchRooms(profileMemory(ari), DEMO_LISTINGS.filter((u) => u.id === id)).results[0]?.misses.length === 0));
     check("Demo coverage: roommates are compatible both ways (the rules are symmetric)", DEMO_PEOPLE.slice(0, 40).every((a) => DEMO_PEOPLE.slice(0, 40).every((b) => mutualBlockers(a, b).length === mutualBlockers(b, a).length)));
@@ -1153,7 +1154,7 @@ try {
     const demoPeople = r.data.results.people;
     const names = (demoPeople.items || []).map((p) => p.firstName);
     check("Demo mode: demo roommate profiles with scores worked out by coHabit and what they share", demoPeople.status === "ok" && demoPeople.items.length >= 5 && demoPeople.items.every((p) => p.demo === true && p.email === null && p.fits.length && p.score >= 60), JSON.stringify(names));
-    check("Demo mode: profiles that didn't choose to be found are never shown, nor dealbreakers (a smoker for a no-smoking student)", !["Pia", "Quinn", "Theo", "Gus"].some((n) => names.includes(n)) && names.includes("Ari"));
+    check("Demo mode: profiles that didn't choose to be found are never shown, nor dealbreakers (a smoker for a no-smoking student)", !["Pia", "Quinn", "Theo", "Gus", "Ahmed"].some((n) => names.includes(n)) && names.includes("Ari"));
     check("Demo mode: real renters never appear among demo profiles", !["Alexandra", "Bartholomew", "Test", "Riley"].some((n) => names.includes(n)));
     r = await api("/api/assistant/demo", { method: "POST", as: chatFresh, body: { on: false } });
     check("Demo mode off: results are real again, with no demo listings or profiles", r.data.demo === false && !JSON.stringify(r.data.results).includes("demo-") && r.data.results.people.status !== "ok");
